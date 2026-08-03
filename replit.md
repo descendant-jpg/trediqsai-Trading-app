@@ -1,6 +1,6 @@
-# [Project name]
+# TradiQs AI
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+A high-end, gamified trading terminal mobile app with a simulated trading floor, AI signals, and a leaderboard.
 
 ## Run & Operate
 
