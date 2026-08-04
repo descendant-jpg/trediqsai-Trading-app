@@ -1,51 +1,205 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import * as AppleAuthentication from 'expo-apple-authentication';
+import { makeRedirectUri } from 'expo-auth-session';
+import * as QueryParams from 'expo-auth-session/build/QueryParams';
+import * as WebBrowser from 'expo-web-browser';
 import { supabase } from '@/utils/supabase';
 import colors from '@/constants/colors';
 
-const c = colors.light;
+// Completes any pending auth session when the browser redirects back.
+WebBrowser.maybeCompleteAuthSession();
+
+const redirectTo = makeRedirectUri();
+
+/** Extract Supabase tokens from an OAuth redirect URL and set the session. */
+async function createSessionFromUrl(url: string) {
+  const { params, errorCode } = QueryParams.getQueryParams(url);
+  if (errorCode) throw new Error(errorCode);
+  const { access_token, refresh_token } = params;
+  if (!access_token || !refresh_token) return;
+  const { error } = await supabase.auth.setSession({
+    access_token,
+    refresh_token,
+  });
+  if (error) throw error;
+}
 
 /**
- * Email/password authentication screen for TradiQs AI.
- * Terminal Black aesthetic: cyan primary CTA, outlined secondary CTA.
+ * Authentication screen for TradiQs AI.
+ * Sign In (email OR username) / Create Account modes, forgot password,
+ * and Apple + Google social auth. Terminal Black aesthetic.
  */
 export default function AuthScreen() {
+  const [isLoginMode, setIsLoginMode] = useState(true);
+  const [emailOrUsername, setEmailOrUsername] = useState('');
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [appleAvailable, setAppleAvailable] = useState(false);
 
-  const handleLogin = async () => {
-    setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
+  useEffect(() => {
+    // Native Apple sign-in exists only on iOS devices that support it.
+    if (Platform.OS === 'ios') {
+      AppleAuthentication.isAvailableAsync()
+        .then(setAppleAvailable)
+        .catch(() => setAppleAvailable(false));
+    }
+  }, []);
+
+  const switchMode = () => {
+    setIsLoginMode((m) => !m);
+    setPassword('');
+  };
+
+  /** Resolve the sign-in identifier to an email (username → RPC lookup). */
+  const resolveEmail = async (identifier: string): Promise<string> => {
+    const value = identifier.trim();
+    if (value.includes('@')) return value;
+    const { data, error } = await supabase.rpc('get_email_for_username', {
+      p_username: value,
     });
-    if (error) Alert.alert('Sign in failed', error.message);
-    setLoading(false);
+    if (error) throw error;
+    if (!data) throw new Error('No account found with that username.');
+    return data as string;
+  };
+
+  const handleSignIn = async () => {
+    if (!emailOrUsername.trim() || !password) {
+      Alert.alert('Missing details', 'Enter your email/username and password.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const resolved = await resolveEmail(emailOrUsername);
+      const { error } = await supabase.auth.signInWithPassword({
+        email: resolved,
+        password,
+      });
+      if (error) throw error;
+    } catch (err: any) {
+      Alert.alert('Sign in failed', err?.message ?? 'Unknown error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSignUp = async () => {
-    setLoading(true);
-    const {
-      data: { session },
-      error,
-    } = await supabase.auth.signUp({ email, password });
-    if (error) {
-      Alert.alert('Sign up failed', error.message);
-    } else if (!session) {
-      Alert.alert('Check your inbox', 'Please verify your email to continue.');
+    const name = username.trim();
+    if (!name || !email.trim() || !password) {
+      Alert.alert('Missing details', 'Username, email, and password are required.');
+      return;
     }
-    setLoading(false);
+    setLoading(true);
+    try {
+      const { data: taken, error: takenErr } = await supabase.rpc(
+        'is_username_taken',
+        { p_username: name },
+      );
+      if (takenErr) throw takenErr;
+      if (taken) throw new Error('Username already taken.');
+
+      const {
+        data: { session },
+        error,
+      } = await supabase.auth.signUp({
+        email: email.trim(),
+        password,
+        options: { data: { username: name } },
+      });
+      if (error) throw error;
+      // The handle_new_user trigger inserts { user_id, username, email }
+      // into profiles server-side — no client insert needed.
+      if (!session) {
+        Alert.alert('Check your inbox', 'Please verify your email to continue.');
+      }
+    } catch (err: any) {
+      Alert.alert('Sign up failed', err?.message ?? 'Unknown error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    const value = emailOrUsername.trim();
+    if (!value) {
+      Alert.alert('Forgot password', 'Enter your email or username first.');
+      return;
+    }
+    try {
+      const resolved = await resolveEmail(value);
+      const { error } = await supabase.auth.resetPasswordForEmail(resolved, {
+        redirectTo,
+      });
+      if (error) throw error;
+      Alert.alert('Check your inbox', 'We sent you a password reset link.');
+    } catch (err: any) {
+      Alert.alert('Reset failed', err?.message ?? 'Unknown error');
+    }
+  };
+
+  const handleAppleLogin = async () => {
+    try {
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+      if (!credential.identityToken) {
+        throw new Error('Apple did not return an identity token.');
+      }
+      const { error } = await supabase.auth.signInWithIdToken({
+        provider: 'apple',
+        token: credential.identityToken,
+      });
+      if (error) throw error;
+    } catch (err: any) {
+      if (err?.code === 'ERR_REQUEST_CANCELED') return; // user dismissed
+      Alert.alert('Apple sign in failed', err?.message ?? 'Unknown error');
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    try {
+      if (Platform.OS === 'web') {
+        // On web the full-page redirect flow works out of the box.
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: { redirectTo },
+        });
+        if (error) throw error;
+        return;
+      }
+      // Native: open the auth URL in an in-app browser session, then
+      // exchange the tokens from the redirect URL for a Supabase session.
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo, skipBrowserRedirect: true },
+      });
+      if (error) throw error;
+      const result = await WebBrowser.openAuthSessionAsync(
+        data.url,
+        redirectTo,
+      );
+      if (result.type === 'success' && result.url) {
+        await createSessionFromUrl(result.url);
+      }
+    } catch (err: any) {
+      Alert.alert('Google sign in failed', err?.message ?? 'Unknown error');
+    }
   };
 
   return (
@@ -53,22 +207,78 @@ export default function AuthScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <View style={styles.content}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+      >
         <Text style={styles.title}>TradiQs AI</Text>
-        <Text style={styles.subtitle}>Sign in to enter the trading floor.</Text>
+        <Text style={styles.subtitle}>
+          {isLoginMode
+            ? 'Sign in to enter the trading floor.'
+            : 'Create your account to start trading.'}
+        </Text>
+
+        {/* Mode toggle */}
+        <View style={styles.modeToggle}>
+          <TouchableOpacity
+            onPress={() => !isLoginMode && switchMode()}
+            testID="auth-mode-signin"
+          >
+            <Text
+              style={[styles.modeText, isLoginMode && styles.modeTextActive]}
+            >
+              Sign In
+            </Text>
+          </TouchableOpacity>
+          <Text style={styles.modeDivider}>/</Text>
+          <TouchableOpacity
+            onPress={() => isLoginMode && switchMode()}
+            testID="auth-mode-signup"
+          >
+            <Text
+              style={[styles.modeText, !isLoginMode && styles.modeTextActive]}
+            >
+              Create Account
+            </Text>
+          </TouchableOpacity>
+        </View>
 
         <View style={styles.form}>
-          <TextInput
-            style={styles.input}
-            placeholder="Email"
-            placeholderTextColor="#8A8D93"
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            autoComplete="email"
-            keyboardType="email-address"
-            testID="auth-email"
-          />
+          {isLoginMode ? (
+            <TextInput
+              style={styles.input}
+              placeholder="Email or Username"
+              placeholderTextColor="#8A8D93"
+              value={emailOrUsername}
+              onChangeText={setEmailOrUsername}
+              autoCapitalize="none"
+              autoComplete="username"
+              testID="auth-identifier"
+            />
+          ) : (
+            <>
+              <TextInput
+                style={styles.input}
+                placeholder="Choose Username"
+                placeholderTextColor="#8A8D93"
+                value={username}
+                onChangeText={setUsername}
+                autoCapitalize="none"
+                testID="auth-username"
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Email Address"
+                placeholderTextColor="#8A8D93"
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+                autoComplete="email"
+                keyboardType="email-address"
+                testID="auth-email"
+              />
+            </>
+          )}
           <TextInput
             style={styles.input}
             placeholder="Password"
@@ -83,29 +293,61 @@ export default function AuthScreen() {
 
           <TouchableOpacity
             style={[styles.primaryButton, loading && styles.disabled]}
-            onPress={handleLogin}
+            onPress={isLoginMode ? handleSignIn : handleSignUp}
             disabled={loading}
             activeOpacity={0.85}
-            testID="auth-sign-in"
+            testID="auth-submit"
           >
             {loading ? (
               <ActivityIndicator color="#0A0B0E" />
             ) : (
-              <Text style={styles.primaryButtonText}>Sign In</Text>
+              <Text style={styles.primaryButtonText}>
+                {isLoginMode ? 'Sign In' : 'Create Account'}
+              </Text>
             )}
           </TouchableOpacity>
 
+          {isLoginMode && (
+            <TouchableOpacity
+              onPress={handleForgotPassword}
+              style={styles.forgotWrap}
+              testID="auth-forgot"
+            >
+              <Text style={styles.forgotText}>Forgot Password?</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* OR separator */}
+          <View style={styles.separatorRow}>
+            <View style={styles.separatorLine} />
+            <Text style={styles.separatorText}>OR</Text>
+            <View style={styles.separatorLine} />
+          </View>
+
+          {/* Social auth */}
+          {appleAvailable && (
+            <TouchableOpacity
+              style={styles.appleButton}
+              onPress={handleAppleLogin}
+              activeOpacity={0.85}
+              testID="auth-apple"
+            >
+              <Text style={styles.appleIcon}></Text>
+              <Text style={styles.appleButtonText}>Continue with Apple</Text>
+            </TouchableOpacity>
+          )}
+
           <TouchableOpacity
-            style={[styles.secondaryButton, loading && styles.disabled]}
-            onPress={handleSignUp}
-            disabled={loading}
+            style={styles.googleButton}
+            onPress={handleGoogleLogin}
             activeOpacity={0.85}
-            testID="auth-sign-up"
+            testID="auth-google"
           >
-            <Text style={styles.secondaryButtonText}>Sign Up</Text>
+            <Text style={styles.googleIcon}>G</Text>
+            <Text style={styles.googleButtonText}>Continue with Google</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
@@ -116,9 +358,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#0A0B0E',
   },
   content: {
-    flex: 1,
+    flexGrow: 1,
     justifyContent: 'center',
     paddingHorizontal: 24,
+    paddingVertical: 40,
   },
   title: {
     color: '#FFFFFF',
@@ -134,8 +377,27 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 6,
   },
+  modeToggle: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 22,
+  },
+  modeText: {
+    color: '#8A8D93',
+    fontSize: 15,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  modeTextActive: {
+    color: '#00F0FF',
+  },
+  modeDivider: {
+    color: '#22252A',
+    fontSize: 15,
+  },
   form: {
-    marginTop: 32,
+    marginTop: 26,
     gap: 14,
   },
   input: {
@@ -162,19 +424,71 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'Inter_700Bold',
   },
-  secondaryButton: {
+  forgotWrap: {
+    alignSelf: 'center',
+    paddingVertical: 2,
+  },
+  forgotText: {
+    color: '#8A8D93',
+    fontSize: 13,
+    fontFamily: 'Inter_500Medium',
+  },
+  separatorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginVertical: 4,
+  },
+  separatorLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#22252A',
+  },
+  separatorText: {
+    color: '#8A8D93',
+    fontSize: 12,
+    fontFamily: 'Inter_600SemiBold',
+    letterSpacing: 1,
+  },
+  appleButton: {
     height: 54,
     borderRadius: colors.radius,
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: '#00F0FF',
+    backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
   },
-  secondaryButtonText: {
-    color: '#00F0FF',
+  appleIcon: {
+    color: '#000000',
+    fontSize: 18,
+    marginTop: -2,
+  },
+  appleButtonText: {
+    color: '#000000',
     fontSize: 16,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  googleButton: {
+    height: 54,
+    borderRadius: colors.radius,
+    backgroundColor: '#16181D',
+    borderWidth: 1,
+    borderColor: '#22252A',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  googleIcon: {
+    color: '#FFFFFF',
+    fontSize: 17,
     fontFamily: 'Inter_700Bold',
+  },
+  googleButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontFamily: 'Inter_600SemiBold',
   },
   disabled: {
     opacity: 0.6,
