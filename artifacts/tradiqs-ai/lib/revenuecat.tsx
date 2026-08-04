@@ -123,6 +123,17 @@ function useSubscriptionContext() {
     onSuccess: (customerInfo) => applyFreshCustomerInfo(customerInfo),
   });
 
+  const manageSubscriptionMutation = useMutation({
+    mutationFn: async () => {
+      await Purchases.showManageSubscriptions();
+    },
+    // Refetch in case the user cancelled or changed their plan
+    onSuccess: () => customerInfoQuery.refetch(),
+  });
+
+  const activeEntitlement =
+    customerInfoQuery.data?.entitlements.active?.[REVENUECAT_ENTITLEMENT_IDENTIFIER];
+
   // Prefer live data; fall back to the cached value while loading.
   const isSubscribed = liveIsSubscribed !== null ? liveIsSubscribed : cachedIsSubscribed === true;
 
@@ -133,10 +144,13 @@ function useSubscriptionContext() {
   return {
     customerInfo: customerInfoQuery.data,
     offerings: offeringsQuery.data,
+    activeEntitlement,
     isSubscribed,
     isLoading: subscriptionResolving || (!isSubscribed && offeringsQuery.isLoading),
     purchase: purchaseMutation.mutateAsync,
     restore: restoreMutation.mutateAsync,
+    manageSubscription: manageSubscriptionMutation.mutateAsync,
+    isManagingSubscription: manageSubscriptionMutation.isPending,
     isPurchasing: purchaseMutation.isPending,
     isRestoring: restoreMutation.isPending,
     purchaseError: purchaseMutation.error,
