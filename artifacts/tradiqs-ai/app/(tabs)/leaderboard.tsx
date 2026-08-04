@@ -31,6 +31,18 @@ const TRADERS: Trader[] = [
   { id: 't10', rank: 10, name: 'Harper Singh', handle: '@harperswing', pnl: -6820, pnlPct: -6.8, winRate: 44, trades: 143, pro: false },
 ];
 
+const YOU: Trader = {
+  id: 'you',
+  rank: 12,
+  name: 'You',
+  handle: '@you',
+  pnl: 1240,
+  pnlPct: 1.2,
+  winRate: 53,
+  trades: 24,
+  pro: false,
+};
+
 const MEDAL_COLORS: Record<number, string> = {
   1: '#FFD75E',
   2: '#C7CCD6',
@@ -42,13 +54,13 @@ function formatPnl(v: number) {
   return `${sign}$${Math.abs(v).toLocaleString()}`;
 }
 
-function TraderRow({ trader }: { trader: Trader }) {
+function TraderRow({ trader, isYou }: { trader: Trader; isYou?: boolean }) {
   const profit = trader.pnl >= 0;
   const pnlColor = profit ? c.success : c.destructive;
   const medal = MEDAL_COLORS[trader.rank];
 
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, isYou && styles.youRow]}>
       <View style={styles.rankBox}>
         {medal ? (
           <Feather name="award" size={18} color={medal} />
@@ -69,6 +81,11 @@ function TraderRow({ trader }: { trader: Trader }) {
           <Text style={styles.name} numberOfLines={1}>
             {trader.name}
           </Text>
+          {isYou && (
+            <View style={styles.youBadge}>
+              <Text style={styles.youText}>YOU</Text>
+            </View>
+          )}
           {trader.pro && (
             <View style={styles.proBadge}>
               <Text style={styles.proText}>PRO</Text>
@@ -100,6 +117,9 @@ export default function LeaderboardScreen() {
         <Feather name="award" size={20} color={c.secondary} />
         <Text style={styles.headerTitle}>Leaderboard</Text>
         <Text style={styles.headerSub}>This week</Text>
+      </View>
+      <View style={styles.youPinned}>
+        <TraderRow trader={YOU} isYou />
       </View>
       <FlatList
         data={TRADERS}
@@ -149,6 +169,28 @@ const styles = StyleSheet.create({
     borderColor: c.border,
     borderRadius: colors.radius,
     padding: 12,
+  },
+  youPinned: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+  },
+  youRow: {
+    borderColor: c.primary,
+    backgroundColor: 'rgba(0,240,255,0.08)',
+  },
+  youBadge: {
+    backgroundColor: 'rgba(0,240,255,0.15)',
+    borderWidth: 1,
+    borderColor: c.primary,
+    borderRadius: 6,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  youText: {
+    color: c.primary,
+    fontSize: 9,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 0.5,
   },
   separator: {
     height: 8,
