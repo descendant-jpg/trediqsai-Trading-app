@@ -1,18 +1,33 @@
 import React from 'react';
 import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { Feather } from '@expo/vector-icons';
+import { useAuth } from '@/context/AuthContext';
 import colors from '@/constants/colors';
 
 const c = colors.light;
 
 /** Sleek top header with the app wordmark. */
 export function TerminalHeader() {
+  const { session, signOut } = useAuth();
   return (
     <View style={headerStyles.container}>
       <Text style={headerStyles.wordmark}>
         TradiQs <Text style={headerStyles.ai}>AI</Text>
       </Text>
-      <View style={headerStyles.statusDot} />
+      <View style={headerStyles.right}>
+        <View style={headerStyles.statusDot} />
+        {session ? (
+          <TouchableOpacity
+            onPress={signOut}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            testID="sign-out"
+            accessibilityLabel="Sign out"
+          >
+            <Feather name="log-out" size={18} color={c.mutedForeground} />
+          </TouchableOpacity>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -33,6 +48,11 @@ const headerStyles = StyleSheet.create({
   },
   ai: {
     color: c.primary,
+  },
+  right: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
   },
   statusDot: {
     width: 8,

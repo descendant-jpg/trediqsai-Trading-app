@@ -5,7 +5,9 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { TradingProvider } from '@/context/TradingContext';
+import AuthScreen from '@/screens/AuthScreen';
 import {
   Inter_400Regular,
   Inter_500Medium,
@@ -30,6 +32,14 @@ try {
 const queryClient = new QueryClient();
 
 function RootLayoutNav() {
+  const { session, loading } = useAuth();
+
+  // Hold on the splash-colored blank frame while the stored session restores,
+  // so signed-in users don't flash the sign-in screen on launch.
+  if (loading) return null;
+
+  if (!session) return <AuthScreen />;
+
   return (
     <Stack screenOptions={{ headerBackTitle: 'Back' }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -60,9 +70,11 @@ export default function RootLayout() {
           <SubscriptionProvider>
             <GestureHandlerRootView>
               <KeyboardProvider>
-                <TradingProvider>
-                  <RootLayoutNav />
-                </TradingProvider>
+                <AuthProvider>
+                  <TradingProvider>
+                    <RootLayoutNav />
+                  </TradingProvider>
+                </AuthProvider>
               </KeyboardProvider>
             </GestureHandlerRootView>
           </SubscriptionProvider>

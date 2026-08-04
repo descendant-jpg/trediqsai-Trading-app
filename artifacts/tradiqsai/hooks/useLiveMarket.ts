@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 
 export type LivePoint = { timestamp: number; value: number };
 
+const BINANCE_WS_URL = 'wss://stream.binance.com:9443/ws/btcusdt@trade';
+
 /**
  * Public BTC/USD(T) trade streams, tried in order. Binance can be
  * geo-blocked (HTTP 451) in some regions/datacenters, so we fail over to
