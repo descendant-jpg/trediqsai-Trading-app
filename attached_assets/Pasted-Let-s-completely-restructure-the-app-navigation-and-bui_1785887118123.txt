@@ -1,0 +1,31 @@
+Let's completely restructure the app navigation and build a massive, fully-featured Profile screen. We also need to remove the manual "Choose a Username" screen.
+
+Here are the strict requirements:
+
+1. Remove the Username Popup:
+   - Delete or bypass the manual "Choose a Username" screen entirely from the Auth flow. 
+   - The database has been updated to automatically handle username creation from the user's email prefix, so the frontend no longer needs to ask for it after an OAuth login. Send them straight to the Trading Floor.
+
+2. Redesign the Bottom Tab Navigator:
+   - Update the main navigation to have exactly 5 tabs in this specific order: Home (Trading Floor), Signals, AI Tools, Portfolio, Profile.
+   - Layout & Spacing: Ensure the tab bar uses standard React Native safe area insets and padding so it does NOT overlap with Android system navigation buttons. 
+   - Center Button: Make the "AI Tools" button (the center button) visually distinct. Give it a slightly larger icon and an Electric Cyan (#00F0FF) border or background so it stands out as the core feature.
+
+3. Build the `ProfileScreen.tsx` (Terminal Black Aesthetic #0A0B0E):
+   - Wrap the entire screen in a `ScrollView` for smooth scrolling.
+   - Section 1 (User Info): Display the user's fetched username/email and their current plan (default to "Free Plan"). Add a prominent "Upgrade to Pro" button.
+   - Section 2 (Wallet & Referrals): 
+     - Add a "Withdraw Funds" button (tied to the app plans).
+     - Add a Referral section displaying a mock referral link and a counter: "Users Joined: 0".
+   - Section 3 (Account Settings): Create touchable list items for Change Password, Delete Account, Language, and Notifications.
+   - Section 4 (Partner Program): Create list items for "Crypto Brokers", "Forex Partners", and "Stock Partners".
+   - Section 5 (Support & Socials): 
+     - "Contact Us" (Configure this to open the user's email app to support@tradiqsai.com).
+     - Help & FAQs, App Guide.
+     - "Follow Us" (Add sub-items for Telegram Channel, Telegram Group, and other social pages).
+   - Section 6 (Legal - REQUIRED FOR APP STORES):
+     - Create items for "Terms and Conditions" and "Privacy Policy". 
+     - CRITICAL: Generate actual, comprehensive boilerplate text for both the T&C and Privacy Policy (covering simulated trading, virtual currency, data usage, and account deletion) and display them in scrollable Modals when clicked. The App Stores will reject the app if these are empty.
+   - Section 7 (Action): A large, prominent "Sign Out" button at the bottom.
+
+Ensure all list items use a clean, modern dark mode UI (Background #16181D, text #FFFFFF, bottom border #22252A, and chevron icons for navigation).
