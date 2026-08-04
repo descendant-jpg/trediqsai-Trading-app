@@ -21,6 +21,20 @@ import colors from '@/constants/colors';
 // Completes any pending auth session when the browser redirects back.
 WebBrowser.maybeCompleteAuthSession();
 
+/**
+ * Cross-platform alert. RN's Alert.alert is a SILENT NO-OP on web, which
+ * made auth errors invisible in the browser preview — always route through
+ * this helper so errors surface on every platform.
+ */
+function showAlert(title: string, message: string) {
+  if (Platform.OS === 'web') {
+    // eslint-disable-next-line no-alert
+    window.alert(`${title}\n\n${message}`);
+  } else {
+    Alert.alert(title, message);
+  }
+}
+
 const redirectTo = makeRedirectUri();
 
 /** Extract Supabase tokens from an OAuth redirect URL and set the session. */
@@ -77,8 +91,12 @@ export default function AuthScreen() {
   };
 
   const handleSignIn = async () => {
+    console.log('[Auth] handleSignIn pressed', {
+      emailOrUsername,
+      passwordLength: password.length,
+    });
     if (!emailOrUsername.trim() || !password) {
-      Alert.alert('Missing details', 'Enter your email/username and password.');
+      showAlert('Missing details', 'Enter your email/username and password.');
       return;
     }
     setLoading(true);
@@ -90,16 +108,21 @@ export default function AuthScreen() {
       });
       if (error) throw error;
     } catch (err: any) {
-      Alert.alert('Sign in failed', err?.message ?? 'Unknown error');
+      showAlert('Sign in failed', err?.message ?? 'Unknown error');
     } finally {
       setLoading(false);
     }
   };
 
   const handleSignUp = async () => {
+    console.log('[Auth] handleSignUp pressed', {
+      username,
+      email,
+      passwordLength: password.length,
+    });
     const name = username.trim();
     if (!name || !email.trim() || !password) {
-      Alert.alert('Missing details', 'Username, email, and password are required.');
+      showAlert('Missing details', 'Username, email, and password are required.');
       return;
     }
     setLoading(true);
@@ -123,10 +146,10 @@ export default function AuthScreen() {
       // The handle_new_user trigger inserts { user_id, username, email }
       // into profiles server-side — no client insert needed.
       if (!session) {
-        Alert.alert('Check your inbox', 'Please verify your email to continue.');
+        showAlert('Check your inbox', 'Please verify your email to continue.');
       }
     } catch (err: any) {
-      Alert.alert('Sign up failed', err?.message ?? 'Unknown error');
+      showAlert('Sign up failed', err?.message ?? 'Unknown error');
     } finally {
       setLoading(false);
     }
@@ -135,7 +158,7 @@ export default function AuthScreen() {
   const handleForgotPassword = async () => {
     const value = emailOrUsername.trim();
     if (!value) {
-      Alert.alert('Forgot password', 'Enter your email or username first.');
+      showAlert('Forgot password', 'Enter your email or username first.');
       return;
     }
     try {
@@ -144,9 +167,9 @@ export default function AuthScreen() {
         redirectTo,
       });
       if (error) throw error;
-      Alert.alert('Check your inbox', 'We sent you a password reset link.');
+      showAlert('Check your inbox', 'We sent you a password reset link.');
     } catch (err: any) {
-      Alert.alert('Reset failed', err?.message ?? 'Unknown error');
+      showAlert('Reset failed', err?.message ?? 'Unknown error');
     }
   };
 
@@ -168,7 +191,7 @@ export default function AuthScreen() {
       if (error) throw error;
     } catch (err: any) {
       if (err?.code === 'ERR_REQUEST_CANCELED') return; // user dismissed
-      Alert.alert('Apple sign in failed', err?.message ?? 'Unknown error');
+      showAlert('Apple sign in failed', err?.message ?? 'Unknown error');
     }
   };
 
@@ -198,7 +221,7 @@ export default function AuthScreen() {
         await createSessionFromUrl(result.url);
       }
     } catch (err: any) {
-      Alert.alert('Google sign in failed', err?.message ?? 'Unknown error');
+      showAlert('Google sign in failed', err?.message ?? 'Unknown error');
     }
   };
 
