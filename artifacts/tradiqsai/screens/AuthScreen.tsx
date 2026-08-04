@@ -16,6 +16,7 @@ import { makeRedirectUri } from 'expo-auth-session';
 import * as QueryParams from 'expo-auth-session/build/QueryParams';
 import * as WebBrowser from 'expo-web-browser';
 import { supabase } from '@/utils/supabase';
+import { setPendingSignupUsername } from '@/context/AuthContext';
 import colors from '@/constants/colors';
 
 // Completes any pending auth session when the browser redirects back.
@@ -134,6 +135,11 @@ export default function AuthScreen() {
       if (takenErr) throw takenErr;
       if (taken) throw new Error('Username already taken.');
 
+      // Stage the username BEFORE signUp: the session event fires during the
+      // await, and the profile row (written by the handle_new_user trigger)
+      // may not be readable yet. Staging it prevents the "Choose a Username"
+      // prompt from flashing while that insert commits.
+      setPendingSignupUsername(name);
       const {
         data: { session },
         error,
@@ -146,9 +152,13 @@ export default function AuthScreen() {
       // The handle_new_user trigger inserts { user_id, username, email }
       // into profiles server-side — no client insert needed.
       if (!session) {
+        // Email verification required — no session yet, so nothing consumed
+        // the staged username. Clear it so it can't leak to another sign-in.
+        setPendingSignupUsername(null);
         showAlert('Check your inbox', 'Please verify your email to continue.');
       }
     } catch (err: any) {
+      setPendingSignupUsername(null);
       showAlert('Sign up failed', err?.message ?? 'Unknown error');
     } finally {
       setLoading(false);

@@ -19,6 +19,21 @@ import { isSupabaseConfigured, supabase } from '@/utils/supabase';
  */
 const claimedUsernameKey = (userId: string) => `tradiqs:claimed-username:${userId}`;
 
+/**
+ * Username chosen during an email/password sign-up, staged BEFORE the
+ * signUp call so it is already available when the new session arrives.
+ * The handle_new_user trigger copies this same value into the profile row
+ * server-side, but that insert can commit after our first profile lookup —
+ * without this, `maybeSingle()` returns no row and the "Choose a Username"
+ * prompt flashes for a user who already picked one.
+ */
+let pendingSignupUsername: string | null = null;
+
+/** Stage (or clear) the username for an in-flight email sign-up. */
+export function setPendingSignupUsername(name: string | null) {
+  pendingSignupUsername = name ? name.trim() || null : null;
+}
+
 interface AuthContextValue {
   /** Current Supabase session, or null when signed out. */
   session: Session | null;
@@ -67,8 +82,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // the prompt for this user, even if the profile fetch below is slow,
       // fails, or returns a stale (pre-claim) row.
       let locallyClaimed: string | null = null;
+
+      // A username staged by an in-flight email sign-up wins immediately —
+      // the signup metadata guarantees the trigger will store this exact
+      // value, so never show the prompt while the profile row commits.
+      if (pendingSignupUsername) {
+        locallyClaimed = pendingSignupUsername;
+        pendingSignupUsername = null;
+        setUsername(locallyClaimed);
+        AsyncStorage.setItem(claimedUsernameKey(userId), locallyClaimed).catch(() => {});
+      }
+
       try {
-        locallyClaimed = await AsyncStorage.getItem(claimedUsernameKey(userId));
+        locallyClaimed =
+          (await AsyncStorage.getItem(claimedUsernameKey(userId))) ?? locallyClaimed;
       } catch {
         // Storage unavailable — fall through to the server lookup.
       }
