@@ -1,7 +1,5 @@
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import * as Haptics from 'expo-haptics';
-import { Platform } from 'react-native';
 import colors from '@/constants/colors';
 
 const c = colors.light;
@@ -167,27 +165,49 @@ const drawdownStyles = StyleSheet.create({
   },
 });
 
-/** Massive BUY / SELL execution buttons. */
+export type TradeSide = 'BUY' | 'SELL' | null;
+
+/**
+ * Massive BUY / SELL execution buttons. When a trade is open, both buttons
+ * collapse into a single CLOSE TRADE button tinted by the open direction.
+ */
 export function ExecutionButtons({
+  activeTrade = null,
   onBuy,
   onSell,
+  onClose,
 }: {
+  activeTrade?: TradeSide;
   onBuy?: () => void;
   onSell?: () => void;
+  onClose?: () => void;
 }) {
-  const press = (cb?: () => void) => () => {
-    if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    }
-    cb?.();
-  };
+  if (activeTrade) {
+    const isBuy = activeTrade === 'BUY';
+    return (
+      <View style={execStyles.row}>
+        <TouchableOpacity
+          activeOpacity={0.85}
+          style={[execStyles.button, isBuy ? execStyles.buy : execStyles.sell]}
+          onPress={onClose}
+          testID="close-trade-button"
+        >
+          <Text
+            style={[execStyles.buttonText, !isBuy && execStyles.sellText]}
+          >
+            CLOSE TRADE
+          </Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={execStyles.row}>
       <TouchableOpacity
         activeOpacity={0.85}
         style={[execStyles.button, execStyles.buy]}
-        onPress={press(onBuy)}
+        onPress={onBuy}
         testID="buy-button"
       >
         <Text style={execStyles.buttonText}>BUY</Text>
@@ -195,7 +215,7 @@ export function ExecutionButtons({
       <TouchableOpacity
         activeOpacity={0.85}
         style={[execStyles.button, execStyles.sell]}
-        onPress={press(onSell)}
+        onPress={onSell}
         testID="sell-button"
       >
         <Text style={[execStyles.buttonText, execStyles.sellText]}>SELL</Text>
