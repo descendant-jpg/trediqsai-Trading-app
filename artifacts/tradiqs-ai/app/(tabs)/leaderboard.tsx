@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import colors from '@/constants/colors';
@@ -95,13 +95,41 @@ function formatPnl(v: number) {
   return `${sign}$${Math.abs(v).toLocaleString()}`;
 }
 
-function TraderRow({ trader, isYou }: { trader: Trader; isYou?: boolean }) {
+function seededSeries(seed: string, points: number, finalPnl: number): number[] {
+  // Deterministic pseudo-random walk ending at the trader's P&L.
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  const rand = () => {
+    h = (h * 1664525 + 1013904223) >>> 0;
+    return h / 0xffffffff;
+  };
+  const series: number[] = [0];
+  for (let i = 1; i < points; i++) {
+    const drift = finalPnl / points;
+    const noise = (rand() - 0.5) * Math.max(Math.abs(finalPnl), 2000) * 0.25;
+    series.push(series[i - 1] + drift + noise);
+  }
+  series[points - 1] = finalPnl;
+  return series;
+}
+function TraderRow({
+  trader,
+  isYou,
+  onPress,
+}: {
+  trader: Trader;
+  isYou?: boolean;
+  onPress?: (t: Trader) => void;
+}) {
   const profit = trader.pnl >= 0;
   const pnlColor = profit ? c.success : c.destructive;
   const medal = MEDAL_COLORS[trader.rank];
 
   return (
-    <View style={[styles.row, isYou && styles.youRow]}>
+    <Pressable
+      onPress={() => onPress?.(trader)}
+      style={({ pressed }) => [styles.row, isYou && styles.youRow, pressed && styles.rowPressed]}
+    >
       <View style={styles.rankBox}>
         {medal ? (
           <Feather name="award" size={18} color={medal} />
@@ -144,7 +172,7 @@ function TraderRow({ trader, isYou }: { trader: Trader; isYou?: boolean }) {
           {trader.pnlPct.toFixed(1)}%
         </Text>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -152,6 +180,7 @@ export default function LeaderboardScreen() {
   const insets = useSafeAreaInsets();
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
   const [period, setPeriod] = useState<Period>('week');
+  const [selected, setSelected] = useState<Trader | null>(null);
   const { data: baseTraders, isLoading, isError, refetch } = useGetLeaderboard();
 
   const traders = useMemo(
@@ -198,19 +227,20 @@ export default function LeaderboardScreen() {
       ) : (
         <>
           <View style={styles.youPinned}>
-            <TraderRow trader={you} isYou />
+            <TraderRow trader={you} isYou onPress={setSelected} />
           </View>
           <FlatList
             data={traders}
             extraData={period}
             keyExtractor={(item) => item.id}
-            renderItem={({ item }) => <TraderRow trader={item} />}
+            renderItem={({ item }) => <TraderRow trader={item} onPress={setSelected} />}
             contentContainerStyle={styles.listContent}
             ItemSeparatorComponent={() => <View style={styles.separator} />}
             showsVerticalScrollIndicator={false}
           />
         </>
       )}
+      <TraderDetailModal trader={selected} onClose={() => setSelected(null)} />
     </View>
   );
 }
@@ -396,4 +426,207 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'Inter_700Bold',
   },
+  rowPressed: {
+    opacity: 0.7,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: c.card,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    borderWidth: 1,
+    borderColor: c.border,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 36,
+  },
+  modalHandle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: c.border,
+    marginBottom: 16,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  modalAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: c.muted,
+    borderWidth: 1,
+    borderColor: c.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalAvatarText: {
+    color: c.primary,
+    fontSize: 16,
+    fontFamily: 'Inter_700Bold',
+  },
+  modalHeaderInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  modalName: {
+    color: c.foreground,
+    fontSize: 17,
+    fontFamily: 'Inter_700Bold',
+  },
+  closeBtn: {
+    padding: 4,
+  },
+  modalPnlBlock: {
+    marginTop: 20,
+    gap: 2,
+  },
+  modalPnl: {
+    fontSize: 28,
+    fontFamily: 'Inter_700Bold',
+  },
+  modalPnlPct: {
+    fontSize: 13,
+    fontFamily: 'Inter_500Medium',
+  },
+  sparkline: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    height: 72,
+    gap: 2,
+    marginTop: 16,
+  },
+  sparkBarSlot: {
+    flex: 1,
+    height: '100%',
+    justifyContent: 'flex-end',
+  },
+  sparkBar: {
+    borderRadius: 2,
+    opacity: 0.85,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 20,
+  },
+  statBox: {
+    flex: 1,
+    backgroundColor: c.muted,
+    borderWidth: 1,
+    borderColor: c.border,
+    borderRadius: colors.radius,
+    paddingVertical: 12,
+    alignItems: 'center',
+    gap: 4,
+  },
+  statValue: {
+    color: c.foreground,
+    fontSize: 15,
+    fontFamily: 'Inter_700Bold',
+  },
+  statLabel: {
+    color: c.mutedForeground,
+    fontSize: 10,
+    fontFamily: 'Inter_500Medium',
+  },
 });
+
+function Sparkline({ trader }: { trader: Trader }) {
+  const series = useMemo(() => seededSeries(trader.id, 24, trader.pnl), [trader]);
+  const min = Math.min(...series);
+  const max = Math.max(...series);
+  const range = max - min || 1;
+  const color = trader.pnl >= 0 ? c.success : c.destructive;
+
+  return (
+    <View style={styles.sparkline}>
+      {series.map((v, i) => {
+        const hPct = 8 + ((v - min) / range) * 92;
+        return (
+          <View key={i} style={styles.sparkBarSlot}>
+            <View style={[styles.sparkBar, { height: `${hPct}%`, backgroundColor: color }]} />
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+function TraderDetailModal({ trader, onClose }: { trader: Trader | null; onClose: () => void }) {
+  if (!trader) return null;
+  const profit = trader.pnl >= 0;
+  const pnlColor = profit ? c.success : c.destructive;
+
+  return (
+    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={styles.modalBackdrop} onPress={onClose}>
+        <Pressable style={styles.modalSheet} onPress={() => {}}>
+          <View style={styles.modalHandle} />
+          <View style={styles.modalHeader}>
+            <View style={styles.modalAvatar}>
+              <Text style={styles.modalAvatarText}>
+                {trader.name
+                  .split(' ')
+                  .map((p) => p[0])
+                  .join('')}
+              </Text>
+            </View>
+            <View style={styles.modalHeaderInfo}>
+              <View style={styles.nameRow}>
+                <Text style={styles.modalName}>{trader.name}</Text>
+                {trader.pro && (
+                  <View style={styles.proBadge}>
+                    <Text style={styles.proText}>PRO</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={styles.handle}>
+                {trader.handle} · Rank #{trader.rank}
+              </Text>
+            </View>
+            <Pressable onPress={onClose} hitSlop={12} style={styles.closeBtn}>
+              <Feather name="x" size={20} color={c.mutedForeground} />
+            </Pressable>
+          </View>
+
+          <View style={styles.modalPnlBlock}>
+            <Text style={[styles.modalPnl, { color: pnlColor }]}>{formatPnl(trader.pnl)}</Text>
+            <Text style={[styles.modalPnlPct, { color: pnlColor }]}>
+              {trader.pnlPct >= 0 ? '+' : ''}
+              {trader.pnlPct.toFixed(1)}% this week
+            </Text>
+          </View>
+
+          <Sparkline trader={trader} />
+
+          <View style={styles.statsRow}>
+            <StatBox label="Win rate" value={`${trader.winRate}%`} color={c.primary} />
+            <StatBox label="Trades" value={`${trader.trades}`} />
+            <StatBox
+              label="Avg P&L / trade"
+              value={formatPnl(Math.round(trader.pnl / trader.trades))}
+              color={pnlColor}
+            />
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+function StatBox({ label, value, color }: { label: string; value: string; color?: string }) {
+  return (
+    <View style={styles.statBox}>
+      <Text style={[styles.statValue, color ? { color } : null]}>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
+    </View>
+  );
+}
