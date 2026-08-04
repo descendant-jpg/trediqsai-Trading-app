@@ -1,14 +1,15 @@
 import React from 'react';
+import { ActivityIndicator, FlatList, Platform, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { PaywallCard } from '@/components/paywall';
 import colors from '@/constants/colors';
-import { ActivityIndicator, FlatList, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useGetSignals, type Signal } from '@workspace/api-client-react';
-import { TouchableOpacity } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useSubscription } from '@/lib/revenuecat';
 
 const c = colors.light;
+
 function SignalCard({
   signal,
   onTrade,
@@ -97,8 +98,11 @@ function SignalCard({
 export default function AISignalsScreen() {
   const insets = useSafeAreaInsets();
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
-  const { data: signals, isLoading, isError, refetch } = useGetSignals();
+  const { data: signals, isLoading: signalsLoading, isError, refetch } = useGetSignals();
+  const { isSubscribed, isLoading: subLoading } = useSubscription();
   const router = useRouter();
+
+  const isLoading = signalsLoading || subLoading;
 
   const handleTrade = (signal: Signal) => {
     router.push({
@@ -112,7 +116,14 @@ export default function AISignalsScreen() {
       <View style={styles.header}>
         <Feather name="zap" size={20} color={c.primary} />
         <Text style={styles.headerTitle}>AI Signals</Text>
+        {isSubscribed && (
+          <View style={styles.proBadge}>
+            <Feather name="star" size={11} color={c.secondary} />
+            <Text style={styles.proBadgeText}>PRO</Text>
+          </View>
+        )}
       </View>
+
       {isLoading ? (
         <View style={styles.stateBox}>
           <ActivityIndicator color={c.primary} />
@@ -126,9 +137,18 @@ export default function AISignalsScreen() {
             <Text style={styles.retryText}>Retry</Text>
           </Pressable>
         </View>
+      ) : isSubscribed ? (
+        /* Full signals feed — unlocked for Pro subscribers */
+        <FlatList
+          data={signals ?? []}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => <SignalCard signal={item} onTrade={handleTrade} />}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+        />
       ) : (
+        /* Locked signals feed — dimmed and non-interactive behind the paywall */
         <>
-          {/* Locked signals feed — dimmed and non-interactive behind the paywall */}
           <View style={styles.lockedContent} pointerEvents="none">
             <FlatList
               data={signals ?? []}
@@ -139,7 +159,6 @@ export default function AISignalsScreen() {
               scrollEnabled={false}
             />
           </View>
-
           {/* Centered Pro Tier paywall overlay */}
           <View style={styles.paywallOverlay}>
             <PaywallCard />
@@ -166,6 +185,24 @@ const styles = StyleSheet.create({
     color: c.foreground,
     fontSize: 20,
     fontFamily: 'Inter_700Bold',
+  },
+  proBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(176,38,255,0.15)',
+    borderWidth: 1,
+    borderColor: c.secondary,
+    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    marginLeft: 4,
+  },
+  proBadgeText: {
+    color: c.secondary,
+    fontSize: 10,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 0.5,
   },
   listContent: {
     paddingHorizontal: 16,

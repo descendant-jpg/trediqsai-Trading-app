@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { Alert } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
@@ -14,10 +15,17 @@ import {
 } from '@expo-google-fonts/inter';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { setBaseUrl } from '@workspace/api-client-react';
+import { initializeRevenueCat, SubscriptionProvider } from '@/lib/revenuecat';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
-import { setBaseUrl } from '@workspace/api-client-react';
+
+try {
+  initializeRevenueCat();
+} catch (err: any) {
+  Alert.alert('RevenueCat Unavailable', err?.message ?? 'Unknown error');
+}
 
 const queryClient = new QueryClient();
 
@@ -49,13 +57,15 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
-          <GestureHandlerRootView>
-            <KeyboardProvider>
-              <TradingProvider>
-                <RootLayoutNav />
-              </TradingProvider>
-            </KeyboardProvider>
-          </GestureHandlerRootView>
+          <SubscriptionProvider>
+            <GestureHandlerRootView>
+              <KeyboardProvider>
+                <TradingProvider>
+                  <RootLayoutNav />
+                </TradingProvider>
+              </KeyboardProvider>
+            </GestureHandlerRootView>
+          </SubscriptionProvider>
         </QueryClientProvider>
       </ErrorBoundary>
     </SafeAreaProvider>
