@@ -45,17 +45,13 @@ export {
 };
 export type { ClosedTrade, OrderDecision, Position, Side };
 
-const BASE_PRICE = 2_350; // synthetic "QQX index" price
-const STORAGE_KEY = 'tradiqs.sim.v1';
+import {
+  STORAGE_KEY,
+  hydratePersistedState,
+  type PersistedState,
+} from '@/lib/persistedState';
 
-interface PersistedState {
-  balance: number;
-  realizedLossToday: number;
-  day: string;
-  position: Position | null;
-  history: ClosedTrade[];
-  lastPrice: number;
-}
+const BASE_PRICE = 2_350; // synthetic "QQX index" price
 
 export type TradeResult =
   | { kind: 'opened'; position: Position }
@@ -98,15 +94,12 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
     (async () => {
       try {
         const raw = await AsyncStorage.getItem(STORAGE_KEY);
-        if (raw) {
-          const s: PersistedState = JSON.parse(raw);
-          setBalance(s.balance);
-          setPosition(s.position);
-          setHistory(s.history ?? []);
-          if (typeof s.lastPrice === 'number') setPrice(s.lastPrice);
-          // Reset daily drawdown on a new day.
-          setRealizedLossToday(s.day === todayKey() ? s.realizedLossToday : 0);
-        }
+        const s = hydratePersistedState(raw, todayKey());
+        setBalance(s.balance);
+        setPosition(s.position);
+        setHistory(s.history);
+        if (s.lastPrice !== null) setPrice(s.lastPrice);
+        setRealizedLossToday(s.realizedLossToday);
       } catch (e) {
         console.error('Failed to load trading state', e);
       } finally {
