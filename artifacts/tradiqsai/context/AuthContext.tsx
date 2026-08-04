@@ -9,6 +9,7 @@ import React, {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Session } from '@supabase/supabase-js';
 import { isSupabaseConfigured, supabase } from '@/utils/supabase';
+import { resolveUsername } from '@/lib/usernameResolution';
 
 /**
  * Local record of a successfully claimed username, keyed per user id.
@@ -77,56 +78,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     let cancelled = false;
-    (async () => {
-      // A locally recorded successful claim wins immediately — never re-show
-      // the prompt for this user, even if the profile fetch below is slow,
-      // fails, or returns a stale (pre-claim) row.
-      let locallyClaimed: string | null = null;
-
-      // A username staged by an in-flight email sign-up wins immediately —
-      // the signup metadata guarantees the trigger will store this exact
-      // value, so never show the prompt while the profile row commits.
-      if (pendingSignupUsername) {
-        locallyClaimed = pendingSignupUsername;
+    // The resolution rules (staged signup username wins, local claim record
+    // beats a missing row, remote syncs to local, errors never downgrade)
+    // live in lib/usernameResolution.ts so they stay unit-tested.
+    resolveUsername({
+      consumePendingSignupUsername: () => {
+        const staged = pendingSignupUsername;
         pendingSignupUsername = null;
-        setUsername(locallyClaimed);
-        AsyncStorage.setItem(claimedUsernameKey(userId), locallyClaimed).catch(() => {});
-      }
-
-      try {
-        locallyClaimed =
-          (await AsyncStorage.getItem(claimedUsernameKey(userId))) ?? locallyClaimed;
-      } catch {
-        // Storage unavailable — fall through to the server lookup.
-      }
-      if (cancelled) return;
-      if (locallyClaimed) {
-        setUsername(locallyClaimed);
-      }
-
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('username')
-        .eq('id', userId)
-        .maybeSingle();
-      if (cancelled) return;
-      // On lookup failure, don't block the app behind the prompt.
-      if (error) {
-        console.warn('Failed to load profile username:', error.message);
-        if (!locallyClaimed) setUsername(undefined);
-        return;
-      }
-      const remote = data?.username ?? null;
-      if (remote) {
-        setUsername(remote);
-        // Keep the local record in sync (covers usernames set at signup too).
-        AsyncStorage.setItem(claimedUsernameKey(userId), remote).catch(() => {});
-      } else if (!locallyClaimed) {
-        // Never downgrade a username we already know about to null — only an
-        // unclaimed profile with no local record should trigger the prompt.
-        setUsername((prev) => (typeof prev === 'string' ? prev : null));
-      }
-    })();
+        return staged;
+      },
+      getStoredUsername: () => AsyncStorage.getItem(claimedUsernameKey(userId)),
+      storeUsername: (name) => {
+        AsyncStorage.setItem(claimedUsernameKey(userId), name).catch(() => {});
+      },
+      fetchRemoteUsername: async () => {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('username')
+          .eq('id', userId)
+          .maybeSingle();
+        if (error) return { error: error.message };
+        return { username: data?.username ?? null };
+      },
+      setUsername,
+      isCancelled: () => cancelled,
+      warn: (message) => console.warn(message),
+    });
     return () => {
       cancelled = true;
     };
