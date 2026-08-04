@@ -62,17 +62,20 @@ const headerStyles = StyleSheet.create({
   },
 });
 
-/** Simulated balance card with distance-to-payout line. */
+/** Balance card with distance-to-payout line. */
 export function BalanceCard({
   balance,
   distanceToPayout,
+  label = 'SIMULATED BALANCE',
 }: {
   balance: string;
   distanceToPayout: string;
+  /** Card heading, e.g. "ACCOUNT BALANCE" when showing the server balance. */
+  label?: string;
 }) {
   return (
     <View style={balanceStyles.card}>
-      <Text style={balanceStyles.label}>SIMULATED BALANCE</Text>
+      <Text style={balanceStyles.label}>{label}</Text>
       <Text style={balanceStyles.balance}>{balance}</Text>
       <Text style={balanceStyles.payout}>
         Distance to Payout: {distanceToPayout}
@@ -234,6 +237,54 @@ export function PositionCard({
     </View>
   );
 }
+
+/**
+ * Full-width notice shown in place of the BUY/SELL buttons when the
+ * server has liquidated the account (account_status = 'BLOWN').
+ */
+export function BlownAccountCard() {
+  return (
+    <View style={blownStyles.card} testID="blown-account-card">
+      <View style={blownStyles.titleRow}>
+        <Feather name="alert-octagon" size={18} color={c.destructive} />
+        <Text style={blownStyles.title}>ACCOUNT BLOWN</Text>
+      </View>
+      <Text style={blownStyles.body}>
+        Your account breached the daily drawdown limit and was liquidated.
+        Trading is disabled.
+      </Text>
+    </View>
+  );
+}
+
+const blownStyles = StyleSheet.create({
+  card: {
+    backgroundColor: c.card,
+    borderRadius: colors.radius,
+    borderWidth: 1,
+    borderColor: c.destructive,
+    paddingHorizontal: 20,
+    paddingVertical: 18,
+    gap: 8,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  title: {
+    color: c.destructive,
+    fontSize: 14,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 2,
+  },
+  body: {
+    color: c.mutedForeground,
+    fontSize: 13,
+    fontFamily: 'Inter_500Medium',
+    lineHeight: 19,
+  },
+});
 
 export type TradeSide = 'BUY' | 'SELL' | null;
 

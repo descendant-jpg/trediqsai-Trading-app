@@ -3,11 +3,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import {
   BalanceCard,
+  BlownAccountCard,
   DrawdownBar,
   ExecutionButtons,
   PositionCard,
   TerminalHeader,
 } from '@/components/trading';
+import { useProfile } from '@/hooks/useProfile';
 import { TradingChart } from '@/components/wagmi-chart';
 import { LivePriceTicker } from '@/components/live-ticker';
 import { ProWindDownBanner } from '@/components/paywall';
@@ -51,6 +53,27 @@ export default function TradingFloorScreen() {
   } = useTrading();
   const [message, setMessage] = useState<string | null>(null);
   const { livePrice, chartData, heartbeat, connected } = useLiveMarket();
+  const { profile, refresh: refreshProfile } = useProfile();
+  const isBlown = profile?.account_status === 'BLOWN';
+
+  // Server-owned numbers for signed-in traders; local simulation otherwise.
+  // Drawdown breach happens at 95% of the daily starting balance, so the
+  // bar shows how much of that 5% buffer today's losses have consumed.
+  // Payout target mirrors the simulated 4.5% profit goal.
+  const displayBalance = profile ? profile.balance : equity;
+  const displayDistanceToPayout = profile
+    ? Math.max(0, +(profile.daily_starting_balance * 1.045 - profile.balance).toFixed(2))
+    : distanceToPayout;
+  const displayDrawdownUsed = profile
+    ? Math.min(
+        Math.max(
+          (profile.daily_starting_balance - profile.balance) /
+            (profile.daily_starting_balance * 0.05 || 1),
+          0,
+        ),
+        1,
+      )
+    : drawdownUsed;
   const [executing, setExecuting] = useState(false);
   /** Supabase id of the currently open trade record, if it was recorded. */
   const openTradeIdRef = useRef<string | null>(null);
@@ -64,6 +87,13 @@ export default function TradingFloorScreen() {
   const executeTrade = useCallback(
     async (side: 'BUY' | 'SELL', localAction: () => TradeResult) => {
       if (executing) return;
+      if (isBlown) {
+        setMessage('Account blown — trading is disabled.');
+        if (Platform.OS !== 'web') {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        }
+        return;
+      }
       setExecuting(true);
       const result = localAction();
       handleResult(result);
@@ -77,6 +107,8 @@ export default function TradingFloorScreen() {
           openTradeIdRef.current = null;
           if (tradeId) {
             await TradeService.closeTrade(tradeId, livePrice);
+            // The DB trigger just settled P&L into profiles.balance.
+            refreshProfile();
           }
         }
       } catch (err) {
@@ -91,7 +123,7 @@ export default function TradingFloorScreen() {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [executing, livePrice],
+    [executing, livePrice, isBlown, refreshProfile],
   );
 
   const handleResult = useCallback((result: TradeResult) => {
@@ -125,10 +157,11 @@ export default function TradingFloorScreen() {
       <View style={styles.content}>
         <View>
           <BalanceCard
-            balance={formatMoney(equity)}
-            distanceToPayout={formatMoney(distanceToPayout)}
+            balance={formatMoney(displayBalance)}
+            distanceToPayout={formatMoney(displayDistanceToPayout)}
+            label={profile ? 'ACCOUNT BALANCE' : 'SIMULATED BALANCE'}
           />
-          <DrawdownBar used={drawdownUsed} />
+          <DrawdownBar used={displayDrawdownUsed} />
         </View>
 
         <View>
@@ -156,10 +189,11 @@ export default function TradingFloorScreen() {
             </View>
           )}
           {message ? <Text style={styles.message}>{message}</Text> : null}
+          {isBlown ? <BlownAccountCard /> : null}
           <ExecutionButtons
             onBuy={() => executeTrade('BUY', buy)}
             onSell={() => executeTrade('SELL', sell)}
-            disabled={executing}
+            disabled={executing || isBlown}
             buyLabel={position?.side === 'SHORT' ? 'BUY / CLOSE' : 'BUY'}
             sellLabel={position?.side === 'LONG' ? 'SELL / CLOSE' : 'SELL'}
             preselected={position ? undefined : signalDirection}

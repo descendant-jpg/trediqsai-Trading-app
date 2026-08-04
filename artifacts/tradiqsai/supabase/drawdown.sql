@@ -47,6 +47,21 @@ insert into public.profiles (id)
 select id from auth.users
 on conflict (id) do nothing;
 
+-- Broadcast profile updates over realtime so the app sees liquidations
+-- immediately. (Idempotent: skip if already in the publication.)
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+     where pubname = 'supabase_realtime'
+       and schemaname = 'public'
+       and tablename = 'profiles'
+  ) then
+    alter publication supabase_realtime add table public.profiles;
+  end if;
+end;
+$$;
+
 -- ── 2. Settle realized P&L into the balance when a trade closes ──────
 create or replace function public.apply_pnl_to_balance()
 returns trigger
