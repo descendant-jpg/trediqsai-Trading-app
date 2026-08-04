@@ -54,6 +54,7 @@ import {
   TradingProvider,
   useTrading,
   STARTING_BALANCE,
+  DAILY_DRAWDOWN_LIMIT,
 } from '@/context/TradingContext';
 import { STORAGE_KEY, type PersistedState } from '@/lib/persistedState';
 
@@ -163,6 +164,104 @@ describe('TradingContext persistence', () => {
     });
     expect(setItem).toHaveBeenCalledTimes(1);
     expect(lastWrite().lastPrice).toBe(tickedPrice);
+  });
+
+  it('resets the daily loss when the calendar day rolls over while running', async () => {
+    // Start just before midnight UTC with a loss already realized today.
+    vi.setSystemTime(new Date('2026-08-04T23:59:00Z'));
+    storage.set(
+      STORAGE_KEY,
+      JSON.stringify({
+        balance: STARTING_BALANCE - 500,
+        realizedLossToday: 500,
+        day: '2026-08-04',
+        position: null,
+        history: [],
+        lastPrice: 2350,
+      } satisfies PersistedState),
+    );
+
+    await renderProvider();
+    expect(latest!.drawdownUsed).toBeGreaterThan(0);
+
+    // Cross midnight while the app stays open. The 30s rollover check fires.
+    act(() => {
+      vi.advanceTimersByTime(2 * 60_000);
+    });
+
+    expect(latest!.drawdownUsed).toBe(0);
+    // The persisted state now stamps the new day with a zeroed loss.
+    const persisted = lastWrite();
+    expect(persisted.day).toBe('2026-08-05');
+    expect(persisted.realizedLossToday).toBe(0);
+  });
+
+  it('does not block a trade placed right after midnight, before the periodic check fires', async () => {
+    // Yesterday's losses maxed out the daily limit.
+    vi.setSystemTime(new Date('2026-08-04T23:59:59Z'));
+    storage.set(
+      STORAGE_KEY,
+      JSON.stringify({
+        balance: STARTING_BALANCE - DAILY_DRAWDOWN_LIMIT,
+        realizedLossToday: DAILY_DRAWDOWN_LIMIT,
+        day: '2026-08-04',
+        position: null,
+        history: [],
+        lastPrice: 2350,
+      } satisfies PersistedState),
+    );
+
+    await renderProvider();
+    expect(latest!.drawdownUsed).toBe(1);
+    // Sanity check: trading is blocked before midnight.
+    let blocked: ReturnType<TradingValue['buy']>;
+    act(() => {
+      blocked = latest!.buy();
+    });
+    expect(blocked!.kind).toBe('blocked');
+
+    // Cross midnight with only 2s elapsed — well before the 30s rollover
+    // check — and trade immediately while the app stays active.
+    act(() => {
+      vi.advanceTimersByTime(2_000);
+    });
+    let result: ReturnType<TradingValue['buy']>;
+    act(() => {
+      result = latest!.buy();
+    });
+    expect(result!.kind).toBe('opened');
+    expect(latest!.drawdownUsed).toBe(0);
+  });
+
+  it('resets the daily loss on foregrounding after midnight', async () => {
+    vi.setSystemTime(new Date('2026-08-04T23:59:50Z'));
+    storage.set(
+      STORAGE_KEY,
+      JSON.stringify({
+        balance: STARTING_BALANCE - 300,
+        realizedLossToday: 300,
+        day: '2026-08-04',
+        position: null,
+        history: [],
+        lastPrice: 2350,
+      } satisfies PersistedState),
+    );
+
+    await renderProvider();
+    expect(latest!.drawdownUsed).toBeGreaterThan(0);
+
+    // Background the app, cross midnight without hitting the 30s interval
+    // (timers don't run in background on a real device; simulate by only
+    // moving the clock), then foreground.
+    act(() => {
+      appState.listeners.forEach((l) => l('background'));
+    });
+    vi.setSystemTime(new Date('2026-08-05T00:00:05Z'));
+    act(() => {
+      appState.listeners.forEach((l) => l('active'));
+    });
+
+    expect(latest!.drawdownUsed).toBe(0);
   });
 
   it('flushes the latest price via the 30s throttle interval', async () => {

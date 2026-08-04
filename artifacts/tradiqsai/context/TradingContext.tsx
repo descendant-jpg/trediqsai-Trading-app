@@ -89,13 +89,15 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
   const [position, setPosition] = useState<Position | null>(null);
   const [history, setHistory] = useState<ClosedTrade[]>([]);
   const loaded = useRef(false);
+  const dayRef = useRef(todayKey());
 
   // Load persisted state once.
   useEffect(() => {
     (async () => {
       try {
         const raw = await AsyncStorage.getItem(STORAGE_KEY);
-        const s = hydratePersistedState(raw, todayKey());
+        dayRef.current = todayKey();
+        const s = hydratePersistedState(raw, dayRef.current);
         setBalance(s.balance);
         setPosition(s.position);
         setHistory(s.history);
@@ -148,8 +150,28 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const sub = AppState.addEventListener('change', (s) => {
       if (s === 'background' || s === 'inactive') persistRef.current();
+      if (s === 'active') rolloverRef.current();
     });
     return () => sub.remove();
+  }, []);
+
+  // Daily drawdown rollover: when the calendar day changes while the app is
+  // running, reset realizedLossToday so yesterday's losses don't count
+  // against today's limit. Checked periodically and on app foreground.
+  const rollDayIfNeeded = useCallback(() => {
+    const today = todayKey();
+    if (today !== dayRef.current) {
+      dayRef.current = today;
+      setRealizedLossToday(0);
+    }
+  }, []);
+
+  const rolloverRef = useRef(rollDayIfNeeded);
+  rolloverRef.current = rollDayIfNeeded;
+
+  useEffect(() => {
+    const id = setInterval(() => rolloverRef.current(), 30_000);
+    return () => clearInterval(id);
   }, []);
 
   // Synthetic price ticker: mean-reverting random walk.
@@ -188,7 +210,15 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
 
   const execute = useCallback(
     (side: Side): TradeResult => {
-      const decision = decideOrder(position, side, drawdownUsed);
+      // Roll the day over at the decision point too, so a trade placed right
+      // after midnight (before the periodic check fires) is never blocked by
+      // yesterday's losses.
+      const dayChanged = todayKey() !== dayRef.current;
+      if (dayChanged) rollDayIfNeeded();
+      const effectiveDrawdown = dayChanged
+        ? computeDrawdownUsed(0, unrealizedPnl)
+        : drawdownUsed;
+      const decision = decideOrder(position, side, effectiveDrawdown);
       if (decision.action === 'blocked') {
         return { kind: 'blocked', reason: decision.reason };
       }
@@ -204,7 +234,7 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
       setPosition(pos);
       return { kind: 'opened', position: pos };
     },
-    [position, price, drawdownUsed, closePosition],
+    [position, price, drawdownUsed, unrealizedPnl, rollDayIfNeeded, closePosition],
   );
 
   const buy = useCallback(() => execute('LONG'), [execute]);
