@@ -4,6 +4,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { TradingProvider } from '@/context/TradingContext';
 import {
   Inter_400Regular,
   Inter_500Medium,
@@ -49,7 +50,9 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           <GestureHandlerRootView>
             <KeyboardProvider>
-              <RootLayoutNav />
+              <TradingProvider>
+                <RootLayoutNav />
+              </TradingProvider>
             </KeyboardProvider>
           </GestureHandlerRootView>
         </QueryClientProvider>

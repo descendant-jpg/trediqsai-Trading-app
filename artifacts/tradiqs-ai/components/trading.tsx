@@ -1,5 +1,6 @@
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import colors from '@/constants/colors';
 
 const c = colors.light;
@@ -165,60 +166,95 @@ const drawdownStyles = StyleSheet.create({
   },
 });
 
-export type TradeSide = 'BUY' | 'SELL' | null;
-
-/**
- * Massive BUY / SELL execution buttons. When a trade is open, both buttons
- * collapse into a single CLOSE TRADE button tinted by the open direction.
- */
-export function ExecutionButtons({
-  activeTrade = null,
-  onBuy,
-  onSell,
-  onClose,
+/** Shows the currently open simulated position and its live P&L. */
+export function PositionCard({
+  side,
+  entryPrice,
+  size,
+  price,
+  pnl,
 }: {
-  activeTrade?: TradeSide;
-  onBuy?: () => void;
-  onSell?: () => void;
-  onClose?: () => void;
+  side: 'LONG' | 'SHORT';
+  entryPrice: number;
+  size: number;
+  price: number;
+  pnl: number;
 }) {
-  if (activeTrade) {
-    const isBuy = activeTrade === 'BUY';
-    return (
-      <View style={execStyles.row}>
-        <TouchableOpacity
-          activeOpacity={0.85}
-          style={[execStyles.button, isBuy ? execStyles.buy : execStyles.sell]}
-          onPress={onClose}
-          testID="close-trade-button"
+  const profit = pnl >= 0;
+  return (
+    <View style={positionStyles.card}>
+      <View style={positionStyles.row}>
+        <View
+          style={[
+            positionStyles.badge,
+            { backgroundColor: side === 'LONG' ? c.success : c.destructive },
+          ]}
         >
           <Text
-            style={[execStyles.buttonText, !isBuy && execStyles.sellText]}
+            style={[
+              positionStyles.badgeText,
+              side === 'SHORT' && { color: '#FFFFFF' },
+            ]}
           >
-            CLOSE TRADE
+            {side}
           </Text>
-        </TouchableOpacity>
+        </View>
+        <Text style={positionStyles.detail}>
+          {size} @ {entryPrice.toFixed(2)} → {price.toFixed(2)}
+        </Text>
+        <Text
+          style={[
+            positionStyles.pnl,
+            { color: profit ? c.success : c.destructive },
+          ]}
+        >
+          {profit ? '+' : '-'}${Math.abs(pnl).toFixed(2)}
+        </Text>
       </View>
-    );
-  }
+    </View>
+  );
+}
+
+export type TradeSide = 'BUY' | 'SELL' | null;
+
+/** Massive BUY / SELL execution buttons. */
+export function ExecutionButtons({
+  onBuy,
+  onSell,
+  buyLabel = 'BUY',
+  sellLabel = 'SELL',
+}: {
+  onBuy?: () => void;
+  onSell?: () => void;
+  buyLabel?: string;
+  sellLabel?: string;
+}) {
+  const press = (cb?: () => void) => () => {
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+    cb?.();
+  };
 
   return (
     <View style={execStyles.row}>
       <TouchableOpacity
         activeOpacity={0.85}
         style={[execStyles.button, execStyles.buy]}
-        onPress={onBuy}
+        onPress={press(onBuy)}
         testID="buy-button"
       >
-        <Text style={execStyles.buttonText}>BUY</Text>
+        <Text style={execStyles.buttonText}>{buyLabel}</Text>
       </TouchableOpacity>
       <TouchableOpacity
         activeOpacity={0.85}
         style={[execStyles.button, execStyles.sell]}
-        onPress={onSell}
+        onPress={press(onSell)}
         testID="sell-button"
       >
-        <Text style={[execStyles.buttonText, execStyles.sellText]}>SELL</Text>
+        <Text style={[execStyles.buttonText, execStyles.sellText]}>
+          {sellLabel}
+        </Text>
       </TouchableOpacity>
     </View>
   );
@@ -256,5 +292,42 @@ const execStyles = StyleSheet.create({
   },
   sellText: {
     color: '#FFFFFF',
+  },
+});
+
+const positionStyles = StyleSheet.create({
+  card: {
+    backgroundColor: c.card,
+    borderRadius: colors.radius,
+    borderWidth: 1,
+    borderColor: c.border,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  badge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  badgeText: {
+    color: '#0A0B0E',
+    fontSize: 12,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 1,
+  },
+  detail: {
+    flex: 1,
+    color: c.mutedForeground,
+    fontSize: 13,
+    fontFamily: 'Inter_500Medium',
+  },
+  pnl: {
+    fontSize: 15,
+    fontFamily: 'Inter_700Bold',
   },
 });

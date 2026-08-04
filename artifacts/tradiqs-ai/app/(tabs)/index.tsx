@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -6,26 +6,17 @@ import {
   BalanceCard,
   DrawdownBar,
   ExecutionButtons,
+  PositionCard,
   TerminalHeader,
-  TradeSide,
 } from '@/components/trading';
 import { TradingChart } from '@/components/wagmi-chart';
+import { useTrading, type TradeResult } from '@/context/TradingContext';
 import colors from '@/constants/colors';
 
 const c = colors.light;
 
-const STARTING_BALANCE = 100_000;
-const MARGIN = 1_000;
-const PAYOUT_TARGET = 104_500;
-
-function fireHaptic(style: Haptics.ImpactFeedbackStyle) {
-  if (Platform.OS !== 'web') {
-    Haptics.impactAsync(style);
-  }
-}
-
-function formatUsd(v: number): string {
-  return `$${v.toLocaleString('en-US', {
+function formatMoney(n: number) {
+  return `$${n.toLocaleString('en-US', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
@@ -34,39 +25,40 @@ function formatUsd(v: number): string {
 export default function TradingFloorScreen() {
   const insets = useSafeAreaInsets();
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
+  const {
+    price,
+    equity,
+    position,
+    unrealizedPnl,
+    drawdownUsed,
+    distanceToPayout,
+    buy,
+    sell,
+  } = useTrading();
+  const [message, setMessage] = useState<string | null>(null);
 
-  const [accountBalance, setAccountBalance] = useState<number>(STARTING_BALANCE);
-  const [activeTrade, setActiveTrade] = useState<TradeSide>(null);
-  const [lastPnl, setLastPnl] = useState<number | null>(null);
-  // Synchronous re-entry guard: prevents double execution from rapid
-  // multi-taps that land before React re-renders with the new state.
-  const tradeLock = useRef<TradeSide>(null);
-
-  const openTrade = (side: 'BUY' | 'SELL') => {
-    if (tradeLock.current) return;
-    tradeLock.current = side;
-    fireHaptic(Haptics.ImpactFeedbackStyle.Medium);
-    setAccountBalance((b) => b - MARGIN);
-    setActiveTrade(side);
-    setLastPnl(null);
-  };
-
-  const closeTrade = () => {
-    if (!tradeLock.current) return;
-    tradeLock.current = null;
-    fireHaptic(Haptics.ImpactFeedbackStyle.Heavy);
-    // Random P&L between -$500 and +$800; margin is returned on close.
-    const pnl = Math.round((Math.random() * 1300 - 500) * 100) / 100;
-    setAccountBalance((b) => b + MARGIN + pnl);
-    setLastPnl(pnl);
-    setActiveTrade(null);
-  };
-
-  const distanceToPayout = Math.max(PAYOUT_TARGET - accountBalance, 0);
-  const drawdownUsed = Math.min(
-    Math.max((STARTING_BALANCE - accountBalance) / 5_000, 0),
-    1,
-  );
+  const handleResult = useCallback((result: TradeResult) => {
+    if (result.kind === 'blocked') {
+      setMessage(result.reason);
+      if (Platform.OS !== 'web') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      }
+    } else if (result.kind === 'closed') {
+      const { pnl } = result.trade;
+      setMessage(
+        `Position closed: ${pnl >= 0 ? '+' : '-'}$${Math.abs(pnl).toFixed(2)}`,
+      );
+      if (Platform.OS !== 'web') {
+        Haptics.notificationAsync(
+          pnl >= 0
+            ? Haptics.NotificationFeedbackType.Success
+            : Haptics.NotificationFeedbackType.Error,
+        );
+      }
+    } else {
+      setMessage(null);
+    }
+  }, []);
 
   return (
     <View style={[styles.container, { paddingTop: topInset }]}>
@@ -75,45 +67,35 @@ export default function TradingFloorScreen() {
       <View style={styles.content}>
         <View>
           <BalanceCard
-            balance={formatUsd(accountBalance)}
-            distanceToPayout={formatUsd(distanceToPayout)}
+            balance={formatMoney(equity)}
+            distanceToPayout={formatMoney(distanceToPayout)}
           />
           <DrawdownBar used={drawdownUsed} />
         </View>
 
         <TradingChart />
 
-        <View>
-          {activeTrade ? (
-            <Text style={styles.statusLine}>
-              <Text
-                style={{
-                  color: activeTrade === 'BUY' ? c.success : c.destructive,
-                }}
-              >
-                {activeTrade}
-              </Text>
-              <Text style={styles.statusMuted}>
-                {'  '}position open · ${MARGIN.toLocaleString()} margin
-              </Text>
-            </Text>
-          ) : lastPnl !== null ? (
-            <Text style={styles.statusLine}>
-              <Text style={styles.statusMuted}>Last trade P&L{'  '}</Text>
-              <Text
-                style={{ color: lastPnl >= 0 ? c.success : c.destructive }}
-              >
-                {lastPnl >= 0 ? '+' : '-'}
-                {formatUsd(Math.abs(lastPnl))}
-              </Text>
-            </Text>
-          ) : null}
-
+        <View style={styles.bottom}>
+          {position ? (
+            <PositionCard
+              side={position.side}
+              entryPrice={position.entryPrice}
+              size={position.size}
+              price={price}
+              pnl={unrealizedPnl}
+            />
+          ) : (
+            <View style={styles.priceRow}>
+              <Text style={styles.priceLabel}>QQX INDEX</Text>
+              <Text style={styles.priceValue}>{price.toFixed(2)}</Text>
+            </View>
+          )}
+          {message ? <Text style={styles.message}>{message}</Text> : null}
           <ExecutionButtons
-            activeTrade={activeTrade}
-            onBuy={() => openTrade('BUY')}
-            onSell={() => openTrade('SELL')}
-            onClose={closeTrade}
+            onBuy={() => handleResult(buy())}
+            onSell={() => handleResult(sell())}
+            buyLabel={position?.side === 'SHORT' ? 'BUY / CLOSE' : 'BUY'}
+            sellLabel={position?.side === 'LONG' ? 'SELL / CLOSE' : 'SELL'}
           />
         </View>
       </View>
@@ -124,7 +106,7 @@ export default function TradingFloorScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A0B0E',
+    backgroundColor: c.background,
   },
   content: {
     flex: 1,
@@ -133,14 +115,30 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     justifyContent: 'space-between',
   },
-  statusLine: {
-    fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
-    textAlign: 'center',
-    marginBottom: 10,
+  bottom: {
+    gap: 10,
   },
-  statusMuted: {
+  priceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  priceLabel: {
     color: c.mutedForeground,
+    fontSize: 11,
+    fontFamily: 'Inter_600SemiBold',
+    letterSpacing: 1.5,
+  },
+  priceValue: {
+    color: c.foreground,
+    fontSize: 16,
+    fontFamily: 'Inter_700Bold',
+  },
+  message: {
+    color: c.mutedForeground,
+    fontSize: 12,
     fontFamily: 'Inter_500Medium',
+    textAlign: 'center',
   },
 });
