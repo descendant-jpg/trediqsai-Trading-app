@@ -13,6 +13,8 @@ import {
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
+import { useTrading } from '@/context/TradingContext';
+import TimezonePickerModal from '@/components/TimezonePickerModal';
 import { useSubscription } from '@/lib/revenuecat';
 import { PRIVACY_POLICY, TERMS_AND_CONDITIONS } from '@/lib/legalContent';
 import { supabase } from '@/utils/supabase';
@@ -32,11 +34,13 @@ type IconName = React.ComponentProps<typeof Feather>['name'];
 function ListItem({
   icon,
   label,
+  value,
   onPress,
   testID,
 }: {
   icon: IconName;
   label: string;
+  value?: string;
   onPress?: () => void;
   testID?: string;
 }) {
@@ -49,6 +53,11 @@ function ListItem({
     >
       <Feather name={icon} size={18} color="#8A8D93" />
       <Text style={styles.listItemLabel}>{label}</Text>
+      {!!value && (
+        <Text style={styles.listItemValue} numberOfLines={1}>
+          {value}
+        </Text>
+      )}
       <Feather name="chevron-right" size={18} color="#8A8D93" />
     </TouchableOpacity>
   );
@@ -70,6 +79,8 @@ export default function ProfileScreen() {
   const { isSubscribed } = useSubscription();
   const [username, setUsername] = useState<string | null>(null);
   const [legalDoc, setLegalDoc] = useState<'terms' | 'privacy' | null>(null);
+  const { tradingDayTz, setTradingDayTz } = useTrading();
+  const [tzPickerOpen, setTzPickerOpen] = useState(false);
 
   const email = session?.user?.email ?? '';
 
@@ -172,6 +183,13 @@ export default function ProfileScreen() {
           <ListItem icon="lock" label="Change Password" onPress={comingSoon('Change Password')} />
           <ListItem icon="trash-2" label="Delete Account" onPress={comingSoon('Delete Account')} />
           <ListItem icon="globe" label="Language" onPress={comingSoon('Language')} />
+          <ListItem
+            icon="clock"
+            label="Trading Day Timezone"
+            value={tradingDayTz.replace(/_/g, ' ')}
+            onPress={() => setTzPickerOpen(true)}
+            testID="profile-timezone"
+          />
           <ListItem icon="bell" label="Notifications" onPress={comingSoon('Notifications')} />
         </Section>
 
@@ -219,6 +237,18 @@ export default function ProfileScreen() {
           <Text style={styles.signOutText}>Sign Out</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Trading-day timezone picker */}
+      <TimezonePickerModal
+        visible={tzPickerOpen}
+        current={tradingDayTz}
+        onClose={() => setTzPickerOpen(false)}
+        onSelect={(tz) => {
+          const ok = setTradingDayTz(tz);
+          if (!ok) showAlert('Timezone', `"${tz}" is not a valid timezone.`);
+          return ok;
+        }}
+      />
 
       {/* Legal modal */}
       <Modal
@@ -365,6 +395,12 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14.5,
     fontFamily: 'Inter_500Medium',
+  },
+  listItemValue: {
+    color: '#00F0FF',
+    fontSize: 12.5,
+    fontFamily: 'Inter_500Medium',
+    maxWidth: 150,
   },
   referralBlock: {
     padding: 16,

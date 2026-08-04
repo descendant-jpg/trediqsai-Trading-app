@@ -51,6 +51,7 @@ import {
   dayKeyInZone,
   deviceTimeZone,
   hydratePersistedState,
+  isValidTimeZone,
   type PersistedState,
 } from '@/lib/persistedState';
 
@@ -75,6 +76,12 @@ interface TradingContextValue {
   distanceToPayout: number;
   /** Pinned IANA timezone the trading day rolls over in. */
   tradingDayTz: string;
+  /**
+   * Re-pin the trading-day timezone. Returns false (and changes nothing)
+   * when the value is not a valid IANA timezone. Today's tracked loss is
+   * preserved — only the day-rollover boundary moves.
+   */
+  setTradingDayTz: (tz: string) => boolean;
   buy: () => TradeResult;
   sell: () => TradeResult;
 }
@@ -139,7 +146,7 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state)).catch((e) =>
       console.error('Failed to persist trading state', e),
     );
-  }, [balance, realizedLossToday, position, history, todayKey]);
+  }, [balance, realizedLossToday, position, history, tradingDayTz, todayKey]);
 
   const persistRef = useRef(persist);
   persistRef.current = persist;
@@ -173,6 +180,17 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
       dayRef.current = today;
       setRealizedLossToday(0);
     }
+  }, []);
+
+  // Re-pin the trading-day timezone. The day key is re-derived in the new
+  // zone WITHOUT resetting realizedLossToday — moving the reset boundary
+  // should never wipe (or double-count) today's tracked loss.
+  const changeTradingDayTz = useCallback((tz: string): boolean => {
+    if (!isValidTimeZone(tz)) return false;
+    tzRef.current = tz;
+    dayRef.current = dayKeyInZone(tz);
+    setTradingDayTz(tz);
+    return true;
   }, []);
 
   const rolloverRef = useRef(rollDayIfNeeded);
@@ -264,6 +282,7 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
       drawdownUsed,
       distanceToPayout,
       tradingDayTz,
+      setTradingDayTz: changeTradingDayTz,
       buy,
       sell,
     }),
@@ -278,6 +297,7 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
       drawdownUsed,
       distanceToPayout,
       tradingDayTz,
+      changeTradingDayTz,
       buy,
       sell,
     ],

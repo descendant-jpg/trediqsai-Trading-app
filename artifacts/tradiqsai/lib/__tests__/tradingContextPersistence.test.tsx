@@ -269,6 +269,64 @@ describe('TradingContext persistence', () => {
     expect(latest!.drawdownUsed).toBe(0);
   });
 
+  it('changing the trading-day timezone persists it and keeps today\'s tracked loss', async () => {
+    const deviceTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    vi.setSystemTime(new Date(2026, 7, 4, 12, 0, 0));
+    storage.set(
+      STORAGE_KEY,
+      JSON.stringify({
+        balance: STARTING_BALANCE - 300,
+        realizedLossToday: 300,
+        day: '2026-08-04',
+        tradingDayTz: deviceTz,
+        position: null,
+        history: [],
+        lastPrice: 2350,
+      } satisfies PersistedState),
+    );
+
+    await renderProvider();
+    expect(latest!.tradingDayTz).toBe(deviceTz);
+    const drawdownBefore = latest!.drawdownUsed;
+    expect(drawdownBefore).toBeGreaterThan(0);
+
+    setItem.mockClear();
+    let ok = false;
+    act(() => {
+      ok = latest!.setTradingDayTz('Pacific/Kiritimati');
+    });
+    expect(ok).toBe(true);
+    expect(latest!.tradingDayTz).toBe('Pacific/Kiritimati');
+    // Today's tracked loss is NOT wiped by the zone change...
+    expect(latest!.drawdownUsed).toBe(drawdownBefore);
+    // ...and the persisted payload carries the new zone with a day key
+    // re-derived in that zone, loss intact.
+    const persisted = lastWrite();
+    expect(persisted.tradingDayTz).toBe('Pacific/Kiritimati');
+    expect(persisted.realizedLossToday).toBe(300);
+    expect(persisted.day).toBe(
+      new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Pacific/Kiritimati',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(new Date(2026, 7, 4, 12, 0, 0)),
+    );
+  });
+
+  it('rejects an invalid trading-day timezone without changing anything', async () => {
+    await renderProvider();
+    const before = latest!.tradingDayTz;
+    setItem.mockClear();
+    let ok = true;
+    act(() => {
+      ok = latest!.setTradingDayTz('Not/A_Zone');
+    });
+    expect(ok).toBe(false);
+    expect(latest!.tradingDayTz).toBe(before);
+    expect(setItem).not.toHaveBeenCalled();
+  });
+
   it('flushes the latest price via the 30s throttle interval', async () => {
     await renderProvider();
     setItem.mockClear();
