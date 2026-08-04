@@ -69,3 +69,49 @@ $$;
 
 revoke execute on function public.is_username_taken(text) from public;
 grant execute on function public.is_username_taken(text) to anon, authenticated;
+
+-- ── 5. Claim a username after social sign-in ─────────────────────────
+-- Google/Apple sign-ups have no username in their metadata, so the profile
+-- row is created with username = null. Clients have no UPDATE policy on
+-- profiles (balances are server-owned), so this SECURITY DEFINER RPC lets
+-- an authenticated user set their OWN username exactly once (only while
+-- it is still null). Returns the stored username.
+create or replace function public.claim_username(p_username text)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_username text := trim(p_username);
+begin
+  if auth.uid() is null then
+    raise exception 'Not authenticated';
+  end if;
+
+  if v_username is null or length(v_username) < 3 or length(v_username) > 20 then
+    raise exception 'Username must be 3-20 characters.';
+  end if;
+  if v_username !~ '^[A-Za-z0-9_]+$' then
+    raise exception 'Username can only contain letters, numbers, and underscores.';
+  end if;
+
+  update public.profiles
+     set username = v_username,
+         updated_at = now()
+   where id = auth.uid()
+     and username is null;
+
+  if not found then
+    raise exception 'Username is already set for this account.';
+  end if;
+
+  return v_username;
+exception
+  when unique_violation then
+    raise exception 'Username already taken.';
+end;
+$$;
+
+revoke execute on function public.claim_username(text) from public, anon;
+grant execute on function public.claim_username(text) to authenticated;

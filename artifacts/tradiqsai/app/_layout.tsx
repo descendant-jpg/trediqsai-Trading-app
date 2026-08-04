@@ -8,6 +8,7 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { TradingProvider } from '@/context/TradingContext';
 import AuthScreen from '@/screens/AuthScreen';
+import ChooseUsernameScreen from '@/screens/ChooseUsernameScreen';
 import {
   Inter_400Regular,
   Inter_500Medium,
@@ -32,13 +33,17 @@ try {
 const queryClient = new QueryClient();
 
 function RootLayoutNav() {
-  const { session, loading } = useAuth();
+  const { session, loading, needsUsername } = useAuth();
 
   // Hold on the splash-colored blank frame while the stored session restores,
   // so signed-in users don't flash the sign-in screen on launch.
   if (loading) return null;
 
   if (!session) return <AuthScreen />;
+
+  // Social sign-ups (Google/Apple) have no username in their profile yet —
+  // prompt them to pick one before entering the app (skippable per session).
+  if (needsUsername) return <ChooseUsernameScreen />;
 
   return (
     <Stack screenOptions={{ headerBackTitle: 'Back' }}>
