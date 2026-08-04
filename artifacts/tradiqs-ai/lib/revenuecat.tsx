@@ -156,6 +156,11 @@ function useSubscriptionContext() {
   // Prefer live data; fall back to the cached value while loading.
   const isSubscribed = liveIsSubscribed !== null ? liveIsSubscribed : cachedIsSubscribed === true;
 
+  // Entitlement is active but the user cancelled in the store: Pro access
+  // continues until expirationDate, then the paywall reappears normally.
+  const isWindingDown = activeEntitlement !== undefined && activeEntitlement.willRenew === false;
+  const windDownExpirationDate = isWindingDown ? activeEntitlement?.expirationDate ?? null : null;
+
   // Only report loading if we have neither live data nor a cached value yet.
   const subscriptionResolving =
     customerInfoQuery.isLoading && (!cacheLoaded || cachedIsSubscribed === null);
@@ -170,6 +175,8 @@ function useSubscriptionContext() {
     offerings: offeringsQuery.data,
     activeEntitlement,
     isSubscribed,
+    isWindingDown,
+    windDownExpirationDate,
     isLoading: subscriptionResolving || (!isSubscribed && offeringsQuery.isLoading),
     purchase: purchaseMutation.mutateAsync,
     restore: restoreMutation.mutateAsync,

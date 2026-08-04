@@ -144,6 +144,36 @@ export function PaywallCard() {
 }
 
 /**
+ * Subtle notice shown when the user cancelled in the store but the
+ * entitlement is still active: Pro access continues until the expiration
+ * date, after which the paywall reappears normally.
+ */
+export function ProWindDownBanner() {
+  const { isWindingDown, windDownExpirationDate } = useSubscription();
+
+  if (!isWindingDown) return null;
+
+  const endDate = windDownExpirationDate
+    ? new Date(windDownExpirationDate).toLocaleDateString(undefined, {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      })
+    : null;
+
+  return (
+    <View style={styles.windDownBanner} testID="pro-wind-down-banner">
+      <Feather name="clock" size={14} color="#FFB020" />
+      <Text style={styles.windDownText}>
+        {endDate
+          ? `Your subscription is cancelled — Pro access continues until ${endDate}.`
+          : 'Your subscription is cancelled — Pro access continues until the end of your billing period.'}
+      </Text>
+    </View>
+  );
+}
+
+/**
  * Subscription management card for active Pro subscribers.
  * Shows the current plan, price, and next renewal date from RevenueCat
  * customerInfo, and deep-links to the platform subscription management page.
@@ -243,6 +273,24 @@ export function ManageSubscriptionCard() {
 }
 
 const styles = StyleSheet.create({
+  windDownBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(255,176,32,0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,176,32,0.35)',
+    borderRadius: colors.radius,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  windDownText: {
+    flex: 1,
+    color: '#FFB020',
+    fontSize: 12,
+    fontFamily: 'Inter_500Medium',
+    lineHeight: 17,
+  },
   manageCard: {
     backgroundColor: '#16181D',
     borderRadius: colors.radius,

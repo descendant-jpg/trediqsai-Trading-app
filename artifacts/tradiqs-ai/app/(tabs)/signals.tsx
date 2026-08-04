@@ -3,7 +3,7 @@ import { ActivityIndicator, FlatList, Platform, Pressable, StyleSheet, Text, Tou
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { ManageSubscriptionCard, PaywallCard } from '@/components/paywall';
+import { ManageSubscriptionCard, PaywallCard, ProWindDownBanner } from '@/components/paywall';
 import colors from '@/constants/colors';
 import { useGetSignals, type Signal } from '@workspace/api-client-react';
 import { useSubscription } from '@/lib/revenuecat';
@@ -154,7 +154,12 @@ export default function AISignalsScreen() {
           renderItem={({ item }) => <SignalCard signal={item} onTrade={handleTrade} />}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
-          ListHeaderComponent={<ManageSubscriptionCard />}
+          ListHeaderComponent={
+            <View style={{ gap: 12 }}>
+              <ProWindDownBanner />
+              <ManageSubscriptionCard />
+            </View>
+          }
         />
       ) : (
         /* Locked signals feed — dimmed and non-interactive behind the paywall */
