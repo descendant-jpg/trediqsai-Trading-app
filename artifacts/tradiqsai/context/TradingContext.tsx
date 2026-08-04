@@ -7,6 +7,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 /**
@@ -109,8 +110,12 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
     })();
   }, []);
 
-  // Persist on change (after initial load).
-  useEffect(() => {
+  // Latest price kept in a ref so meaningful-change persistence can include
+  // it without re-running the effect on every 1s tick.
+  const priceRef = useRef(price);
+  priceRef.current = price;
+
+  const persist = useCallback(() => {
     if (!loaded.current) return;
     const state: PersistedState = {
       balance,
@@ -118,12 +123,34 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
       day: todayKey(),
       position,
       history,
-      lastPrice: price,
+      lastPrice: priceRef.current,
     };
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state)).catch((e) =>
       console.error('Failed to persist trading state', e),
     );
-  }, [balance, realizedLossToday, position, history, price]);
+  }, [balance, realizedLossToday, position, history]);
+
+  const persistRef = useRef(persist);
+  persistRef.current = persist;
+
+  // Persist immediately on meaningful changes (after initial load).
+  useEffect(() => {
+    persist();
+  }, [persist]);
+
+  // Persist lastPrice only occasionally: throttled to every 30s...
+  useEffect(() => {
+    const id = setInterval(() => persistRef.current(), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // ...and whenever the app leaves the foreground.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'background' || s === 'inactive') persistRef.current();
+    });
+    return () => sub.remove();
+  }, []);
 
   // Synthetic price ticker: mean-reverting random walk.
   useEffect(() => {
