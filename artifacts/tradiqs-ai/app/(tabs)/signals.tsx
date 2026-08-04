@@ -2,6 +2,7 @@ import React from 'react';
 import { FlatList, Platform, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import { PaywallCard } from '@/components/paywall';
 import colors from '@/constants/colors';
 
 const c = colors.light;
@@ -182,13 +183,22 @@ export default function AISignalsScreen() {
         <Feather name="zap" size={20} color={c.primary} />
         <Text style={styles.headerTitle}>AI Signals</Text>
       </View>
-      <FlatList
-        data={SIGNALS}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <SignalCard signal={item} />}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-      />
+      {/* Locked signals feed — dimmed and non-interactive behind the paywall */}
+      <View style={styles.lockedContent} pointerEvents="none">
+        <FlatList
+          data={SIGNALS}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => <SignalCard signal={item} />}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          scrollEnabled={false}
+        />
+      </View>
+
+      {/* Centered Pro Tier paywall overlay */}
+      <View style={styles.paywallOverlay}>
+        <PaywallCard />
+      </View>
     </View>
   );
 }
@@ -214,6 +224,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 32,
     gap: 12,
+  },
+  lockedContent: {
+    flex: 1,
+    opacity: 0.2,
+  },
+  paywallOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    paddingHorizontal: 24,
   },
   card: {
     backgroundColor: c.card,
