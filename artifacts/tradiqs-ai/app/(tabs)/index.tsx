@@ -3,11 +3,11 @@ import { Platform, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   BalanceCard,
-  ChartPlaceholder,
   DrawdownBar,
   ExecutionButtons,
   TerminalHeader,
 } from '@/components/trading';
+import { LiveChart } from '@/components/live-chart';
 import colors from '@/constants/colors';
 
 const c = colors.light;
@@ -26,7 +26,7 @@ export default function TradingFloorScreen() {
           <DrawdownBar used={0.3} />
         </View>
 
-        <ChartPlaceholder />
+        <LiveChart />
 
         <ExecutionButtons />
       </View>

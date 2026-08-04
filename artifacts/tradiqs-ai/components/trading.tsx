@@ -167,31 +167,6 @@ const drawdownStyles = StyleSheet.create({
   },
 });
 
-/** Placeholder area reserved for the future chart component. */
-export function ChartPlaceholder() {
-  return (
-    <View style={chartStyles.container}>
-      <Text style={chartStyles.text}>Chart Component Goes Here</Text>
-    </View>
-  );
-}
-
-const chartStyles = StyleSheet.create({
-  container: {
-    height: 300,
-    borderWidth: 1,
-    borderColor: '#22252A',
-    borderRadius: colors.radius,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  text: {
-    color: c.mutedForeground,
-    fontSize: 14,
-    fontFamily: 'Inter_500Medium',
-  },
-});
-
 /** Massive BUY / SELL execution buttons. */
 export function ExecutionButtons({
   onBuy,
