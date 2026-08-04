@@ -1,5 +1,5 @@
-import React from 'react';
-import { FlatList, Platform, StyleSheet, Text, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { FlatList, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import colors from '@/constants/colors';
@@ -17,6 +17,14 @@ type Trader = {
   trades: number;
   pro: boolean;
 };
+
+type Period = 'today' | 'week' | 'all';
+
+const PERIODS: { key: Period; label: string }[] = [
+  { key: 'today', label: 'Today' },
+  { key: 'week', label: 'This week' },
+  { key: 'all', label: 'All time' },
+];
 
 const TRADERS: Trader[] = [
   { id: 't1', rank: 1, name: 'Ava Chen', handle: '@quantava', pnl: 48230, pnlPct: 34.2, winRate: 71, trades: 182, pro: true },
@@ -42,6 +50,60 @@ const YOU: Trader = {
   trades: 24,
   pro: false,
 };
+
+// Per-period variation applied to the base (weekly) sample data. Each entry
+// scales P&L and trade counts and nudges ordering so rankings differ per period.
+const PERIOD_ADJUST: Record<
+  Period,
+  { pnlScale: number; tradeScale: number; shuffle: number[]; youRank: number; youPnl: number; youPnlPct: number; youTrades: number }
+> = {
+  today: {
+    pnlScale: 0.18,
+    tradeScale: 0.12,
+    shuffle: [2, 0, 4, 1, 3, 6, 5, 8, 7, 9],
+    youRank: 8,
+    youPnl: 310,
+    youPnlPct: 0.3,
+    youTrades: 4,
+  },
+  week: {
+    pnlScale: 1,
+    tradeScale: 1,
+    shuffle: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    youRank: 12,
+    youPnl: 1240,
+    youPnlPct: 1.2,
+    youTrades: 24,
+  },
+  all: {
+    pnlScale: 6.4,
+    tradeScale: 9,
+    shuffle: [1, 0, 3, 2, 4, 6, 5, 7, 9, 8],
+    youRank: 27,
+    youPnl: 4120,
+    youPnlPct: 4.1,
+    youTrades: 118,
+  },
+};
+
+function tradersForPeriod(period: Period): Trader[] {
+  const adj = PERIOD_ADJUST[period];
+  return adj.shuffle.map((srcIdx, i) => {
+    const t = TRADERS[srcIdx];
+    return {
+      ...t,
+      rank: i + 1,
+      pnl: Math.round(t.pnl * adj.pnlScale),
+      pnlPct: Number((t.pnlPct * adj.pnlScale).toFixed(1)),
+      trades: Math.max(1, Math.round(t.trades * adj.tradeScale)),
+    };
+  });
+}
+
+function youForPeriod(period: Period): Trader {
+  const adj = PERIOD_ADJUST[period];
+  return { ...YOU, rank: adj.youRank, pnl: adj.youPnl, pnlPct: adj.youPnlPct, trades: adj.youTrades };
+}
 
 const MEDAL_COLORS: Record<number, string> = {
   1: '#FFD75E',
@@ -110,19 +172,39 @@ function TraderRow({ trader, isYou }: { trader: Trader; isYou?: boolean }) {
 export default function LeaderboardScreen() {
   const insets = useSafeAreaInsets();
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
+  const [period, setPeriod] = useState<Period>('week');
+
+  const traders = useMemo(() => tradersForPeriod(period), [period]);
+  const you = useMemo(() => youForPeriod(period), [period]);
 
   return (
     <View style={[styles.container, { paddingTop: topInset }]}>
       <View style={styles.header}>
         <Feather name="award" size={20} color={c.secondary} />
         <Text style={styles.headerTitle}>Leaderboard</Text>
-        <Text style={styles.headerSub}>This week</Text>
+      </View>
+      <View style={styles.segmented}>
+        {PERIODS.map((p) => {
+          const active = p.key === period;
+          return (
+            <Pressable
+              key={p.key}
+              onPress={() => setPeriod(p.key)}
+              style={[styles.segment, active && styles.segmentActive]}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+            >
+              <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{p.label}</Text>
+            </Pressable>
+          );
+        })}
       </View>
       <View style={styles.youPinned}>
-        <TraderRow trader={YOU} isYou />
+        <TraderRow trader={you} isYou />
       </View>
       <FlatList
-        data={TRADERS}
+        data={traders}
+        extraData={period}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => <TraderRow trader={item} />}
         contentContainerStyle={styles.listContent}
@@ -150,11 +232,36 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontFamily: 'Inter_700Bold',
   },
-  headerSub: {
+  segmented: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginBottom: 12,
+    backgroundColor: c.muted,
+    borderWidth: 1,
+    borderColor: c.border,
+    borderRadius: colors.radius,
+    padding: 3,
+    gap: 3,
+  },
+  segment: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 7,
+    borderRadius: colors.radius - 3,
+  },
+  segmentActive: {
+    backgroundColor: c.card,
+    borderWidth: 1,
+    borderColor: c.primary,
+  },
+  segmentText: {
     color: c.mutedForeground,
     fontSize: 12,
     fontFamily: 'Inter_500Medium',
-    marginLeft: 'auto',
+  },
+  segmentTextActive: {
+    color: c.primary,
+    fontFamily: 'Inter_700Bold',
   },
   listContent: {
     paddingHorizontal: 16,
