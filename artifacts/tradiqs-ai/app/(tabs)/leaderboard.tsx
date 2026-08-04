@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import { PrizePoolBanner } from '@/components/prize-banner';
 import colors from '@/constants/colors';
 import { useGetLeaderboard, type Trader } from '@workspace/api-client-react';
 
@@ -195,6 +196,7 @@ export default function LeaderboardScreen() {
         <Feather name="award" size={20} color={c.secondary} />
         <Text style={styles.headerTitle}>Leaderboard</Text>
       </View>
+      <PrizePoolBanner />
       <View style={styles.segmented}>
         {PERIODS.map((p) => {
           const active = p.key === period;
