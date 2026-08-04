@@ -12,6 +12,19 @@ import {
 
 export const STORAGE_KEY = 'tradiqs.sim.v1';
 
+/**
+ * Day key for the daily drawdown, derived from the device's LOCAL calendar
+ * date (YYYY-MM-DD) — the daily loss limit resets at the trader's local
+ * midnight, not UTC. A persisted UTC-based key from older versions simply
+ * mismatches once and resets the loss to 0, which is acceptable.
+ */
+export function localDayKey(date: Date = new Date()): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 export interface PersistedState {
   balance: number;
   realizedLossToday: number;

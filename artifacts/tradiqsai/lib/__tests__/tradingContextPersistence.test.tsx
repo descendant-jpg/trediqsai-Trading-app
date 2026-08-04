@@ -167,8 +167,9 @@ describe('TradingContext persistence', () => {
   });
 
   it('resets the daily loss when the calendar day rolls over while running', async () => {
-    // Start just before midnight UTC with a loss already realized today.
-    vi.setSystemTime(new Date('2026-08-04T23:59:00Z'));
+    // Start just before LOCAL midnight with a loss already realized today.
+    // (Local-time Date constructor — the day key is the device's local date.)
+    vi.setSystemTime(new Date(2026, 7, 4, 23, 59, 0));
     storage.set(
       STORAGE_KEY,
       JSON.stringify({
@@ -197,8 +198,8 @@ describe('TradingContext persistence', () => {
   });
 
   it('does not block a trade placed right after midnight, before the periodic check fires', async () => {
-    // Yesterday's losses maxed out the daily limit.
-    vi.setSystemTime(new Date('2026-08-04T23:59:59Z'));
+    // Yesterday's losses maxed out the daily limit. Just before LOCAL midnight.
+    vi.setSystemTime(new Date(2026, 7, 4, 23, 59, 59));
     storage.set(
       STORAGE_KEY,
       JSON.stringify({
@@ -234,7 +235,8 @@ describe('TradingContext persistence', () => {
   });
 
   it('resets the daily loss on foregrounding after midnight', async () => {
-    vi.setSystemTime(new Date('2026-08-04T23:59:50Z'));
+    // Just before LOCAL midnight.
+    vi.setSystemTime(new Date(2026, 7, 4, 23, 59, 50));
     storage.set(
       STORAGE_KEY,
       JSON.stringify({
@@ -256,7 +258,7 @@ describe('TradingContext persistence', () => {
     act(() => {
       appState.listeners.forEach((l) => l('background'));
     });
-    vi.setSystemTime(new Date('2026-08-05T00:00:05Z'));
+    vi.setSystemTime(new Date(2026, 7, 5, 0, 0, 5));
     act(() => {
       appState.listeners.forEach((l) => l('active'));
     });

@@ -49,6 +49,7 @@ export type { ClosedTrade, OrderDecision, Position, Side };
 import {
   STORAGE_KEY,
   hydratePersistedState,
+  localDayKey,
   type PersistedState,
 } from '@/lib/persistedState';
 
@@ -78,7 +79,9 @@ interface TradingContextValue {
 const TradingContext = createContext<TradingContextValue | null>(null);
 
 function todayKey() {
-  return new Date().toISOString().slice(0, 10);
+  // Local calendar date: the daily loss limit resets at the trader's local
+  // midnight, not UTC.
+  return localDayKey();
 }
 
 export function TradingProvider({ children }: { children: React.ReactNode }) {

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { hydratePersistedState, type PersistedState } from '../persistedState';
+import {
+  hydratePersistedState,
+  localDayKey,
+  type PersistedState,
+} from '../persistedState';
 import { STARTING_BALANCE } from '../tradingLogic';
 
 const TODAY = '2026-08-04';
@@ -140,5 +144,26 @@ describe('hydratePersistedState — daily loss reset', () => {
       hydratePersistedState(JSON.stringify({ ...valid, day: 123 }), TODAY)
         .realizedLossToday,
     ).toBe(0);
+  });
+});
+
+describe('localDayKey', () => {
+  it('formats the local calendar date as YYYY-MM-DD', () => {
+    // Local-time constructor: components below are the LOCAL date regardless
+    // of the timezone the test runs in.
+    expect(localDayKey(new Date(2026, 7, 4, 23, 59, 59))).toBe('2026-08-04');
+    expect(localDayKey(new Date(2026, 0, 5, 0, 0, 1))).toBe('2026-01-05');
+  });
+
+  it('reports the LOCAL date even when it differs from the UTC date', () => {
+    // Just before local midnight: in any zone ahead of UTC by >30 minutes
+    // the UTC date is still the previous day; behind UTC it may already be
+    // the next day. localDayKey must always report the local date.
+    const d = new Date(2026, 7, 4, 23, 30, 0);
+    expect(localDayKey(d)).toBe('2026-08-04');
+    const offsetMin = -d.getTimezoneOffset(); // minutes ahead of UTC
+    const utcKey = d.toISOString().slice(0, 10);
+    if (offsetMin > 30) expect(utcKey).toBe('2026-08-04'); // UTC still 04
+    if (offsetMin < -30) expect(utcKey).toBe('2026-08-05'); // UTC already 05
   });
 });
