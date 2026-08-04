@@ -22,7 +22,6 @@ export const MOCK_BTC_DATA: { timestamp: number; value: number }[] = (() => {
 })();
 
 const CHART_HEIGHT = 210;
-const LAST_PRICE = MOCK_BTC_DATA[MOCK_BTC_DATA.length - 1].value;
 
 /**
  * Worklet-safe USD formatter (no Intl/toLocaleString — those are unsafe
@@ -46,20 +45,33 @@ function formatUsdWorklet(v: number): string {
  * A single shared Provider drives both the header price/time readout and
  * the chart, so dragging the crosshair updates the header live.
  */
-export function TradingChart({ symbol }: { symbol?: string }) {
+export function TradingChart({
+  symbol,
+  data,
+}: {
+  symbol?: string;
+  /** Live streamed points; falls back to mock data until ≥2 ticks arrive. */
+  data?: { timestamp: number; value: number }[];
+}) {
+  const live = !!data && data.length >= 2;
+  const series = live ? data : MOCK_BTC_DATA;
+  const lastPrice = series[series.length - 1].value;
+
   return (
     <View style={styles.container} testID="trading-chart">
-      <LineChart.Provider data={MOCK_BTC_DATA}>
+      <LineChart.Provider data={series}>
         <View style={styles.headerRow}>
           <View>
             <Text style={styles.symbol}>{symbol ?? 'BTC / USD'}</Text>
-            <Text style={styles.feedLabel}>SIMULATED FEED</Text>
+            <Text style={[styles.feedLabel, live && styles.liveLabel]}>
+              {live ? 'LIVE FEED' : 'SIMULATED FEED'}
+            </Text>
           </View>
           <View style={styles.priceBlock}>
             <LineChart.PriceText
               format={({ value }) => {
                 'worklet';
-                const v = value ? parseFloat(value) : LAST_PRICE;
+                const v = value ? parseFloat(value) : lastPrice;
                 return formatUsdWorklet(v);
               }}
               style={styles.price}
@@ -107,6 +119,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'Inter_700Bold',
     letterSpacing: 0.5,
+  },
+  liveLabel: {
+    color: '#00F0FF',
   },
   feedLabel: {
     color: c.mutedForeground,

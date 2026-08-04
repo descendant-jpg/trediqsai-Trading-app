@@ -10,7 +10,10 @@ import {
   TerminalHeader,
 } from '@/components/trading';
 import { TradingChart } from '@/components/wagmi-chart';
+import { LivePriceTicker } from '@/components/live-ticker';
 import { ProWindDownBanner } from '@/components/paywall';
+import { useLiveMarket } from '@/hooks/useLiveMarket';
+import * as TradeService from '@/services/TradeService';
 import { useTrading, type TradeResult } from '@/context/TradingContext';
 import colors from '@/constants/colors';
 import { useLocalSearchParams } from 'expo-router';
@@ -47,6 +50,41 @@ export default function TradingFloorScreen() {
     sell,
   } = useTrading();
   const [message, setMessage] = useState<string | null>(null);
+  const { livePrice, chartData, heartbeat, connected } = useLiveMarket();
+  const [executing, setExecuting] = useState(false);
+
+  /**
+   * Runs the local simulated trade, then records it to Supabase via
+   * TradeService. Buttons stay disabled until the network call settles so
+   * spam-taps can't open duplicate trades.
+   */
+  const executeTrade = useCallback(
+    async (side: 'BUY' | 'SELL', localAction: () => TradeResult) => {
+      if (executing) return;
+      setExecuting(true);
+      const result = localAction();
+      handleResult(result);
+      try {
+        // Persist only genuine opens; closes are handled by the sim engine
+        // (recording closes requires the persisted trade id — future work).
+        // Skip when no valid live price has arrived yet.
+        if (result.kind === 'opened' && livePrice > 0) {
+          await TradeService.openTrade('BTC/USD', side, livePrice);
+        }
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : 'Unknown error';
+        setMessage(
+          reason === 'User not authenticated'
+            ? 'Simulated only — sign in to record trades'
+            : `Trade not recorded: ${reason}`,
+        );
+      } finally {
+        setExecuting(false);
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [executing, livePrice],
+  );
 
   const handleResult = useCallback((result: TradeResult) => {
     if (result.kind === 'blocked') {
@@ -85,7 +123,14 @@ export default function TradingFloorScreen() {
           <DrawdownBar used={drawdownUsed} />
         </View>
 
-        <TradingChart symbol={signalSymbol} />
+        <View>
+          <LivePriceTicker
+            livePrice={livePrice}
+            heartbeat={heartbeat}
+            connected={connected}
+          />
+          <TradingChart symbol={signalSymbol} data={chartData} />
+        </View>
 
         <View style={styles.bottom}>
           {position ? (
@@ -104,8 +149,9 @@ export default function TradingFloorScreen() {
           )}
           {message ? <Text style={styles.message}>{message}</Text> : null}
           <ExecutionButtons
-            onBuy={() => handleResult(buy())}
-            onSell={() => handleResult(sell())}
+            onBuy={() => executeTrade('BUY', buy)}
+            onSell={() => executeTrade('SELL', sell)}
+            disabled={executing}
             buyLabel={position?.side === 'SHORT' ? 'BUY / CLOSE' : 'BUY'}
             sellLabel={position?.side === 'LONG' ? 'SELL / CLOSE' : 'SELL'}
             preselected={position ? undefined : signalDirection}

@@ -228,14 +228,18 @@ export function ExecutionButtons({
   buyLabel = 'BUY',
   sellLabel = 'SELL',
   preselected,
+  disabled,
 }: {
   onBuy?: () => void;
   onSell?: () => void;
   buyLabel?: string;
   sellLabel?: string;
   preselected?: 'BUY' | 'SELL';
+  /** Disables both buttons (e.g. while a trade request is in flight). */
+  disabled?: boolean;
 }) {
   const press = (cb?: () => void) => () => {
+    if (disabled) return;
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
@@ -251,8 +255,10 @@ export function ExecutionButtons({
           execStyles.buy,
           preselected === 'BUY' && execStyles.selected,
           preselected === 'SELL' && execStyles.dimmed,
+          disabled && execStyles.dimmed,
         ]}
         onPress={press(onBuy)}
+        disabled={disabled}
         testID="buy-button"
       >
         <Text style={execStyles.buttonText}>{buyLabel}</Text>
@@ -264,8 +270,10 @@ export function ExecutionButtons({
           execStyles.sell,
           preselected === 'SELL' && execStyles.selected,
           preselected === 'BUY' && execStyles.dimmed,
+          disabled && execStyles.dimmed,
         ]}
         onPress={press(onSell)}
+        disabled={disabled}
         testID="sell-button"
       >
         <Text style={[execStyles.buttonText, execStyles.sellText]}>
