@@ -1,8 +1,11 @@
-import React, { createContext, useContext } from "react";
+import React, { createContext, useContext, useEffect, useState } from "react";
 import { Platform } from "react-native";
 import Purchases from "react-native-purchases";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import Constants from "expo-constants";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+const SUBSCRIPTION_CACHE_KEY = "revenuecat.isSubscribed";
 
 const REVENUECAT_TEST_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_TEST_API_KEY;
 const REVENUECAT_IOS_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY;
@@ -45,6 +48,27 @@ export function initializeRevenueCat() {
 }
 
 function useSubscriptionContext() {
+  // Last-known subscription state from AsyncStorage, used until the live
+  // customerInfo fetch resolves so the paywall doesn't flash for subscribers.
+  const [cachedIsSubscribed, setCachedIsSubscribed] = useState<boolean | null>(null);
+  const [cacheLoaded, setCacheLoaded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    AsyncStorage.getItem(SUBSCRIPTION_CACHE_KEY)
+      .then((value) => {
+        if (cancelled) return;
+        if (value !== null) setCachedIsSubscribed(value === "true");
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setCacheLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const customerInfoQuery = useQuery({
     queryKey: ["revenuecat", "customer-info"],
     queryFn: async () => {
@@ -53,6 +77,17 @@ function useSubscriptionContext() {
     },
     staleTime: 60 * 1000,
   });
+
+  // On every successful fetch, persist the entitlement state.
+  const liveIsSubscribed = customerInfoQuery.data
+    ? customerInfoQuery.data.entitlements.active?.[REVENUECAT_ENTITLEMENT_IDENTIFIER] !== undefined
+    : null;
+
+  useEffect(() => {
+    if (liveIsSubscribed === null) return;
+    setCachedIsSubscribed(liveIsSubscribed);
+    AsyncStorage.setItem(SUBSCRIPTION_CACHE_KEY, String(liveIsSubscribed)).catch(() => {});
+  }, [liveIsSubscribed]);
 
   const offeringsQuery = useQuery({
     queryKey: ["revenuecat", "offerings"],
@@ -63,29 +98,43 @@ function useSubscriptionContext() {
     staleTime: 300 * 1000,
   });
 
+  // Invalidate the cache when a purchase or restore completes: recompute the
+  // entitlement from the fresh customerInfo and persist it immediately.
+  const applyFreshCustomerInfo = (customerInfo: Awaited<ReturnType<typeof Purchases.getCustomerInfo>>) => {
+    const subscribed =
+      customerInfo.entitlements.active?.[REVENUECAT_ENTITLEMENT_IDENTIFIER] !== undefined;
+    setCachedIsSubscribed(subscribed);
+    AsyncStorage.setItem(SUBSCRIPTION_CACHE_KEY, String(subscribed)).catch(() => {});
+    customerInfoQuery.refetch();
+  };
+
   const purchaseMutation = useMutation({
     mutationFn: async (packageToPurchase: any) => {
       const { customerInfo } = await Purchases.purchasePackage(packageToPurchase);
       return customerInfo;
     },
-    onSuccess: () => customerInfoQuery.refetch(),
+    onSuccess: (customerInfo) => applyFreshCustomerInfo(customerInfo),
   });
 
   const restoreMutation = useMutation({
     mutationFn: async () => {
       return Purchases.restorePurchases();
     },
-    onSuccess: () => customerInfoQuery.refetch(),
+    onSuccess: (customerInfo) => applyFreshCustomerInfo(customerInfo),
   });
 
-  const isSubscribed =
-    customerInfoQuery.data?.entitlements.active?.[REVENUECAT_ENTITLEMENT_IDENTIFIER] !== undefined;
+  // Prefer live data; fall back to the cached value while loading.
+  const isSubscribed = liveIsSubscribed !== null ? liveIsSubscribed : cachedIsSubscribed === true;
+
+  // Only report loading if we have neither live data nor a cached value yet.
+  const subscriptionResolving =
+    customerInfoQuery.isLoading && (!cacheLoaded || cachedIsSubscribed === null);
 
   return {
     customerInfo: customerInfoQuery.data,
     offerings: offeringsQuery.data,
     isSubscribed,
-    isLoading: customerInfoQuery.isLoading || offeringsQuery.isLoading,
+    isLoading: subscriptionResolving || (!isSubscribed && offeringsQuery.isLoading),
     purchase: purchaseMutation.mutateAsync,
     restore: restoreMutation.mutateAsync,
     isPurchasing: purchaseMutation.isPending,
