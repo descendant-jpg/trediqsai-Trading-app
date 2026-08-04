@@ -1,4 +1,3 @@
-import React, { useCallback, useState } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -17,6 +16,7 @@ import * as TradeService from '@/services/TradeService';
 import { useTrading, type TradeResult } from '@/context/TradingContext';
 import colors from '@/constants/colors';
 import { useLocalSearchParams } from 'expo-router';
+import React, { useCallback, useRef, useState } from 'react';
 
 const c = colors.light;
 
@@ -52,11 +52,14 @@ export default function TradingFloorScreen() {
   const [message, setMessage] = useState<string | null>(null);
   const { livePrice, chartData, heartbeat, connected } = useLiveMarket();
   const [executing, setExecuting] = useState(false);
+  /** Supabase id of the currently open trade record, if it was recorded. */
+  const openTradeIdRef = useRef<string | null>(null);
 
   /**
    * Runs the local simulated trade, then records it to Supabase via
-   * TradeService. Buttons stay disabled until the network call settles so
-   * spam-taps can't open duplicate trades.
+   * TradeService. Opening inserts a row; closing updates it — the database
+   * trigger computes the final P&L server-side. Buttons stay disabled until
+   * the network call settles so spam-taps can't open duplicate trades.
    */
   const executeTrade = useCallback(
     async (side: 'BUY' | 'SELL', localAction: () => TradeResult) => {
@@ -65,11 +68,16 @@ export default function TradingFloorScreen() {
       const result = localAction();
       handleResult(result);
       try {
-        // Persist only genuine opens; closes are handled by the sim engine
-        // (recording closes requires the persisted trade id — future work).
-        // Skip when no valid live price has arrived yet.
+        // Skip recording opens until a valid live price has arrived.
         if (result.kind === 'opened' && livePrice > 0) {
-          await TradeService.openTrade('BTC/USD', side, livePrice);
+          const record = await TradeService.openTrade('BTC/USD', side, livePrice);
+          openTradeIdRef.current = record.id;
+        } else if (result.kind === 'closed') {
+          const tradeId = openTradeIdRef.current;
+          openTradeIdRef.current = null;
+          if (tradeId) {
+            await TradeService.closeTrade(tradeId, livePrice);
+          }
         }
       } catch (err) {
         const reason = err instanceof Error ? err.message : 'Unknown error';
