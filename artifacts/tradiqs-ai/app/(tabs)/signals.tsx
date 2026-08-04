@@ -99,7 +99,7 @@ export default function AISignalsScreen() {
   const insets = useSafeAreaInsets();
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
   const { data: signals, isLoading: signalsLoading, isError, refetch } = useGetSignals();
-  const { isSubscribed, isLoading: subLoading } = useSubscription();
+  const { isSubscribed, isLoading: subLoading, verificationPending } = useSubscription();
   const router = useRouter();
 
   const isLoading = signalsLoading || subLoading;
@@ -123,6 +123,15 @@ export default function AISignalsScreen() {
           </View>
         )}
       </View>
+
+      {verificationPending && (
+        <View style={styles.verifyBanner} testID="subscription-verify-banner">
+          <Feather name="wifi-off" size={12} color={c.mutedForeground} />
+          <Text style={styles.verifyBannerText}>
+            Couldn't verify subscription — retrying when back online
+          </Text>
+        </View>
+      )}
 
       {isLoading ? (
         <View style={styles.stateBox}>
@@ -204,6 +213,25 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontFamily: 'Inter_700Bold',
     letterSpacing: 0.5,
+  },
+  verifyBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: c.border,
+    backgroundColor: c.card,
+  },
+  verifyBannerText: {
+    color: c.mutedForeground,
+    fontSize: 11,
+    fontFamily: 'Inter_500Medium',
+    flexShrink: 1,
   },
   listContent: {
     paddingHorizontal: 16,

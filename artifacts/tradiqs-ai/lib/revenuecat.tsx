@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { Platform } from "react-native";
+import { AppState, Platform } from "react-native";
 import Purchases from "react-native-purchases";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import Constants from "expo-constants";
@@ -76,7 +76,26 @@ function useSubscriptionContext() {
       return info;
     },
     staleTime: 60 * 1000,
+    // Retry failed fetches with exponential backoff, then keep re-attempting
+    // periodically while errored so the entitlement re-verifies on its own
+    // when RevenueCat becomes reachable again (offline, outage).
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(2000 * 2 ** attemptIndex, 30 * 1000),
+    refetchOnReconnect: true,
+    refetchInterval: (query) => (query.state.status === "error" ? 30 * 1000 : false),
   });
+
+  // Refetch the entitlement whenever the app returns to the foreground so a
+  // failed fetch recovers as soon as connectivity is likely back.
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active" && customerInfoQuery.isError) {
+        customerInfoQuery.refetch();
+      }
+    });
+    return () => subscription.remove();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerInfoQuery.isError]);
 
   // On every successful fetch, persist the entitlement state.
   const liveIsSubscribed = customerInfoQuery.data
@@ -141,7 +160,12 @@ function useSubscriptionContext() {
   const subscriptionResolving =
     customerInfoQuery.isLoading && (!cacheLoaded || cachedIsSubscribed === null);
 
+  // True when the live fetch is failing and we're relying on the cached
+  // entitlement — used to show a non-blocking "couldn't verify" indicator.
+  const verificationPending = customerInfoQuery.isError && liveIsSubscribed === null;
+
   return {
+    verificationPending,
     customerInfo: customerInfoQuery.data,
     offerings: offeringsQuery.data,
     activeEntitlement,
