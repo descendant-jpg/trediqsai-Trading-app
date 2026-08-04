@@ -6,8 +6,18 @@ import React, {
   useMemo,
   useState,
 } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Session } from '@supabase/supabase-js';
 import { isSupabaseConfigured, supabase } from '@/utils/supabase';
+
+/**
+ * Local record of a successfully claimed username, keyed per user id.
+ * The claim_username RPC is one-shot, so once it succeeds we can trust this
+ * record even if a subsequent profile fetch races or returns a stale row
+ * (e.g. read replica lag right after the claim). Prevents the "Choose a
+ * Username" screen from ever reappearing after a successful claim.
+ */
+const claimedUsernameKey = (userId: string) => `tradiqs:claimed-username:${userId}`;
 
 interface AuthContextValue {
   /** Current Supabase session, or null when signed out. */
@@ -52,29 +62,60 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     let cancelled = false;
-    supabase
-      .from('profiles')
-      .select('username')
-      .eq('id', userId)
-      .maybeSingle()
-      .then(({ data, error }) => {
-        if (cancelled) return;
-        // On lookup failure, don't block the app behind the prompt.
-        if (error) {
-          console.warn('Failed to load profile username:', error.message);
-          setUsername(undefined);
-          return;
-        }
-        setUsername(data?.username ?? null);
-      });
+    (async () => {
+      // A locally recorded successful claim wins immediately — never re-show
+      // the prompt for this user, even if the profile fetch below is slow,
+      // fails, or returns a stale (pre-claim) row.
+      let locallyClaimed: string | null = null;
+      try {
+        locallyClaimed = await AsyncStorage.getItem(claimedUsernameKey(userId));
+      } catch {
+        // Storage unavailable — fall through to the server lookup.
+      }
+      if (cancelled) return;
+      if (locallyClaimed) {
+        setUsername(locallyClaimed);
+      }
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('username')
+        .eq('id', userId)
+        .maybeSingle();
+      if (cancelled) return;
+      // On lookup failure, don't block the app behind the prompt.
+      if (error) {
+        console.warn('Failed to load profile username:', error.message);
+        if (!locallyClaimed) setUsername(undefined);
+        return;
+      }
+      const remote = data?.username ?? null;
+      if (remote) {
+        setUsername(remote);
+        // Keep the local record in sync (covers usernames set at signup too).
+        AsyncStorage.setItem(claimedUsernameKey(userId), remote).catch(() => {});
+      } else if (!locallyClaimed) {
+        // Never downgrade a username we already know about to null — only an
+        // unclaimed profile with no local record should trigger the prompt.
+        setUsername((prev) => (typeof prev === 'string' ? prev : null));
+      }
+    })();
     return () => {
       cancelled = true;
     };
   }, [userId]);
 
-  const setUsernameClaimed = useCallback((name: string) => {
-    setUsername(name);
-  }, []);
+  const setUsernameClaimed = useCallback(
+    (name: string) => {
+      setUsername(name);
+      // Persist the successful claim so the prompt can never reappear for
+      // this user, even if the next profile fetch hasn't caught up yet.
+      if (userId) {
+        AsyncStorage.setItem(claimedUsernameKey(userId), name).catch(() => {});
+      }
+    },
+    [userId],
+  );
 
   const skipUsernamePrompt = useCallback(() => {
     setSkippedPrompt(true);
