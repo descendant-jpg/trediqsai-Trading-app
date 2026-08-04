@@ -217,17 +217,23 @@ export function PositionCard({
 
 export type TradeSide = 'BUY' | 'SELL' | null;
 
-/** Massive BUY / SELL execution buttons. */
+/**
+ * Massive BUY / SELL execution buttons. When `preselected` is set (e.g.
+ * arriving from a signal), the matching side is emphasized and the other
+ * side is dimmed.
+ */
 export function ExecutionButtons({
   onBuy,
   onSell,
   buyLabel = 'BUY',
   sellLabel = 'SELL',
+  preselected,
 }: {
   onBuy?: () => void;
   onSell?: () => void;
   buyLabel?: string;
   sellLabel?: string;
+  preselected?: 'BUY' | 'SELL';
 }) {
   const press = (cb?: () => void) => () => {
     if (Platform.OS !== 'web') {
@@ -240,7 +246,12 @@ export function ExecutionButtons({
     <View style={execStyles.row}>
       <TouchableOpacity
         activeOpacity={0.85}
-        style={[execStyles.button, execStyles.buy]}
+        style={[
+          execStyles.button,
+          execStyles.buy,
+          preselected === 'BUY' && execStyles.selected,
+          preselected === 'SELL' && execStyles.dimmed,
+        ]}
         onPress={press(onBuy)}
         testID="buy-button"
       >
@@ -248,7 +259,12 @@ export function ExecutionButtons({
       </TouchableOpacity>
       <TouchableOpacity
         activeOpacity={0.85}
-        style={[execStyles.button, execStyles.sell]}
+        style={[
+          execStyles.button,
+          execStyles.sell,
+          preselected === 'SELL' && execStyles.selected,
+          preselected === 'BUY' && execStyles.dimmed,
+        ]}
         onPress={press(onSell)}
         testID="sell-button"
       >
@@ -283,6 +299,13 @@ const execStyles = StyleSheet.create({
   sell: {
     backgroundColor: c.destructive,
     shadowColor: c.destructive,
+  },
+  selected: {
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  dimmed: {
+    opacity: 0.35,
   },
   buttonText: {
     color: '#0A0B0E',

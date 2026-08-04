@@ -12,6 +12,7 @@ import {
 import { TradingChart } from '@/components/wagmi-chart';
 import { useTrading, type TradeResult } from '@/context/TradingContext';
 import colors from '@/constants/colors';
+import { useLocalSearchParams } from 'expo-router';
 
 const c = colors.light;
 
@@ -25,6 +26,15 @@ function formatMoney(n: number) {
 export default function TradingFloorScreen() {
   const insets = useSafeAreaInsets();
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
+  const params = useLocalSearchParams<{ symbol?: string; direction?: string }>();
+
+  const signalSymbol =
+    typeof params.symbol === 'string' && params.symbol ? params.symbol : undefined;
+  const signalDirection =
+    params.direction === 'BUY' || params.direction === 'SELL'
+      ? params.direction
+      : undefined;
+
   const {
     price,
     equity,
@@ -73,7 +83,7 @@ export default function TradingFloorScreen() {
           <DrawdownBar used={drawdownUsed} />
         </View>
 
-        <TradingChart />
+        <TradingChart symbol={signalSymbol} />
 
         <View style={styles.bottom}>
           {position ? (
@@ -96,6 +106,7 @@ export default function TradingFloorScreen() {
             onSell={() => handleResult(sell())}
             buyLabel={position?.side === 'SHORT' ? 'BUY / CLOSE' : 'BUY'}
             sellLabel={position?.side === 'LONG' ? 'SELL / CLOSE' : 'SELL'}
+            preselected={position ? undefined : signalDirection}
           />
         </View>
       </View>

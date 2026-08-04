@@ -5,9 +5,17 @@ import { PaywallCard } from '@/components/paywall';
 import colors from '@/constants/colors';
 import { ActivityIndicator, FlatList, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useGetSignals, type Signal } from '@workspace/api-client-react';
+import { TouchableOpacity } from 'react-native';
+import { useRouter } from 'expo-router';
 
 const c = colors.light;
-function SignalCard({ signal }: { signal: Signal }) {
+function SignalCard({
+  signal,
+  onTrade,
+}: {
+  signal: Signal;
+  onTrade: (signal: Signal) => void;
+}) {
   const isBuy = signal.action === 'BUY';
   const actionColor = isBuy ? c.success : c.destructive;
   const accent = signal.pro ? c.secondary : c.primary;
@@ -61,6 +69,27 @@ function SignalCard({ signal }: { signal: Signal }) {
           <Text style={styles.metaValue}>{signal.timeframe}</Text>
         </View>
       </View>
+
+      <TouchableOpacity
+        activeOpacity={0.85}
+        style={[styles.tradeButton, { backgroundColor: actionColor }]}
+        onPress={() => onTrade(signal)}
+        testID={`trade-signal-${signal.id}`}
+      >
+        <Feather
+          name={isBuy ? 'trending-up' : 'trending-down'}
+          size={14}
+          color={isBuy ? c.background : '#FFFFFF'}
+        />
+        <Text
+          style={[
+            styles.tradeButtonText,
+            { color: isBuy ? c.background : '#FFFFFF' },
+          ]}
+        >
+          Trade this — {signal.action} {signal.symbol}
+        </Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -69,6 +98,14 @@ export default function AISignalsScreen() {
   const insets = useSafeAreaInsets();
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
   const { data: signals, isLoading, isError, refetch } = useGetSignals();
+  const router = useRouter();
+
+  const handleTrade = (signal: Signal) => {
+    router.push({
+      pathname: '/(tabs)',
+      params: { symbol: signal.symbol, direction: signal.action },
+    });
+  };
 
   return (
     <View style={[styles.container, { paddingTop: topInset }]}>
@@ -96,7 +133,7 @@ export default function AISignalsScreen() {
             <FlatList
               data={signals ?? []}
               keyExtractor={(item) => item.id}
-              renderItem={({ item }) => <SignalCard signal={item} />}
+              renderItem={({ item }) => <SignalCard signal={item} onTrade={handleTrade} />}
               contentContainerStyle={styles.listContent}
               showsVerticalScrollIndicator={false}
               scrollEnabled={false}
@@ -270,5 +307,19 @@ const styles = StyleSheet.create({
     color: c.primary,
     fontSize: 13,
     fontFamily: 'Inter_700Bold',
+  },
+  tradeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderRadius: 10,
+    paddingVertical: 10,
+    marginTop: 2,
+  },
+  tradeButtonText: {
+    fontSize: 13,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 0.3,
   },
 });

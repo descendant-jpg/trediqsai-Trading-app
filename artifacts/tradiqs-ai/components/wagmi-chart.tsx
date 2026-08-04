@@ -46,13 +46,13 @@ function formatUsdWorklet(v: number): string {
  * A single shared Provider drives both the header price/time readout and
  * the chart, so dragging the crosshair updates the header live.
  */
-export function TradingChart() {
+export function TradingChart({ symbol }: { symbol?: string }) {
   return (
     <View style={styles.container} testID="trading-chart">
       <LineChart.Provider data={MOCK_BTC_DATA}>
         <View style={styles.headerRow}>
           <View>
-            <Text style={styles.symbol}>BTC / USD</Text>
+            <Text style={styles.symbol}>{symbol ?? 'BTC / USD'}</Text>
             <Text style={styles.feedLabel}>SIMULATED FEED</Text>
           </View>
           <View style={styles.priceBlock}>
