@@ -1,0 +1,1 @@
+- [Stale API client declarations](api-client-stale-dist.md) — phantom TS2305 missing-export errors mean rebuild lib dist (`tsc --build --force`), not missing code.
