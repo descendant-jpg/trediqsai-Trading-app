@@ -10,6 +10,7 @@ import {
   TerminalHeader,
 } from '@/components/trading';
 import { TradingChart } from '@/components/wagmi-chart';
+import { ProWindDownBanner } from '@/components/paywall';
 import { useTrading, type TradeResult } from '@/context/TradingContext';
 import colors from '@/constants/colors';
 import { useLocalSearchParams } from 'expo-router';
@@ -73,6 +74,7 @@ export default function TradingFloorScreen() {
   return (
     <View style={[styles.container, { paddingTop: topInset }]}>
       <TerminalHeader />
+      <ProWindDownBanner />
 
       <View style={styles.content}>
         <View>
