@@ -48,8 +48,9 @@ export type { ClosedTrade, OrderDecision, Position, Side };
 
 import {
   STORAGE_KEY,
+  dayKeyInZone,
+  deviceTimeZone,
   hydratePersistedState,
-  localDayKey,
   type PersistedState,
 } from '@/lib/persistedState';
 
@@ -72,17 +73,13 @@ interface TradingContextValue {
   drawdownUsed: number;
   /** Dollars of profit still needed to reach payout (>= 0). */
   distanceToPayout: number;
+  /** Pinned IANA timezone the trading day rolls over in. */
+  tradingDayTz: string;
   buy: () => TradeResult;
   sell: () => TradeResult;
 }
 
 const TradingContext = createContext<TradingContextValue | null>(null);
-
-function todayKey() {
-  // Local calendar date: the daily loss limit resets at the trader's local
-  // midnight, not UTC.
-  return localDayKey();
-}
 
 export function TradingProvider({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
@@ -92,15 +89,23 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
   const [position, setPosition] = useState<Position | null>(null);
   const [history, setHistory] = useState<ClosedTrade[]>([]);
   const loaded = useRef(false);
-  const dayRef = useRef(todayKey());
+  // Pinned trading-day timezone. Defaults to the device zone at first
+  // launch; the persisted value wins on hydration so a later device
+  // timezone change never moves the daily-loss reset.
+  const [tradingDayTz, setTradingDayTz] = useState(() => deviceTimeZone());
+  const tzRef = useRef(tradingDayTz);
+  const todayKey = useCallback(() => dayKeyInZone(tzRef.current), []);
+  const dayRef = useRef(dayKeyInZone(tzRef.current));
 
   // Load persisted state once.
   useEffect(() => {
     (async () => {
       try {
         const raw = await AsyncStorage.getItem(STORAGE_KEY);
-        dayRef.current = todayKey();
-        const s = hydratePersistedState(raw, dayRef.current);
+        const s = hydratePersistedState(raw);
+        tzRef.current = s.tradingDayTz;
+        setTradingDayTz(s.tradingDayTz);
+        dayRef.current = dayKeyInZone(s.tradingDayTz);
         setBalance(s.balance);
         setPosition(s.position);
         setHistory(s.history);
@@ -126,6 +131,7 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
       balance,
       realizedLossToday,
       day: todayKey(),
+      tradingDayTz: tzRef.current,
       position,
       history,
       lastPrice: priceRef.current,
@@ -133,7 +139,7 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state)).catch((e) =>
       console.error('Failed to persist trading state', e),
     );
-  }, [balance, realizedLossToday, position, history]);
+  }, [balance, realizedLossToday, position, history, todayKey]);
 
   const persistRef = useRef(persist);
   persistRef.current = persist;
@@ -257,6 +263,7 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
       history,
       drawdownUsed,
       distanceToPayout,
+      tradingDayTz,
       buy,
       sell,
     }),
@@ -270,6 +277,7 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
       history,
       drawdownUsed,
       distanceToPayout,
+      tradingDayTz,
       buy,
       sell,
     ],

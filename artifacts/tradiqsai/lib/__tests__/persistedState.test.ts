@@ -1,17 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import {
+  dayKeyInZone,
+  deviceTimeZone,
   hydratePersistedState,
+  isValidTimeZone,
   localDayKey,
   type PersistedState,
 } from '../persistedState';
 import { STARTING_BALANCE } from '../tradingLogic';
 
+// A fixed instant: 2026-08-04 in UTC (midday, so it's also 2026-08-04 in
+// every timezone from UTC-12 to UTC+11:59).
+const NOW = new Date('2026-08-04T12:00:00Z');
 const TODAY = '2026-08-04';
 
 const valid: PersistedState = {
   balance: 101_250.5,
   realizedLossToday: 320,
   day: TODAY,
+  tradingDayTz: 'UTC',
   position: { side: 'LONG', entryPrice: 2340, size: 10, openedAt: 1754000000 },
   history: [
     {
@@ -29,6 +36,7 @@ const valid: PersistedState = {
 const fresh = {
   balance: STARTING_BALANCE,
   realizedLossToday: 0,
+  tradingDayTz: deviceTimeZone(),
   position: null,
   history: [],
   lastPrice: null,
@@ -36,10 +44,11 @@ const fresh = {
 
 describe('hydratePersistedState — valid payload', () => {
   it('restores every field from a well-formed same-day payload', () => {
-    const s = hydratePersistedState(JSON.stringify(valid), TODAY);
+    const s = hydratePersistedState(JSON.stringify(valid), NOW);
     expect(s).toEqual({
       balance: valid.balance,
       realizedLossToday: valid.realizedLossToday,
+      tradingDayTz: valid.tradingDayTz,
       position: valid.position,
       history: valid.history,
       lastPrice: valid.lastPrice,
@@ -48,31 +57,35 @@ describe('hydratePersistedState — valid payload', () => {
 });
 
 describe('hydratePersistedState — missing / no payload', () => {
-  it('returns fresh defaults when nothing was stored', () => {
-    expect(hydratePersistedState(null, TODAY)).toEqual(fresh);
-    expect(hydratePersistedState(undefined, TODAY)).toEqual(fresh);
-    expect(hydratePersistedState('', TODAY)).toEqual(fresh);
+  it('returns fresh defaults (device timezone) when nothing was stored', () => {
+    expect(hydratePersistedState(null, NOW)).toEqual(fresh);
+    expect(hydratePersistedState(undefined, NOW)).toEqual(fresh);
+    expect(hydratePersistedState('', NOW)).toEqual(fresh);
   });
 });
 
 describe('hydratePersistedState — corrupt JSON', () => {
   it('falls back to defaults on unparseable data', () => {
-    expect(hydratePersistedState('{not json', TODAY)).toEqual(fresh);
+    expect(hydratePersistedState('{not json', NOW)).toEqual(fresh);
   });
 
   it('falls back to defaults on non-object JSON', () => {
-    expect(hydratePersistedState('42', TODAY)).toEqual(fresh);
-    expect(hydratePersistedState('"hi"', TODAY)).toEqual(fresh);
-    expect(hydratePersistedState('[1,2]', TODAY)).toEqual(fresh);
-    expect(hydratePersistedState('null', TODAY)).toEqual(fresh);
+    expect(hydratePersistedState('42', NOW)).toEqual(fresh);
+    expect(hydratePersistedState('"hi"', NOW)).toEqual(fresh);
+    expect(hydratePersistedState('[1,2]', NOW)).toEqual(fresh);
+    expect(hydratePersistedState('null', NOW)).toEqual(fresh);
   });
 });
 
 describe('hydratePersistedState — missing or invalid fields', () => {
   it('defaults each missing field individually (older shape)', () => {
     const s = hydratePersistedState(
-      JSON.stringify({ balance: 99_000, day: TODAY, realizedLossToday: 50 }),
-      TODAY,
+      JSON.stringify({
+        balance: 99_000,
+        day: dayKeyInZone(deviceTimeZone(), NOW),
+        realizedLossToday: 50,
+      }),
+      NOW,
     );
     expect(s.balance).toBe(99_000);
     expect(s.realizedLossToday).toBe(50);
@@ -87,9 +100,10 @@ describe('hydratePersistedState — missing or invalid fields', () => {
         balance: 'lots',
         realizedLossToday: -5,
         day: TODAY,
+        tradingDayTz: 'UTC',
         lastPrice: NaN,
       }),
-      TODAY,
+      NOW,
     );
     expect(s.balance).toBe(STARTING_BALANCE);
     expect(s.realizedLossToday).toBe(0);
@@ -103,7 +117,7 @@ describe('hydratePersistedState — missing or invalid fields', () => {
         position: { side: 'SIDEWAYS', entryPrice: 'x' },
         history: [valid.history[0], { side: 'LONG' }, 'junk', null],
       }),
-      TODAY,
+      NOW,
     );
     expect(s.position).toBeNull();
     expect(s.history).toEqual(valid.history);
@@ -112,7 +126,7 @@ describe('hydratePersistedState — missing or invalid fields', () => {
   it('ignores extra unknown fields', () => {
     const s = hydratePersistedState(
       JSON.stringify({ ...valid, futureField: { a: 1 }, version: 9 }),
-      TODAY,
+      NOW,
     );
     expect(s.balance).toBe(valid.balance);
     expect(s).not.toHaveProperty('futureField');
@@ -121,12 +135,15 @@ describe('hydratePersistedState — missing or invalid fields', () => {
 
 describe('hydratePersistedState — daily loss reset', () => {
   it('keeps realizedLossToday on the same day', () => {
-    const s = hydratePersistedState(JSON.stringify(valid), TODAY);
+    const s = hydratePersistedState(JSON.stringify(valid), NOW);
     expect(s.realizedLossToday).toBe(320);
   });
 
   it('resets realizedLossToday on a new day but keeps everything else', () => {
-    const s = hydratePersistedState(JSON.stringify(valid), '2026-08-05');
+    const s = hydratePersistedState(
+      JSON.stringify(valid),
+      new Date('2026-08-05T12:00:00Z'),
+    );
     expect(s.realizedLossToday).toBe(0);
     expect(s.balance).toBe(valid.balance);
     expect(s.position).toEqual(valid.position);
@@ -135,15 +152,90 @@ describe('hydratePersistedState — daily loss reset', () => {
 
   it('resets when the persisted day is missing or not a string', () => {
     expect(
-      hydratePersistedState(
-        JSON.stringify({ ...valid, day: undefined }),
-        TODAY,
-      ).realizedLossToday,
-    ).toBe(0);
-    expect(
-      hydratePersistedState(JSON.stringify({ ...valid, day: 123 }), TODAY)
+      hydratePersistedState(JSON.stringify({ ...valid, day: undefined }), NOW)
         .realizedLossToday,
     ).toBe(0);
+    expect(
+      hydratePersistedState(JSON.stringify({ ...valid, day: 123 }), NOW)
+        .realizedLossToday,
+    ).toBe(0);
+  });
+});
+
+describe('hydratePersistedState — pinned trading-day timezone', () => {
+  it('a device timezone change does NOT reset the loss early: the day key comes from the pinned zone', () => {
+    // Trader's pinned zone is New York. At 2026-08-05T02:00Z it is already
+    // Aug 5 in UTC (and in any device zone at/east of UTC), but still
+    // Aug 4, 10pm in New York — so the loss must survive.
+    const payload: PersistedState = {
+      ...valid,
+      tradingDayTz: 'America/New_York',
+      day: '2026-08-04',
+      realizedLossToday: 450,
+    };
+    const s = hydratePersistedState(
+      JSON.stringify(payload),
+      new Date('2026-08-05T02:00:00Z'),
+    );
+    expect(s.tradingDayTz).toBe('America/New_York');
+    expect(s.realizedLossToday).toBe(450);
+  });
+
+  it('a device timezone change does NOT delay the reset: once the pinned zone rolls over, the loss resets', () => {
+    // 2026-08-05T05:00Z is Aug 5, 1am in New York — new trading day there,
+    // regardless of what zone the device now reports.
+    const payload: PersistedState = {
+      ...valid,
+      tradingDayTz: 'America/New_York',
+      day: '2026-08-04',
+      realizedLossToday: 450,
+    };
+    const s = hydratePersistedState(
+      JSON.stringify(payload),
+      new Date('2026-08-05T05:00:00Z'),
+    );
+    expect(s.realizedLossToday).toBe(0);
+  });
+
+  it('falls back to the device timezone for older payloads without tradingDayTz or with an invalid zone', () => {
+    const { tradingDayTz: _omit, ...legacy } = valid;
+    expect(
+      hydratePersistedState(JSON.stringify(legacy), NOW).tradingDayTz,
+    ).toBe(deviceTimeZone());
+    expect(
+      hydratePersistedState(
+        JSON.stringify({ ...valid, tradingDayTz: 'Not/AZone' }),
+        NOW,
+      ).tradingDayTz,
+    ).toBe(deviceTimeZone());
+  });
+});
+
+describe('dayKeyInZone', () => {
+  it('formats the calendar date of the given zone as YYYY-MM-DD', () => {
+    const t = new Date('2026-08-05T02:00:00Z');
+    expect(dayKeyInZone('UTC', t)).toBe('2026-08-05');
+    expect(dayKeyInZone('America/New_York', t)).toBe('2026-08-04'); // 10pm Aug 4
+    expect(dayKeyInZone('Asia/Tokyo', t)).toBe('2026-08-05'); // 11am Aug 5
+  });
+
+  it('falls back to the device-local date for an unformattable zone', () => {
+    const t = new Date('2026-08-05T02:00:00Z');
+    expect(dayKeyInZone('Not/AZone', t)).toBe(localDayKey(t));
+  });
+});
+
+describe('isValidTimeZone / deviceTimeZone', () => {
+  it('accepts real IANA zones and rejects junk', () => {
+    expect(isValidTimeZone('America/New_York')).toBe(true);
+    expect(isValidTimeZone('UTC')).toBe(true);
+    expect(isValidTimeZone('Not/AZone')).toBe(false);
+    expect(isValidTimeZone('')).toBe(false);
+    expect(isValidTimeZone(42)).toBe(false);
+  });
+
+  it('deviceTimeZone returns a formattable zone', () => {
+    expect(isValidTimeZone(deviceTimeZone())).toBe(true);
   });
 });
 
