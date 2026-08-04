@@ -46,6 +46,15 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="portfolio"
+        options={{
+          title: 'Portfolio',
+          tabBarIcon: ({ color }) => (
+            <Feather name="briefcase" size={22} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="leaderboard"
         options={{
           title: 'Leaderboard',
