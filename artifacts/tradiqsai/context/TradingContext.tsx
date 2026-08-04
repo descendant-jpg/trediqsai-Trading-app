@@ -20,30 +20,33 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
  * - State persists via AsyncStorage.
  */
 
-export const STARTING_BALANCE = 100_000;
-export const PAYOUT_TARGET = 104_500; // balance needed for payout
-export const DAILY_DRAWDOWN_LIMIT = 5_000;
-export const POSITION_SIZE = 10; // units per trade
+import {
+  DAILY_DRAWDOWN_LIMIT,
+  PAYOUT_TARGET,
+  POSITION_SIZE,
+  STARTING_BALANCE,
+  computeDrawdownUsed,
+  decideOrder,
+  distanceToPayout as computeDistanceToPayout,
+  positionPnl,
+  settleClose,
+  type ClosedTrade,
+  type OrderDecision,
+  type Position,
+  type Side,
+} from '@/lib/tradingLogic';
+
+export {
+  DAILY_DRAWDOWN_LIMIT,
+  PAYOUT_TARGET,
+  POSITION_SIZE,
+  STARTING_BALANCE,
+  decideOrder,
+};
+export type { ClosedTrade, OrderDecision, Position, Side };
+
 const BASE_PRICE = 2_350; // synthetic "QQX index" price
 const STORAGE_KEY = 'tradiqs.sim.v1';
-
-export type Side = 'LONG' | 'SHORT';
-
-export interface Position {
-  side: Side;
-  entryPrice: number;
-  size: number;
-  openedAt: number;
-}
-
-export interface ClosedTrade {
-  side: Side;
-  entryPrice: number;
-  exitPrice: number;
-  size: number;
-  pnl: number;
-  closedAt: number;
-}
 
 interface PersistedState {
   balance: number;
@@ -79,46 +82,6 @@ const TradingContext = createContext<TradingContextValue | null>(null);
 
 function todayKey() {
   return new Date().toISOString().slice(0, 10);
-}
-
-function positionPnl(position: Position, price: number) {
-  const diff = price - position.entryPrice;
-  return (position.side === 'LONG' ? diff : -diff) * position.size;
-}
-
-export type OrderDecision =
-  | { action: 'open' }
-  | { action: 'close' }
-  | { action: 'blocked'; reason: string };
-
-/**
- * Pure order-routing rules:
- * - An opposite-side order ALWAYS closes an open position, even when the
- *   daily drawdown limit is exhausted (traders must be able to exit).
- * - A same-side order while a position is open is blocked (no adding).
- * - Opening NEW exposure is blocked once the drawdown limit is used up.
- */
-export function decideOrder(
-  position: Position | null,
-  side: Side,
-  drawdownUsed: number,
-): OrderDecision {
-  if (position) {
-    if (position.side !== side) return { action: 'close' };
-    return {
-      action: 'blocked',
-      reason: `You already have a ${position.side} open. Tap ${
-        side === 'LONG' ? 'SELL' : 'BUY'
-      } to close it.`,
-    };
-  }
-  if (drawdownUsed >= 1) {
-    return {
-      action: 'blocked',
-      reason: 'Daily drawdown limit reached. Trading paused until tomorrow.',
-    };
-  }
-  return { action: 'open' };
 }
 
 export function TradingProvider({ children }: { children: React.ReactNode }) {
@@ -183,27 +146,19 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
 
   const unrealizedPnl = position ? positionPnl(position, price) : 0;
 
-  const drawdownUsed = Math.min(
-    Math.max(
-      (realizedLossToday + Math.max(-unrealizedPnl, 0)) / DAILY_DRAWDOWN_LIMIT,
-      0,
-    ),
-    1,
-  );
+  const drawdownUsed = computeDrawdownUsed(realizedLossToday, unrealizedPnl);
 
   const closePosition = useCallback(
     (pos: Position): ClosedTrade => {
-      const pnl = +positionPnl(pos, price).toFixed(2);
-      const trade: ClosedTrade = {
-        side: pos.side,
-        entryPrice: pos.entryPrice,
-        exitPrice: price,
-        size: pos.size,
-        pnl,
-        closedAt: Date.now(),
-      };
-      setBalance((b) => +(b + pnl).toFixed(2));
-      if (pnl < 0) setRealizedLossToday((l) => l - pnl);
+      const { trade, realizedLossDelta } = settleClose(
+        pos,
+        price,
+        0,
+        Date.now(),
+      );
+      setBalance((b) => +(b + trade.pnl).toFixed(2));
+      if (realizedLossDelta > 0)
+        setRealizedLossToday((l) => l + realizedLossDelta);
       setHistory((h) => [trade, ...h].slice(0, 50));
       setPosition(null);
       return trade;
@@ -236,7 +191,7 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
   const sell = useCallback(() => execute('SHORT'), [execute]);
 
   const equity = +(balance + unrealizedPnl).toFixed(2);
-  const distanceToPayout = Math.max(0, +(PAYOUT_TARGET - equity).toFixed(2));
+  const distanceToPayout = computeDistanceToPayout(equity);
 
   const value = useMemo<TradingContextValue>(
     () => ({

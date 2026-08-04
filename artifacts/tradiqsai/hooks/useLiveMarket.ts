@@ -2,35 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 
 export type LivePoint = { timestamp: number; value: number };
 
-const BINANCE_WS_URL = 'wss://stream.binance.com:9443/ws/btcusdt@trade';
-
-/**
- * Public BTC/USD(T) trade streams, tried in order. Binance can be
- * geo-blocked (HTTP 451) in some regions/datacenters, so we fail over to
- * Coinbase's public feed (which needs a subscribe message).
- */
-const FEEDS: {
-  url: string;
-  subscribe?: string;
-  parse: (msg: any) => number | null;
-}[] = [
-  {
-    url: 'wss://stream.binance.com:9443/ws/btcusdt@trade',
-    parse: (msg) => (msg?.p != null ? parseFloat(msg.p) : null),
-  },
-  {
-    url: 'wss://ws-feed.exchange.coinbase.com',
-    subscribe: JSON.stringify({
-      type: 'subscribe',
-      product_ids: ['BTC-USD'],
-      channels: ['ticker'],
-    }),
-    parse: (msg) =>
-      msg?.type === 'ticker' && msg?.price != null
-        ? parseFloat(msg.price)
-        : null,
-  },
-];
+import { FEEDS, parseFrame } from '@/lib/marketFeeds';
 
 /** Minimum ms between state updates — trade streams can emit many messages
  * per second; throttling keeps re-renders (and the chart) smooth. */
@@ -72,24 +44,20 @@ export function useLiveMarket() {
 
       ws.onmessage = (event) => {
         if (closed) return;
-        try {
-          const price = feed.parse(JSON.parse(event.data as string));
-          if (price == null || !Number.isFinite(price)) return;
-          gotData = true;
+        const price = parseFrame(feed, event.data as string);
+        if (price == null) return;
+        gotData = true;
 
-          const now = Date.now();
-          if (now - lastUpdateRef.current < UPDATE_INTERVAL_MS) return;
-          lastUpdateRef.current = now;
+        const now = Date.now();
+        if (now - lastUpdateRef.current < UPDATE_INTERVAL_MS) return;
+        lastUpdateRef.current = now;
 
-          setLivePrice(price);
-          setChartData((prev) => [
-            ...prev.slice(-(MAX_POINTS - 1)),
-            { timestamp: now, value: price },
-          ]);
-          setHeartbeat((h) => h + 1);
-        } catch {
-          // Ignore malformed frames.
-        }
+        setLivePrice(price);
+        setChartData((prev) => [
+          ...prev.slice(-(MAX_POINTS - 1)),
+          { timestamp: now, value: price },
+        ]);
+        setHeartbeat((h) => h + 1);
       };
 
       let handled = false;
