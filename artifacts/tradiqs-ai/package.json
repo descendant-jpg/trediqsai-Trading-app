@@ -56,7 +56,10 @@
     "zod-validation-error": "^3.4.0"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.112.0",
+    "expo-sqlite": "~16.0.10",
     "react-native-purchases": "^10.6.0",
+    "react-native-url-polyfill": "^4.0.0",
     "react-native-wagmi-charts": "^2.10.0"
   }
 }
