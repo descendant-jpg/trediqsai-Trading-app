@@ -1,22 +1,11 @@
 import React, { useMemo, useState } from 'react';
-import { FlatList, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import colors from '@/constants/colors';
+import { useGetLeaderboard, type Trader } from '@workspace/api-client-react';
 
 const c = colors.light;
-
-type Trader = {
-  id: string;
-  rank: number;
-  name: string;
-  handle: string;
-  pnl: number;
-  pnlPct: number;
-  winRate: number;
-  trades: number;
-  pro: boolean;
-};
 
 type Period = 'today' | 'week' | 'all';
 
@@ -26,18 +15,6 @@ const PERIODS: { key: Period; label: string }[] = [
   { key: 'all', label: 'All time' },
 ];
 
-const TRADERS: Trader[] = [
-  { id: 't1', rank: 1, name: 'Ava Chen', handle: '@quantava', pnl: 48230, pnlPct: 34.2, winRate: 71, trades: 182, pro: true },
-  { id: 't2', rank: 2, name: 'Marcus Vale', handle: '@valestreet', pnl: 39115, pnlPct: 28.7, winRate: 66, trades: 240, pro: true },
-  { id: 't3', rank: 3, name: 'Rin Takahashi', handle: '@rin_alpha', pnl: 31877, pnlPct: 24.1, winRate: 63, trades: 155, pro: false },
-  { id: 't4', rank: 4, name: 'Sofia Marino', handle: '@sofitrades', pnl: 22409, pnlPct: 18.9, winRate: 61, trades: 199, pro: false },
-  { id: 't5', rank: 5, name: 'Dev Patel', handle: '@devdelta', pnl: 17654, pnlPct: 15.2, winRate: 58, trades: 310, pro: true },
-  { id: 't6', rank: 6, name: 'Lena Fischer', handle: '@lenafx', pnl: 12980, pnlPct: 11.6, winRate: 57, trades: 128, pro: false },
-  { id: 't7', rank: 7, name: 'Omar Haddad', handle: '@omarhedge', pnl: 8412, pnlPct: 7.9, winRate: 54, trades: 176, pro: false },
-  { id: 't8', rank: 8, name: 'Jules Beaumont', handle: '@julescap', pnl: 3305, pnlPct: 3.1, winRate: 52, trades: 90, pro: false },
-  { id: 't9', rank: 9, name: 'Nikolai Petrov', handle: '@nikvol', pnl: -2148, pnlPct: -2.4, winRate: 47, trades: 205, pro: false },
-  { id: 't10', rank: 10, name: 'Harper Singh', handle: '@harperswing', pnl: -6820, pnlPct: -6.8, winRate: 44, trades: 143, pro: false },
-];
 
 const YOU: Trader = {
   id: 'you',
@@ -86,10 +63,12 @@ const PERIOD_ADJUST: Record<
   },
 };
 
-function tradersForPeriod(period: Period): Trader[] {
+function tradersForPeriod(period: Period, base: Trader[]): Trader[] {
   const adj = PERIOD_ADJUST[period];
-  return adj.shuffle.map((srcIdx, i) => {
-    const t = TRADERS[srcIdx];
+  return adj.shuffle
+    .filter((srcIdx) => srcIdx < base.length)
+    .map((srcIdx, i) => {
+    const t = base[srcIdx];
     return {
       ...t,
       rank: i + 1,
@@ -173,8 +152,12 @@ export default function LeaderboardScreen() {
   const insets = useSafeAreaInsets();
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
   const [period, setPeriod] = useState<Period>('week');
+  const { data: baseTraders, isLoading, isError, refetch } = useGetLeaderboard();
 
-  const traders = useMemo(() => tradersForPeriod(period), [period]);
+  const traders = useMemo(
+    () => tradersForPeriod(period, baseTraders ?? []),
+    [period, baseTraders],
+  );
   const you = useMemo(() => youForPeriod(period), [period]);
 
   return (
@@ -199,18 +182,35 @@ export default function LeaderboardScreen() {
           );
         })}
       </View>
-      <View style={styles.youPinned}>
-        <TraderRow trader={you} isYou />
-      </View>
-      <FlatList
-        data={traders}
-        extraData={period}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <TraderRow trader={item} />}
-        contentContainerStyle={styles.listContent}
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
-        showsVerticalScrollIndicator={false}
-      />
+      {isLoading ? (
+        <View style={styles.stateBox}>
+          <ActivityIndicator color={c.secondary} />
+          <Text style={styles.stateText}>Loading leaderboard…</Text>
+        </View>
+      ) : isError ? (
+        <View style={styles.stateBox}>
+          <Feather name="alert-circle" size={24} color={c.destructive} />
+          <Text style={styles.stateText}>Couldn't load the leaderboard.</Text>
+          <Pressable style={styles.retryButton} onPress={() => refetch()}>
+            <Text style={styles.retryText}>Retry</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <>
+          <View style={styles.youPinned}>
+            <TraderRow trader={you} isYou />
+          </View>
+          <FlatList
+            data={traders}
+            extraData={period}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => <TraderRow trader={item} />}
+            contentContainerStyle={styles.listContent}
+            ItemSeparatorComponent={() => <View style={styles.separator} />}
+            showsVerticalScrollIndicator={false}
+          />
+        </>
+      )}
     </View>
   );
 }
@@ -371,5 +371,29 @@ const styles = StyleSheet.create({
   pnlPct: {
     fontSize: 11,
     fontFamily: 'Inter_500Medium',
+  },
+  stateBox: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingBottom: 60,
+  },
+  stateText: {
+    color: c.mutedForeground,
+    fontSize: 13,
+    fontFamily: 'Inter_500Medium',
+  },
+  retryButton: {
+    borderWidth: 1,
+    borderColor: c.secondary,
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  retryText: {
+    color: c.secondary,
+    fontSize: 13,
+    fontFamily: 'Inter_700Bold',
   },
 });

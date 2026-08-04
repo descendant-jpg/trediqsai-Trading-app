@@ -10,7 +10,39 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: signals
+    description: AI trading signals
+  - name: leaderboard
+    description: Trader leaderboard
 paths:
+  /signals:
+    get:
+      operationId: getSignals
+      tags: [signals]
+      summary: List AI trading signals
+      responses:
+        "200":
+          description: List of signals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Signal"
+  /leaderboard:
+    get:
+      operationId: getLeaderboard
+      tags: [leaderboard]
+      summary: List leaderboard traders
+      responses:
+        "200":
+          description: Ranked list of traders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Trader"
   /healthz:
     get:
       operationId: healthCheck
@@ -26,6 +58,75 @@ paths:
                 $ref: "#/components/schemas/HealthStatus"
 components:
   schemas:
+    Signal:
+      type: object
+      properties:
+        id:
+          type: string
+        symbol:
+          type: string
+        name:
+          type: string
+        action:
+          type: string
+          enum: [BUY, SELL]
+        confidence:
+          type: number
+        price:
+          type: string
+        target:
+          type: string
+        timeframe:
+          type: string
+        time:
+          type: string
+        pro:
+          type: boolean
+        rationale:
+          type: string
+      required:
+        - id
+        - symbol
+        - name
+        - action
+        - confidence
+        - price
+        - target
+        - timeframe
+        - time
+        - pro
+        - rationale
+    Trader:
+      type: object
+      properties:
+        id:
+          type: string
+        rank:
+          type: number
+        name:
+          type: string
+        handle:
+          type: string
+        pnl:
+          type: number
+        pnlPct:
+          type: number
+        winRate:
+          type: number
+        trades:
+          type: number
+        pro:
+          type: boolean
+      required:
+        - id
+        - rank
+        - name
+        - handle
+        - pnl
+        - pnlPct
+        - winRate
+        - trades
+        - pro
     HealthStatus:
       type: object
       properties:
