@@ -9,6 +9,128 @@ import * as zod from 'zod';
 
 
 /**
+ * @summary Get the AutoPilot state (roster, config, logs, P&L)
+ */
+export const GetAutopilotResponse = zod.object({
+  "masterActive": zod.boolean(),
+  "todayPnl": zod.number().describe('Today\'s simulated bot P&L in USD.'),
+  "bots": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "tags": zod.string(),
+  "risk": zod.enum(['Low', 'Medium', 'High']),
+  "winRate": zod.string(),
+  "return30d": zod.string(),
+  "totalTrades": zod.number(),
+  "proOnly": zod.boolean(),
+  "running": zod.boolean(),
+  "capital": zod.number(),
+  "drawdown": zod.number().describe('Max drawdown limit in percent.')
+})),
+  "logs": zod.array(zod.object({
+  "id": zod.string(),
+  "time": zod.string().describe('HH:MM:SS wall-clock time of the log line.'),
+  "text": zod.string()
+}))
+})
+
+
+/**
+ * @summary Pause or resume the whole AutoPilot system
+ */
+export const SetAutopilotMasterBody = zod.object({
+  "active": zod.boolean()
+})
+
+export const SetAutopilotMasterResponse = zod.object({
+  "masterActive": zod.boolean(),
+  "todayPnl": zod.number().describe('Today\'s simulated bot P&L in USD.'),
+  "bots": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "tags": zod.string(),
+  "risk": zod.enum(['Low', 'Medium', 'High']),
+  "winRate": zod.string(),
+  "return30d": zod.string(),
+  "totalTrades": zod.number(),
+  "proOnly": zod.boolean(),
+  "running": zod.boolean(),
+  "capital": zod.number(),
+  "drawdown": zod.number().describe('Max drawdown limit in percent.')
+})),
+  "logs": zod.array(zod.object({
+  "id": zod.string(),
+  "time": zod.string().describe('HH:MM:SS wall-clock time of the log line.'),
+  "text": zod.string()
+}))
+})
+
+
+/**
+ * @summary Update a bot's running state or configuration
+ */
+export const UpdateAutopilotBotParams = zod.object({
+  "botId": zod.coerce.string()
+})
+
+export const UpdateAutopilotBotBody = zod.object({
+  "running": zod.boolean().optional(),
+  "capital": zod.number().optional(),
+  "drawdown": zod.number().optional()
+}).describe('At least one field should be provided.')
+
+export const UpdateAutopilotBotResponse = zod.object({
+  "masterActive": zod.boolean(),
+  "todayPnl": zod.number().describe('Today\'s simulated bot P&L in USD.'),
+  "bots": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "tags": zod.string(),
+  "risk": zod.enum(['Low', 'Medium', 'High']),
+  "winRate": zod.string(),
+  "return30d": zod.string(),
+  "totalTrades": zod.number(),
+  "proOnly": zod.boolean(),
+  "running": zod.boolean(),
+  "capital": zod.number(),
+  "drawdown": zod.number().describe('Max drawdown limit in percent.')
+})),
+  "logs": zod.array(zod.object({
+  "id": zod.string(),
+  "time": zod.string().describe('HH:MM:SS wall-clock time of the log line.'),
+  "text": zod.string()
+}))
+})
+
+
+/**
+ * @summary Clear the AutoPilot log buffer
+ */
+export const ClearAutopilotLogsResponse = zod.object({
+  "masterActive": zod.boolean(),
+  "todayPnl": zod.number().describe('Today\'s simulated bot P&L in USD.'),
+  "bots": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "tags": zod.string(),
+  "risk": zod.enum(['Low', 'Medium', 'High']),
+  "winRate": zod.string(),
+  "return30d": zod.string(),
+  "totalTrades": zod.number(),
+  "proOnly": zod.boolean(),
+  "running": zod.boolean(),
+  "capital": zod.number(),
+  "drawdown": zod.number().describe('Max drawdown limit in percent.')
+})),
+  "logs": zod.array(zod.object({
+  "id": zod.string(),
+  "time": zod.string().describe('HH:MM:SS wall-clock time of the log line.'),
+  "text": zod.string()
+}))
+})
+
+
+/**
  * @summary Send a chat message to the TradiQs Oracle AI
  */
 export const sendOracleChatBodyMessagesMax = 40;

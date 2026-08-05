@@ -20,6 +20,10 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AutopilotBotUpdate,
+  AutopilotError,
+  AutopilotMasterUpdate,
+  AutopilotState,
   HealthStatus,
   OracleChatError,
   OracleChatRequest,
@@ -54,6 +58,297 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getGetAutopilotUrl = () => {
+
+
+
+
+  return `/api/autopilot`
+}
+
+/**
+ * @summary Get the AutoPilot state (roster, config, logs, P&L)
+ */
+export const getAutopilot = async ( options?: Parameters<typeof customFetch>[1]): Promise<AutopilotState> => {
+
+  return customFetch<AutopilotState>(getGetAutopilotUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAutopilotQueryKey = () => {
+    return [
+    `/api/autopilot`
+    ] as const;
+    }
+
+
+export const getGetAutopilotQueryOptions = <TData = Awaited<ReturnType<typeof getAutopilot>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAutopilot>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAutopilotQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAutopilot>>> = ({ signal }) => getAutopilot({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAutopilot>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAutopilotQueryResult = NonNullable<Awaited<ReturnType<typeof getAutopilot>>>
+export type GetAutopilotQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get the AutoPilot state (roster, config, logs, P&L)
+ */
+
+export function useGetAutopilot<TData = Awaited<ReturnType<typeof getAutopilot>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAutopilot>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAutopilotQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSetAutopilotMasterUrl = () => {
+
+
+
+
+  return `/api/autopilot/master`
+}
+
+/**
+ * @summary Pause or resume the whole AutoPilot system
+ */
+export const setAutopilotMaster = async (autopilotMasterUpdate: AutopilotMasterUpdate, options?: Parameters<typeof customFetch>[1]): Promise<AutopilotState> => {
+
+  return customFetch<AutopilotState>(getSetAutopilotMasterUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(autopilotMasterUpdate)
+  }
+);}
+
+
+
+
+
+export const getSetAutopilotMasterMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setAutopilotMaster>>, TError,{data: BodyType<AutopilotMasterUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof setAutopilotMaster>>, TError,{data: BodyType<AutopilotMasterUpdate>}, TContext> => {
+
+const mutationKey = ['setAutopilotMaster'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof setAutopilotMaster>>, {data: BodyType<AutopilotMasterUpdate>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  setAutopilotMaster(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SetAutopilotMasterMutationResult = NonNullable<Awaited<ReturnType<typeof setAutopilotMaster>>>
+    export type SetAutopilotMasterMutationBody = BodyType<AutopilotMasterUpdate>
+    export type SetAutopilotMasterMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Pause or resume the whole AutoPilot system
+ */
+export const useSetAutopilotMaster = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setAutopilotMaster>>, TError,{data: BodyType<AutopilotMasterUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof setAutopilotMaster>>,
+        TError,
+        {data: BodyType<AutopilotMasterUpdate>},
+        TContext
+      > => {
+      return useMutation(getSetAutopilotMasterMutationOptions(options));
+    }
+
+export const getUpdateAutopilotBotUrl = (botId: string,) => {
+
+
+
+
+  return `/api/autopilot/bots/${botId}`
+}
+
+/**
+ * @summary Update a bot's running state or configuration
+ */
+export const updateAutopilotBot = async (botId: string,
+    autopilotBotUpdate: AutopilotBotUpdate, options?: Parameters<typeof customFetch>[1]): Promise<AutopilotState> => {
+
+  return customFetch<AutopilotState>(getUpdateAutopilotBotUrl(botId),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(autopilotBotUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateAutopilotBotMutationOptions = <TError = ErrorType<AutopilotError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAutopilotBot>>, TError,{botId: string;data: BodyType<AutopilotBotUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAutopilotBot>>, TError,{botId: string;data: BodyType<AutopilotBotUpdate>}, TContext> => {
+
+const mutationKey = ['updateAutopilotBot'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAutopilotBot>>, {botId: string;data: BodyType<AutopilotBotUpdate>}> = (props) => {
+          const {botId,data} = props ?? {};
+
+          return  updateAutopilotBot(botId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAutopilotBotMutationResult = NonNullable<Awaited<ReturnType<typeof updateAutopilotBot>>>
+    export type UpdateAutopilotBotMutationBody = BodyType<AutopilotBotUpdate>
+    export type UpdateAutopilotBotMutationError = ErrorType<AutopilotError>
+
+    /**
+ * @summary Update a bot's running state or configuration
+ */
+export const useUpdateAutopilotBot = <TError = ErrorType<AutopilotError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAutopilotBot>>, TError,{botId: string;data: BodyType<AutopilotBotUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAutopilotBot>>,
+        TError,
+        {botId: string;data: BodyType<AutopilotBotUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateAutopilotBotMutationOptions(options));
+    }
+
+export const getClearAutopilotLogsUrl = () => {
+
+
+
+
+  return `/api/autopilot/logs`
+}
+
+/**
+ * @summary Clear the AutoPilot log buffer
+ */
+export const clearAutopilotLogs = async ( options?: Parameters<typeof customFetch>[1]): Promise<AutopilotState> => {
+
+  return customFetch<AutopilotState>(getClearAutopilotLogsUrl(),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getClearAutopilotLogsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof clearAutopilotLogs>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof clearAutopilotLogs>>, TError,void, TContext> => {
+
+const mutationKey = ['clearAutopilotLogs'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof clearAutopilotLogs>>, void> = () => {
+
+
+          return  clearAutopilotLogs(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ClearAutopilotLogsMutationResult = NonNullable<Awaited<ReturnType<typeof clearAutopilotLogs>>>
+
+    export type ClearAutopilotLogsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Clear the AutoPilot log buffer
+ */
+export const useClearAutopilotLogs = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof clearAutopilotLogs>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof clearAutopilotLogs>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getClearAutopilotLogsMutationOptions(options));
+    }
 
 export const getSendOracleChatUrl = () => {
 

@@ -155,6 +155,62 @@ export interface OracleChatError {
   error: string;
 }
 
+export type AutopilotBotRisk = typeof AutopilotBotRisk[keyof typeof AutopilotBotRisk];
+
+
+export const AutopilotBotRisk = {
+  Low: 'Low',
+  Medium: 'Medium',
+  High: 'High',
+} as const;
+
+export interface AutopilotBot {
+  id: string;
+  name: string;
+  tags: string;
+  risk: AutopilotBotRisk;
+  winRate: string;
+  return30d: string;
+  totalTrades: number;
+  proOnly: boolean;
+  running: boolean;
+  capital: number;
+  /** Max drawdown limit in percent. */
+  drawdown: number;
+}
+
+export interface AutopilotLogLine {
+  id: string;
+  /** HH:MM:SS wall-clock time of the log line. */
+  time: string;
+  text: string;
+}
+
+export interface AutopilotState {
+  masterActive: boolean;
+  /** Today's simulated bot P&L in USD. */
+  todayPnl: number;
+  bots: AutopilotBot[];
+  logs: AutopilotLogLine[];
+}
+
+export interface AutopilotMasterUpdate {
+  active: boolean;
+}
+
+/**
+ * At least one field should be provided.
+ */
+export interface AutopilotBotUpdate {
+  running?: boolean;
+  capital?: number;
+  drawdown?: number;
+}
+
+export interface AutopilotError {
+  error: string;
+}
+
 export interface HealthStatus {
   status: string;
 }

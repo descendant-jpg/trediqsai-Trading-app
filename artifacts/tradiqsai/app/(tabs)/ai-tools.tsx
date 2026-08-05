@@ -16,6 +16,16 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
+import {
+  getGetAutopilotQueryKey,
+  useClearAutopilotLogs,
+  useGetAutopilot,
+  useSetAutopilotMaster,
+  useUpdateAutopilotBot,
+  type AutopilotBot,
+  type AutopilotState,
+} from '@workspace/api-client-react';
 import { PaywallCard } from '@/components/paywall';
 import colors from '@/constants/colors';
 import { legacyOracleRedirectTarget } from '@/lib/legacyOracleRedirect';
@@ -28,60 +38,7 @@ const CYAN = '#00F0FF';
 const CRIMSON = '#E54B4B';
 const GOLD = '#F5C542';
 
-type Bot = {
-  id: string;
-  name: string;
-  tags: string;
-  risk: 'Low' | 'Medium' | 'High';
-  winRate: string;
-  return30d: string;
-  totalTrades: number;
-  proOnly: boolean;
-};
-
-const BOTS: Bot[] = [
-  {
-    id: 'scalp-oracle',
-    name: 'Scalp Oracle AI',
-    tags: 'Crypto / 5m Scalper',
-    risk: 'Low',
-    winRate: '78.4%',
-    return30d: '+12.6%',
-    totalTrades: 1842,
-    proOnly: false,
-  },
-  {
-    id: 'breakout-engine',
-    name: 'Breakout Engine Pro',
-    tags: 'Forex & Stocks / Momentum',
-    risk: 'Medium',
-    winRate: '71.2%',
-    return30d: '+9.1%',
-    totalTrades: 967,
-    proOnly: false,
-  },
-  {
-    id: 'grid-matrix',
-    name: 'Grid Matrix AI',
-    tags: 'Range Trading',
-    risk: 'Low',
-    winRate: '82.1%',
-    return30d: '+7.4%',
-    totalTrades: 2210,
-    proOnly: false,
-  },
-  {
-    id: 'quantum-inst',
-    name: 'Quantum Institutional AI',
-    tags: 'Multi-Asset / Order Flow',
-    risk: 'High',
-    winRate: '88.7%',
-    return30d: '+21.3%',
-    totalTrades: 3405,
-    proOnly: true,
-  },
-];
-
+type Bot = AutopilotBot;
 const RISK_COLORS: Record<Bot['risk'], string> = {
   Low: GREEN,
   Medium: GOLD,
@@ -90,20 +47,6 @@ const RISK_COLORS: Record<Bot['risk'], string> = {
 
 const CAPITAL_OPTIONS = [1000, 5000, 10000, 25000] as const;
 const DRAWDOWN_OPTIONS = [5, 10, 15, 20] as const;
-
-const LOG_TEMPLATES = [
-  '[SCAN] BTCUSD 5m — sweeping liquidity below 96,180…',
-  '[EXEC] Limit order placed: XAUUSD BUY @ 2,411.80',
-  '[RISK] Trailing stop adjusted +12p on EURUSD short',
-  '[SCAN] Market structure shift detected on US30 M15',
-  '[EXEC] Partial close 50% @ TP1 — GBPJPY +100p',
-  '[GRID] Rebalancing grid levels: 27.20 → 27.85 (12 nodes)',
-  '[RISK] Exposure check passed — 3.2% of allocated capital at risk',
-  '[SCAN] Momentum spike on NAS100 — awaiting retest confirmation',
-  '[EXEC] Stop moved to breakeven on ETHUSD long',
-  '[NET] Latency 14ms — co-located feed stable',
-];
-
 /** Glowing green pulse dot for "System Active". */
 function PulseDot({ active }: { active: boolean }) {
   const scale = useRef(new Animated.Value(1)).current;
@@ -150,18 +93,20 @@ function PulseDot({ active }: { active: boolean }) {
   );
 }
 
-function timestamp(): string {
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+function formatPnl(value: number): string {
+  const abs = Math.abs(value).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  return `${value < 0 ? '-' : '+'}$${abs}`;
 }
-
 export default function AiToolsScreen() {
   const insets = useSafeAreaInsets();
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
   const router = useRouter();
   const params = useLocalSearchParams();
   const { isSubscribed } = useSubscription();
+  const queryClient = useQueryClient();
 
   // Legacy deep-link mapping: the Oracle chat used to live on this tab.
   // Old targets like `/(tabs)/ai-tools?chat=1` (or `?view=chat`,
@@ -171,73 +116,60 @@ export default function AiToolsScreen() {
     if (legacyTarget) router.replace(legacyTarget);
   }, [legacyTarget, router]);
 
-  const [masterActive, setMasterActive] = useState(true);
-  const [runningBots, setRunningBots] = useState<Record<string, boolean>>({
-    'scalp-oracle': true,
-    'breakout-engine': true,
+  const {
+    data: autopilot,
+    isLoading,
+    isError,
+    refetch,
+  } = useGetAutopilot({
+    query: { queryKey: getGetAutopilotQueryKey(), refetchInterval: 2600 },
   });
-  const [botConfig, setBotConfig] = useState<Record<string, { capital: number; drawdown: number }>>({
-    'scalp-oracle': { capital: 10000, drawdown: 10 },
-    'breakout-engine': { capital: 15000, drawdown: 15 },
+
+  const applyState = useCallback(
+    (next: AutopilotState) => {
+      queryClient.setQueryData(getGetAutopilotQueryKey(), next);
+    },
+    [queryClient],
+  );
+
+  const { mutate: setMaster } = useSetAutopilotMaster({
+    mutation: { onSuccess: applyState },
   });
-  const [logs, setLogs] = useState<string[]>([
-    `${timestamp()} [SYS] TradiQs AutoPilot core initialized`,
-    `${timestamp()} [SYS] 2 algorithms deployed — monitoring 14 markets`,
-  ]);
+  const { mutate: updateBot } = useUpdateAutopilotBot({
+    mutation: { onSuccess: applyState },
+  });
+  const { mutate: clearLogs } = useClearAutopilotLogs({
+    mutation: { onSuccess: applyState },
+  });
+
   const [configBot, setConfigBot] = useState<Bot | null>(null);
   const [paywallOpen, setPaywallOpen] = useState(false);
   const logScrollRef = useRef<ScrollView>(null);
-  const logIndexRef = useRef(0);
 
-  const appendLog = useCallback((line: string) => {
-    setLogs((cur) => [...cur.slice(-60), `${timestamp()} ${line}`]);
-    requestAnimationFrame(() => logScrollRef.current?.scrollToEnd({ animated: true }));
-  }, []);
+  const masterActive = autopilot?.masterActive ?? false;
+  const bots = autopilot?.bots ?? [];
+  const logs = autopilot?.logs ?? [];
+  const todayPnl = autopilot?.todayPnl ?? 0;
 
-  // Simulated live execution feed while the system is active.
-  useEffect(() => {
-    if (!masterActive) return;
-    const id = setInterval(() => {
-      const line = LOG_TEMPLATES[logIndexRef.current % LOG_TEMPLATES.length];
-      logIndexRef.current += 1;
-      appendLog(line);
-    }, 2600);
-    return () => clearInterval(id);
-  }, [masterActive, appendLog]);
-
-  const activeCount = masterActive
-    ? Object.values(runningBots).filter(Boolean).length
-    : 0;
+  const activeCount = masterActive ? bots.filter((b) => b.running).length : 0;
   const capitalDeployed = useMemo(
     () =>
       masterActive
-        ? Object.entries(runningBots)
-            .filter(([, on]) => on)
-            .reduce((sum, [id]) => sum + (botConfig[id]?.capital ?? 10000), 0)
+        ? bots.filter((b) => b.running).reduce((sum, b) => sum + b.capital, 0)
         : 0,
-    [masterActive, runningBots, botConfig],
+    [masterActive, bots],
   );
 
   const toggleMaster = (value: boolean) => {
-    setMasterActive(value);
-    appendLog(value ? '[SYS] AutoPilot resumed — all bots re-armed' : '[SYS] AutoPilot paused — halting new entries');
+    setMaster({ data: { active: value } });
   };
 
   const toggleBot = (bot: Bot, value: boolean) => {
-    setRunningBots((cur) => ({ ...cur, [bot.id]: value }));
-    const cfg = botConfig[bot.id] ?? { capital: 10000, drawdown: 10 };
-    appendLog(
-      value
-        ? `[BOT] ${bot.name} initialized with $${cfg.capital.toLocaleString()} capital allocation`
-        : `[BOT] ${bot.name} stopped — open positions managed to close`,
-    );
+    updateBot({ botId: bot.id, data: { running: value } });
   };
 
   const saveConfig = (bot: Bot, capital: number, drawdown: number) => {
-    setBotConfig((cur) => ({ ...cur, [bot.id]: { capital, drawdown } }));
-    appendLog(
-      `[CFG] ${bot.name} reconfigured — $${capital.toLocaleString()} capital, ${drawdown}% max drawdown`,
-    );
+    updateBot({ botId: bot.id, data: { capital, drawdown } });
     setConfigBot(null);
   };
 
@@ -295,8 +227,8 @@ export default function AiToolsScreen() {
             </View>
             <View style={styles.metricCol}>
               <Text style={styles.metricLabel}>TODAY'S BOT P&L</Text>
-              <Text style={[styles.metricValue, { color: GREEN }]}>
-                {masterActive ? '+$1,420.50' : '$0.00'}
+              <Text style={[styles.metricValue, { color: todayPnl < 0 ? CRIMSON : GREEN }]}>
+                {formatPnl(todayPnl)}
               </Text>
             </View>
           </View>
@@ -310,7 +242,7 @@ export default function AiToolsScreen() {
               <Text style={styles.consoleTitle}>System Live Logs</Text>
             </View>
             <TouchableOpacity
-              onPress={() => setLogs([])}
+              onPress={() => clearLogs()}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               testID="clear-logs"
               accessibilityLabel="Clear logs"
@@ -328,9 +260,9 @@ export default function AiToolsScreen() {
             {logs.length === 0 ? (
               <Text style={styles.logLineMuted}>— log buffer cleared —</Text>
             ) : (
-              logs.map((line, i) => (
-                <Text key={`${i}-${line}`} style={styles.logLine}>
-                  {line}
+              logs.map((line) => (
+                <Text key={line.id} style={styles.logLine}>
+                  {line.time} {line.text}
                 </Text>
               ))
             )}
@@ -339,10 +271,20 @@ export default function AiToolsScreen() {
 
         {/* Bot roster */}
         <Text style={styles.sectionTitle}>Available AI Algorithms</Text>
-        {BOTS.map((bot) => {
+        {isLoading && (
+          <Text style={styles.logLineMuted}>Loading AutoPilot state…</Text>
+        )}
+        {isError && (
+          <TouchableOpacity onPress={() => refetch()} testID="autopilot-retry">
+            <Text style={styles.logLineMuted}>
+              Couldn't reach the AutoPilot server — tap to retry.
+            </Text>
+          </TouchableOpacity>
+        )}
+        {bots.map((bot) => {
           const locked = bot.proOnly && !isSubscribed;
-          const running = masterActive && !!runningBots[bot.id];
-          const cfg = botConfig[bot.id] ?? { capital: 10000, drawdown: 10 };
+          const running = masterActive && bot.running;
+          const cfg = { capital: bot.capital, drawdown: bot.drawdown };
           return (
             <View key={bot.id} style={[styles.botCard, running && styles.botCardActive]}>
               <View style={styles.botHeader}>
@@ -450,7 +392,7 @@ export default function AiToolsScreen() {
       {/* Configure settings modal */}
       <ConfigModal
         bot={configBot}
-        initial={configBot ? botConfig[configBot.id] ?? { capital: 10000, drawdown: 10 } : null}
+        initial={configBot ? { capital: configBot.capital, drawdown: configBot.drawdown } : null}
         onClose={() => setConfigBot(null)}
         onSave={saveConfig}
       />

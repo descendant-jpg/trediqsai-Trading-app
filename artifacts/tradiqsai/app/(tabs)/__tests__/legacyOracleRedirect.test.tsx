@@ -35,6 +35,21 @@ vi.mock('@/components/paywall', () => ({ PaywallCard: () => null }));
 vi.mock('@/lib/revenuecat', () => ({
   useSubscription: () => ({ isSubscribed: false }),
 }));
+vi.mock('@tanstack/react-query', () => ({
+  useQueryClient: () => ({ setQueryData: vi.fn() }),
+}));
+vi.mock('@workspace/api-client-react', () => ({
+  getGetAutopilotQueryKey: () => ['/api/autopilot'],
+  useGetAutopilot: () => ({
+    data: undefined,
+    isLoading: true,
+    isError: false,
+    refetch: vi.fn(),
+  }),
+  useSetAutopilotMaster: () => ({ mutate: vi.fn() }),
+  useUpdateAutopilotBot: () => ({ mutate: vi.fn() }),
+  useClearAutopilotLogs: () => ({ mutate: vi.fn() }),
+}));
 
 import AiToolsScreen from '../ai-tools';
 

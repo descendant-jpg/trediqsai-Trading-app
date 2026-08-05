@@ -16,7 +16,81 @@ tags:
     description: Trader leaderboard
   - name: oracle
     description: TradiQs Oracle AI chat
+  - name: autopilot
+    description: AutoPilot trading bots
 paths:
+  /autopilot:
+    get:
+      operationId: getAutopilot
+      tags: [autopilot]
+      summary: Get the AutoPilot state (roster, config, logs, P&L)
+      responses:
+        "200":
+          description: Current AutoPilot state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutopilotState"
+  /autopilot/master:
+    put:
+      operationId: setAutopilotMaster
+      tags: [autopilot]
+      summary: Pause or resume the whole AutoPilot system
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AutopilotMasterUpdate"
+      responses:
+        "200":
+          description: Updated AutoPilot state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutopilotState"
+  /autopilot/bots/{botId}:
+    put:
+      operationId: updateAutopilotBot
+      tags: [autopilot]
+      summary: Update a bot's running state or configuration
+      parameters:
+        - name: botId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AutopilotBotUpdate"
+      responses:
+        "200":
+          description: Updated AutoPilot state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutopilotState"
+        "404":
+          description: Unknown bot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutopilotError"
+  /autopilot/logs:
+    delete:
+      operationId: clearAutopilotLogs
+      tags: [autopilot]
+      summary: Clear the AutoPilot log buffer
+      responses:
+        "200":
+          description: Updated AutoPilot state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutopilotState"
   /oracle/chat:
     post:
       operationId: sendOracleChat
@@ -294,6 +368,95 @@ components:
           type: string
       required:
         - error
+    AutopilotBot:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        tags:
+          type: string
+        risk:
+          type: string
+          enum: [Low, Medium, High]
+        winRate:
+          type: string
+        return30d:
+          type: string
+        totalTrades:
+          type: number
+        proOnly:
+          type: boolean
+        running:
+          type: boolean
+        capital:
+          type: number
+        drawdown:
+          type: number
+          description: Max drawdown limit in percent.
+      required:
+        - id
+        - name
+        - tags
+        - risk
+        - winRate
+        - return30d
+        - totalTrades
+        - proOnly
+        - running
+        - capital
+        - drawdown
+    AutopilotLogLine:
+      type: object
+      properties:
+        id:
+          type: string
+        time:
+          type: string
+          description: HH:MM:SS wall-clock time of the log line.
+        text:
+          type: string
+      required: [id, time, text]
+    AutopilotState:
+      type: object
+      properties:
+        masterActive:
+          type: boolean
+        todayPnl:
+          type: number
+          description: Today's simulated bot P&L in USD.
+        bots:
+          type: array
+          items:
+            $ref: "#/components/schemas/AutopilotBot"
+        logs:
+          type: array
+          items:
+            $ref: "#/components/schemas/AutopilotLogLine"
+      required: [masterActive, todayPnl, bots, logs]
+    AutopilotMasterUpdate:
+      type: object
+      properties:
+        active:
+          type: boolean
+      required: [active]
+    AutopilotBotUpdate:
+      type: object
+      properties:
+        running:
+          type: boolean
+        capital:
+          type: number
+        drawdown:
+          type: number
+      description: At least one field should be provided.
+    AutopilotError:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
     HealthStatus:
       type: object
       properties:
