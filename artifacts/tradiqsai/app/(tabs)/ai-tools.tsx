@@ -15,26 +15,23 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import colors from '@/constants/colors';
+import {
+  useSendOracleChat,
+  type OracleChatMessage,
+} from '@workspace/api-client-react';
 
 interface ChatMessage {
   id: string;
   role: 'user' | 'ai';
   text: string;
+  /** Marks a friendly error bubble so it can be styled/identified. */
+  isError?: boolean;
 }
 
 const QUICK_PROMPTS = ['Analyze BTC/USD', 'Show Market Sentiment', 'Daily Movers'];
 
-const AI_RESPONSES: Record<string, string> = {
-  'Analyze BTC/USD':
-    'BTC/USD is holding above the 4H demand zone with funding rates back to neutral. The 4H chart is showing bullish divergence on RSI — momentum favors the upside while price stays above the last swing low. Would you like the execution targets?',
-  'Show Market Sentiment':
-    'Overall sentiment is cautiously risk-on: the Fear & Greed index sits at 61 (Greed), equity breadth is improving, and crypto perp funding is neutral-positive. Watch for crowding in AI-sector names — sentiment there is running hot.',
-  'Daily Movers':
-    "Today's standouts: NVDA +3.2% on datacenter flows, SOL -4.1% as perp funding unwinds, and XAU/USD +0.8% with real yields softening. BTC is coiling in a tight range — a breakout usually follows this kind of compression.",
-};
-
-const DEFAULT_RESPONSE =
-  'The 4H chart for this asset is showing bullish divergence. Would you like the execution targets?';
+const ERROR_RESPONSE =
+  "I couldn't reach my AI brain just now — check your connection and tap Retry to send that again.";
 
 const WELCOME: ChatMessage = {
   id: 'welcome',
@@ -115,44 +112,75 @@ export default function AiToolsScreen() {
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
   const [messages, setMessages] = useState<ChatMessage[]>([WELCOME]);
   const [input, setInput] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
+  const [lastFailedText, setLastFailedText] = useState<string | null>(null);
   const listRef = useRef<FlatList<ChatMessage>>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => () => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-  }, []);
+  const { mutate: sendOracleChat, isPending: isTyping } = useSendOracleChat();
 
   const scrollToEnd = useCallback(() => {
     requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
   }, []);
+
+  /** Post the conversation (baseMessages already includes the new user turn). */
+  const deliver = useCallback(
+    (trimmed: string, baseMessages: ChatMessage[]) => {
+      setMessages(baseMessages);
+      scrollToEnd();
+
+      // Build the conversation history for the AI (skip the welcome
+      // greeting and any error bubbles).
+      const history: OracleChatMessage[] = baseMessages
+        .filter((m) => m.id !== 'welcome' && !m.isError)
+        .map((m) => ({
+          role: m.role === 'user' ? ('user' as const) : ('assistant' as const),
+          content: m.text,
+        }));
+
+      sendOracleChat(
+        { data: { messages: history } },
+        {
+          onSuccess: (res) => {
+            setMessages((cur) => [
+              ...cur,
+              { id: `a-${Date.now()}`, role: 'ai', text: res.reply },
+            ]);
+            scrollToEnd();
+          },
+          onError: () => {
+            setLastFailedText(trimmed);
+            setMessages((cur) => [
+              ...cur,
+              { id: `e-${Date.now()}`, role: 'ai', text: ERROR_RESPONSE, isError: true },
+            ]);
+            scrollToEnd();
+          },
+        },
+      );
+    },
+    [scrollToEnd, sendOracleChat],
+  );
 
   const sendMessage = useCallback(
     (text: string) => {
       const trimmed = text.trim();
       if (!trimmed || isTyping) return;
       setInput('');
-      setMessages((prev) => [
-        ...prev,
+      setLastFailedText(null);
+      deliver(trimmed, [
+        ...messages,
         { id: `u-${Date.now()}`, role: 'user', text: trimmed },
       ]);
-      setIsTyping(true);
-      scrollToEnd();
-      timerRef.current = setTimeout(() => {
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: `a-${Date.now()}`,
-            role: 'ai',
-            text: AI_RESPONSES[trimmed] ?? DEFAULT_RESPONSE,
-          },
-        ]);
-        setIsTyping(false);
-        scrollToEnd();
-      }, 1500);
     },
-    [isTyping, scrollToEnd],
+    [isTyping, messages, deliver],
   );
+
+  const retryLast = useCallback(() => {
+    if (!lastFailedText || isTyping) return;
+    const failed = lastFailedText;
+    setLastFailedText(null);
+    // Drop the error bubble; the failed user turn stays in place and is resent.
+    deliver(failed, messages.filter((m) => !m.isError));
+  }, [lastFailedText, isTyping, messages, deliver]);
 
   const renderMessage = ({ item }: { item: ChatMessage }) => (
     <View
@@ -164,6 +192,18 @@ export default function AiToolsScreen() {
       <Text style={item.role === 'user' ? styles.userText : styles.aiText}>
         {item.text}
       </Text>
+      {item.isError && lastFailedText ? (
+        <TouchableOpacity
+          style={styles.retryButton}
+          onPress={retryLast}
+          disabled={isTyping}
+          activeOpacity={0.8}
+          testID="oracle-retry"
+        >
+          <Feather name="refresh-cw" size={13} color="#00F0FF" />
+          <Text style={styles.retryText}>Retry</Text>
+        </TouchableOpacity>
+      ) : null}
     </View>
   );
 
@@ -321,6 +361,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Inter_400Regular',
     lineHeight: 21,
+  },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: '#00F0FF',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  retryText: {
+    color: '#00F0FF',
+    fontSize: 12.5,
+    fontFamily: 'Inter_600SemiBold',
   },
   typingBubble: {
     flexDirection: 'row',

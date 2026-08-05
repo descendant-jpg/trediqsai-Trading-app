@@ -14,7 +14,33 @@ tags:
     description: AI trading signals
   - name: leaderboard
     description: Trader leaderboard
+  - name: oracle
+    description: TradiQs Oracle AI chat
 paths:
+  /oracle/chat:
+    post:
+      operationId: sendOracleChat
+      tags: [oracle]
+      summary: Send a chat message to the TradiQs Oracle AI
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OracleChatRequest"
+      responses:
+        "200":
+          description: AI reply
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OracleChatResponse"
+        "503":
+          description: AI backend unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OracleChatError"
   /signals:
     get:
       operationId: getSignals
@@ -134,6 +160,42 @@ components:
         - winRate
         - trades
         - pro
+    OracleChatMessage:
+      type: object
+      properties:
+        role:
+          type: string
+          enum: [user, assistant]
+        content:
+          type: string
+      required:
+        - role
+        - content
+    OracleChatRequest:
+      type: object
+      properties:
+        messages:
+          type: array
+          minItems: 1
+          maxItems: 40
+          items:
+            $ref: "#/components/schemas/OracleChatMessage"
+      required:
+        - messages
+    OracleChatResponse:
+      type: object
+      properties:
+        reply:
+          type: string
+      required:
+        - reply
+    OracleChatError:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
     HealthStatus:
       type: object
       properties:
@@ -141,4 +203,3 @@ components:
           type: string
       required:
         - status
-

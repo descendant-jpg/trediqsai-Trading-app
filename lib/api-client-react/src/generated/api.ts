@@ -6,23 +6,30 @@
  * OpenAPI spec version: 0.1.0
  */
 import {
+  useMutation,
   useQuery
 } from '@tanstack/react-query';
 import type {
+  MutationFunction,
   QueryFunction,
   QueryKey,
+  UseMutationOptions,
+  UseMutationResult,
   UseQueryOptions,
   UseQueryResult
 } from '@tanstack/react-query';
 
 import type {
   HealthStatus,
+  OracleChatError,
+  OracleChatRequest,
+  OracleChatResponse,
   Signal,
   Trader
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
-import type { ErrorType } from '../custom-fetch';
+import type { ErrorType , BodyType } from '../custom-fetch';
 
 type AwaitedInput<T> = PromiseLike<T> | T;
 
@@ -47,6 +54,77 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getSendOracleChatUrl = () => {
+
+
+
+
+  return `/api/oracle/chat`
+}
+
+/**
+ * @summary Send a chat message to the TradiQs Oracle AI
+ */
+export const sendOracleChat = async (oracleChatRequest: OracleChatRequest, options?: Parameters<typeof customFetch>[1]): Promise<OracleChatResponse> => {
+
+  return customFetch<OracleChatResponse>(getSendOracleChatUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(oracleChatRequest)
+  }
+);}
+
+
+
+
+
+export const getSendOracleChatMutationOptions = <TError = ErrorType<OracleChatError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendOracleChat>>, TError,{data: BodyType<OracleChatRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendOracleChat>>, TError,{data: BodyType<OracleChatRequest>}, TContext> => {
+
+const mutationKey = ['sendOracleChat'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendOracleChat>>, {data: BodyType<OracleChatRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  sendOracleChat(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SendOracleChatMutationResult = NonNullable<Awaited<ReturnType<typeof sendOracleChat>>>
+    export type SendOracleChatMutationBody = BodyType<OracleChatRequest>
+    export type SendOracleChatMutationError = ErrorType<OracleChatError>
+
+    /**
+ * @summary Send a chat message to the TradiQs Oracle AI
+ */
+export const useSendOracleChat = <TError = ErrorType<OracleChatError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendOracleChat>>, TError,{data: BodyType<OracleChatRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof sendOracleChat>>,
+        TError,
+        {data: BodyType<OracleChatRequest>},
+        TContext
+      > => {
+      return useMutation(getSendOracleChatMutationOptions(options));
+    }
 
 export const getGetSignalsUrl = () => {
 

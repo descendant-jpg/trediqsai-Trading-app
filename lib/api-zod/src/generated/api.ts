@@ -55,3 +55,18 @@ export const HealthCheckResponse = zod.object({
 })
 
 
+/**
+ * @summary Send a chat message to the TradiQs Oracle AI
+ */
+export const sendOracleChatBodyMessagesMax = 40;
+
+export const SendOracleChatBody = zod.object({
+  "messages": zod.array(zod.object({
+  "role": zod.enum(['user', 'assistant']),
+  "content": zod.string()
+})).min(1).max(sendOracleChatBodyMessagesMax)
+})
+
+export const SendOracleChatResponse = zod.object({
+  "reply": zod.string()
+})

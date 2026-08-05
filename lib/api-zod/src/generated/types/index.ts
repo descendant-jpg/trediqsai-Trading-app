@@ -7,6 +7,11 @@
  */
 
 export * from './healthStatus';
+export * from './oracleChatError';
+export * from './oracleChatMessage';
+export * from './oracleChatMessageRole';
+export * from './oracleChatRequest';
+export * from './oracleChatResponse';
 export * from './signal';
 export * from './signalAction';
 export * from './signalStatus';

@@ -50,7 +50,34 @@ export interface Trader {
   pro: boolean;
 }
 
+export type OracleChatMessageRole = typeof OracleChatMessageRole[keyof typeof OracleChatMessageRole];
 export interface HealthStatus {
   status: string;
 }
 
+
+export const OracleChatMessageRole = {
+  user: 'user',
+  assistant: 'assistant',
+} as const;
+
+export interface OracleChatMessage {
+  role: OracleChatMessageRole;
+  content: string;
+}
+
+export interface OracleChatRequest {
+  /**
+     * @minItems 1
+     * @maxItems 40
+     */
+  messages: OracleChatMessage[];
+}
+
+export interface OracleChatError {
+  error: string;
+}
+
+export interface OracleChatResponse {
+  reply: string;
+}
