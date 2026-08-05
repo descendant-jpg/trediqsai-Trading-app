@@ -1,6 +1,17 @@
-import React from 'react';
-import { ActivityIndicator, FlatList, Platform, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useState } from 'react';
+import {
+  ActivityIndicator,
+  FlatList,
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BlurView } from 'expo-blur';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { ManageSubscriptionCard, PaywallCard, ProWindDownBanner } from '@/components/paywall';
@@ -10,16 +21,46 @@ import { useSubscription } from '@/lib/revenuecat';
 
 const c = colors.light;
 
+const STATUS_STYLES: Record<string, { color: string; label: string }> = {
+  ACTIVE: { color: '#00F0FF', label: 'ACTIVE' },
+  WON: { color: '#2ECA8B', label: 'WON' },
+  LOST: { color: '#E54B4B', label: 'LOST' },
+};
+
+function TargetsRow({ signal, actionColor }: { signal: Signal; actionColor: string }) {
+  return (
+    <View style={styles.metaRow}>
+      <View style={styles.metaItem}>
+        <Text style={styles.metaLabel}>Entry</Text>
+        <Text style={styles.metaValue}>{signal.price}</Text>
+      </View>
+      <View style={styles.metaItem}>
+        <Text style={styles.metaLabel}>Take Profit</Text>
+        <Text style={[styles.metaValue, { color: '#2ECA8B' }]}>{signal.target}</Text>
+      </View>
+      <View style={styles.metaItem}>
+        <Text style={styles.metaLabel}>Stop Loss</Text>
+        <Text style={[styles.metaValue, { color: '#E54B4B' }]}>{signal.stopLoss}</Text>
+      </View>
+    </View>
+  );
+}
+
 function SignalCard({
   signal,
+  locked,
   onTrade,
+  onUpgrade,
 }: {
   signal: Signal;
+  locked: boolean;
   onTrade: (signal: Signal) => void;
+  onUpgrade: () => void;
 }) {
   const isBuy = signal.action === 'BUY';
-  const actionColor = isBuy ? c.success : c.destructive;
+  const actionColor = isBuy ? '#00F0FF' : '#E54B4B';
   const accent = signal.pro ? c.secondary : c.primary;
+  const status = STATUS_STYLES[signal.status] ?? STATUS_STYLES.ACTIVE;
 
   return (
     <View style={[styles.card, { borderLeftColor: accent }]}>
@@ -30,24 +71,24 @@ function SignalCard({
             {signal.name}
           </Text>
         </View>
-        {signal.pro ? (
-          <View style={[styles.badge, { backgroundColor: 'rgba(176,38,255,0.15)', borderColor: c.secondary }]}>
-            <Feather name="star" size={10} color={c.secondary} />
-            <Text style={[styles.badgeText, { color: c.secondary }]}>PRO</Text>
+        <View style={styles.badgeRow}>
+          <View style={[styles.statusBadge, { borderColor: status.color }]}>
+            <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
           </View>
-        ) : (
-          <View style={[styles.badge, { backgroundColor: 'rgba(0,240,255,0.12)', borderColor: c.primary }]}>
-            <Feather name="zap" size={10} color={c.primary} />
-            <Text style={[styles.badgeText, { color: c.primary }]}>AI</Text>
+          <View style={[styles.actionPill, { backgroundColor: actionColor }]}>
+            <Feather name={isBuy ? 'trending-up' : 'trending-down'} size={12} color="#0A0B0E" />
+            <Text style={styles.actionText}>{signal.action}</Text>
           </View>
-        )}
+        </View>
       </View>
 
-      <View style={styles.actionRow}>
-        <View style={[styles.actionPill, { backgroundColor: actionColor }]}>
-          <Feather name={isBuy ? 'trending-up' : 'trending-down'} size={12} color={c.background} />
-          <Text style={styles.actionText}>{signal.action}</Text>
-        </View>
+      <View style={styles.subRow}>
+        {signal.pro && (
+          <View style={styles.proTag}>
+            <Feather name="star" size={9} color={c.secondary} />
+            <Text style={styles.proTagText}>PRO</Text>
+          </View>
+        )}
         <Text style={styles.confidence}>
           <Text style={{ color: accent }}>{signal.confidence}%</Text> confidence
         </Text>
@@ -56,41 +97,50 @@ function SignalCard({
 
       <Text style={styles.rationale}>{signal.rationale}</Text>
 
-      <View style={styles.metaRow}>
-        <View style={styles.metaItem}>
-          <Text style={styles.metaLabel}>Entry</Text>
-          <Text style={styles.metaValue}>{signal.price}</Text>
-        </View>
-        <View style={styles.metaItem}>
-          <Text style={styles.metaLabel}>Target</Text>
-          <Text style={[styles.metaValue, { color: actionColor }]}>{signal.target}</Text>
-        </View>
-        <View style={styles.metaItem}>
-          <Text style={styles.metaLabel}>Horizon</Text>
-          <Text style={styles.metaValue}>{signal.timeframe}</Text>
-        </View>
+      {/* Entry / TP / SL — blurred behind the premium gate for locked pro signals */}
+      <View>
+        <TargetsRow signal={signal} actionColor={actionColor} />
+        {locked && (
+          <View style={styles.lockOverlay}>
+            <BlurView
+              intensity={Platform.OS === 'web' ? 30 : 24}
+              tint="dark"
+              style={StyleSheet.absoluteFill}
+            />
+            <View style={styles.lockContent}>
+              <Feather name="lock" size={16} color="#FFFFFF" />
+              <TouchableOpacity
+                style={styles.unlockButton}
+                onPress={onUpgrade}
+                activeOpacity={0.85}
+                testID={`unlock-${signal.id}`}
+              >
+                <Text style={styles.unlockButtonText}>Upgrade to Pro to Unlock</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
       </View>
 
-      <TouchableOpacity
-        activeOpacity={0.85}
-        style={[styles.tradeButton, { backgroundColor: actionColor }]}
-        onPress={() => onTrade(signal)}
-        testID={`trade-signal-${signal.id}`}
-      >
-        <Feather
-          name={isBuy ? 'trending-up' : 'trending-down'}
-          size={14}
-          color={isBuy ? c.background : '#FFFFFF'}
-        />
-        <Text
-          style={[
-            styles.tradeButtonText,
-            { color: isBuy ? c.background : '#FFFFFF' },
-          ]}
+      {!locked && (
+        <TouchableOpacity
+          activeOpacity={0.85}
+          style={[styles.tradeButton, { backgroundColor: actionColor }]}
+          onPress={() => onTrade(signal)}
+          testID={`trade-signal-${signal.id}`}
         >
-          Trade this — {signal.action} {signal.symbol}
-        </Text>
-      </TouchableOpacity>
+          <Feather
+            name={isBuy ? 'trending-up' : 'trending-down'}
+            size={14}
+            color={isBuy ? c.background : '#FFFFFF'}
+          />
+          <Text
+            style={[styles.tradeButtonText, { color: isBuy ? c.background : '#FFFFFF' }]}
+          >
+            Trade this — {signal.action} {signal.symbol}
+          </Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -101,6 +151,7 @@ export default function AISignalsScreen() {
   const { data: signals, isLoading: signalsLoading, isError, refetch } = useGetSignals();
   const { isSubscribed, isLoading: subLoading, verificationPending } = useSubscription();
   const router = useRouter();
+  const [paywallOpen, setPaywallOpen] = useState(false);
 
   const isLoading = signalsLoading || subLoading;
 
@@ -146,40 +197,52 @@ export default function AISignalsScreen() {
             <Text style={styles.retryText}>Retry</Text>
           </Pressable>
         </View>
-      ) : isSubscribed ? (
-        /* Full signals feed — unlocked for Pro subscribers */
+      ) : (
         <FlatList
           data={signals ?? []}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => <SignalCard signal={item} onTrade={handleTrade} />}
+          renderItem={({ item }) => (
+            <SignalCard
+              signal={item}
+              locked={item.pro && !isSubscribed}
+              onTrade={handleTrade}
+              onUpgrade={() => setPaywallOpen(true)}
+            />
+          )}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={
-            <View style={{ gap: 12 }}>
-              <ProWindDownBanner />
-              <ManageSubscriptionCard />
-            </View>
+            isSubscribed ? (
+              <View style={{ gap: 12 }}>
+                <ProWindDownBanner />
+                <ManageSubscriptionCard />
+              </View>
+            ) : null
           }
         />
-      ) : (
-        /* Locked signals feed — dimmed and non-interactive behind the paywall */
-        <>
-          <View style={styles.lockedContent} pointerEvents="none">
-            <FlatList
-              data={signals ?? []}
-              keyExtractor={(item) => item.id}
-              renderItem={({ item }) => <SignalCard signal={item} onTrade={handleTrade} />}
-              contentContainerStyle={styles.listContent}
-              showsVerticalScrollIndicator={false}
-              scrollEnabled={false}
-            />
-          </View>
-          {/* Centered Pro Tier paywall overlay */}
-          <View style={styles.paywallOverlay}>
+      )}
+
+      {/* Paywall modal opened from a locked signal card */}
+      <Modal
+        visible={paywallOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setPaywallOpen(false)}
+      >
+        <View style={styles.paywallBackdrop}>
+          <View style={styles.paywallSheet}>
+            <TouchableOpacity
+              style={styles.paywallClose}
+              onPress={() => setPaywallOpen(false)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              testID="paywall-close"
+            >
+              <Feather name="x" size={22} color="#FFFFFF" />
+            </TouchableOpacity>
             <PaywallCard />
           </View>
-        </>
-      )}
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -243,15 +306,6 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
     gap: 12,
   },
-  lockedContent: {
-    flex: 1,
-    opacity: 0.2,
-  },
-  paywallOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
   card: {
     backgroundColor: c.card,
     borderRadius: colors.radius,
@@ -265,6 +319,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 8,
   },
   symbolRow: {
     flexDirection: 'row',
@@ -283,24 +338,21 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_400Regular',
     flexShrink: 1,
   },
-  badge: {
+  badgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
+  },
+  statusBadge: {
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 6,
     paddingHorizontal: 6,
     paddingVertical: 3,
   },
-  badgeText: {
-    fontSize: 10,
+  statusText: {
+    fontSize: 9,
     fontFamily: 'Inter_700Bold',
-    letterSpacing: 0.5,
-  },
-  actionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
+    letterSpacing: 0.8,
   },
   actionPill: {
     flexDirection: 'row',
@@ -311,9 +363,31 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   actionText: {
-    color: c.background,
+    color: '#0A0B0E',
     fontSize: 12,
     fontFamily: 'Inter_700Bold',
+  },
+  subRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  proTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(176,38,255,0.15)',
+    borderWidth: 1,
+    borderColor: c.secondary,
+    borderRadius: 6,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+  },
+  proTagText: {
+    color: c.secondary,
+    fontSize: 9,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 0.5,
   },
   confidence: {
     color: c.mutedForeground,
@@ -355,6 +429,29 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'Inter_700Bold',
   },
+  lockOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 8,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lockContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  unlockButton: {
+    backgroundColor: '#00F0FF',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  unlockButtonText: {
+    color: '#0A0B0E',
+    fontSize: 12,
+    fontFamily: 'Inter_700Bold',
+  },
   stateBox: {
     flex: 1,
     alignItems: 'center',
@@ -392,5 +489,17 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'Inter_700Bold',
     letterSpacing: 0.3,
+  },
+  paywallBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  paywallSheet: {
+    gap: 10,
+  },
+  paywallClose: {
+    alignSelf: 'flex-end',
   },
 });

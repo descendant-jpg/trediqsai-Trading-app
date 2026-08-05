@@ -13,6 +13,15 @@ export const SignalAction = {
   SELL: 'SELL',
 } as const;
 
+export type SignalStatus = typeof SignalStatus[keyof typeof SignalStatus];
+
+
+export const SignalStatus = {
+  ACTIVE: 'ACTIVE',
+  WON: 'WON',
+  LOST: 'LOST',
+} as const;
+
 export interface Signal {
   id: string;
   symbol: string;
@@ -21,6 +30,8 @@ export interface Signal {
   confidence: number;
   price: string;
   target: string;
+  stopLoss: string;
+  status: SignalStatus;
   timeframe: string;
   time: string;
   pro: boolean;

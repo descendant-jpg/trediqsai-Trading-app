@@ -19,6 +19,8 @@ export const GetSignalsResponseItem = zod.object({
   "confidence": zod.number(),
   "price": zod.string(),
   "target": zod.string(),
+  "stopLoss": zod.string(),
+  "status": zod.enum(['ACTIVE', 'WON', 'LOST']),
   "timeframe": zod.string(),
   "time": zod.string(),
   "pro": zod.boolean(),

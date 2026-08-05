@@ -1,0 +1,21 @@
+Let's build the core value-driven screens for the bottom navigation: the "Signals" feed and the "AI Tools" hub.
+
+### 1. Signals Screen (SignalsScreen.tsx)
+- Layout: A scrollable feed (FlatList) with the standard Terminal Black (#0A0B0E) background.
+- State/Data: Create a mock state array of 5 signal objects. Each should include `{ id, asset, type: 'BUY' | 'SELL', entryPrice, takeProfit, stopLoss, status: 'ACTIVE' | 'WON' | 'LOST', isPremium: boolean }`.
+- Signal Card UI: Render a Card for each signal (Background: #16181D, Border: 1px solid #22252A, border radius 12px, nice padding).
+- Card Content: 
+  - Top row: Asset name (e.g., XAU/USD) on the left, and a vibrant 'BUY' (Electric Cyan #00F0FF) or 'SELL' (Muted Crimson #E54B4B) badge on the right.
+  - Middle row: Display the Entry, TP, and SL targets in a clean, evenly spaced horizontal row.
+- The Premium Gate: If `isPremium` is true, blur out the Entry/TP/SL numbers. Overlay a padlock icon and a small "Upgrade to Pro to Unlock" button on top of the blurred section.
+
+### 2. AI Tools Hub (AIToolsScreen.tsx)
+- Layout: A chat-style interface simulating a specialized market AI assistant. Terminal Black background.
+- Header: A bold title reading "TradiQs Oracle" at the top. Next to it, add a tiny indicator dot that continuously pulses Electric Cyan to show the AI is "Online".
+- Chat Interface:
+  - A main scrollable message area (`FlatList`).
+  - A fixed text input field at the bottom (Background #16181D) with a send button.
+- Quick Prompts: Just above the text input, add a horizontal `ScrollView` containing 3 pill-shaped buttons (chips) with pre-set queries: "Analyze BTC/USD", "Show Market Sentiment", "Daily Movers".
+- Mock Logic: Create a state array for `messages`. When the user types a message (or clicks a Quick Prompt) and hits send, append their message to the screen. Set an `isTyping` state to true for 1.5 seconds to show a typing indicator, then append a mock AI response (e.g., "The 4H chart for this asset is showing bullish divergence. Would you like the execution targets?").
+
+Ensure all styling strictly follows the dark mode palette, uses crisp typography, and implements React Native `SafeAreaView` so nothing overlaps the phone's notches or the bottom tab bar.

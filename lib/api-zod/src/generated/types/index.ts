@@ -9,4 +9,5 @@
 export * from './healthStatus';
 export * from './signal';
 export * from './signalAction';
+export * from './signalStatus';
 export * from './trader';

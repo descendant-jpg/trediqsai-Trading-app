@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { SignalAction } from './signalAction';
+import type { SignalStatus } from './signalStatus';
 
 export interface Signal {
   id: string;
@@ -15,6 +16,8 @@ export interface Signal {
   confidence: number;
   price: string;
   target: string;
+  stopLoss: string;
+  status: SignalStatus;
   timeframe: string;
   time: string;
   pro: boolean;

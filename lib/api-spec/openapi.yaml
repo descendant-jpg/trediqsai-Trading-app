@@ -76,6 +76,11 @@ components:
           type: string
         target:
           type: string
+        stopLoss:
+          type: string
+        status:
+          type: string
+          enum: [ACTIVE, WON, LOST]
         timeframe:
           type: string
         time:
@@ -92,6 +97,8 @@ components:
         - confidence
         - price
         - target
+        - stopLoss
+        - status
         - timeframe
         - time
         - pro
