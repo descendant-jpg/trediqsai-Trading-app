@@ -15,9 +15,10 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { Feather } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { PaywallCard } from '@/components/paywall';
 import colors from '@/constants/colors';
+import { legacyOracleRedirectTarget } from '@/lib/legacyOracleRedirect';
 import { useSubscription } from '@/lib/revenuecat';
 
 const c = colors.light;
@@ -159,7 +160,16 @@ export default function AiToolsScreen() {
   const insets = useSafeAreaInsets();
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
   const router = useRouter();
+  const params = useLocalSearchParams();
   const { isSubscribed } = useSubscription();
+
+  // Legacy deep-link mapping: the Oracle chat used to live on this tab.
+  // Old targets like `/(tabs)/ai-tools?chat=1` (or `?view=chat`,
+  // `?screen=oracle`) should still land on the chat at `/oracle`.
+  const legacyTarget = legacyOracleRedirectTarget(params);
+  useEffect(() => {
+    if (legacyTarget) router.replace(legacyTarget);
+  }, [legacyTarget, router]);
 
   const [masterActive, setMasterActive] = useState(true);
   const [runningBots, setRunningBots] = useState<Record<string, boolean>>({
