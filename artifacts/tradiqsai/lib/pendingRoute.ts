@@ -56,6 +56,39 @@ export function buildPendingRoute(
   return `${pathname}${encodeParams(params)}`;
 }
 
+/**
+ * Pathnames that resolve to real screens (see `app/`). Keep in sync when
+ * adding or removing routes; group segments like `(tabs)` are stripped
+ * before matching.
+ */
+const KNOWN_PATHS = new Set([
+  '/',
+  '/index',
+  '/leaderboard',
+  '/portfolio',
+  '/signals',
+  '/profile',
+  '/ai-tools',
+  '/oracle',
+  '/notification-settings',
+]);
+
+/**
+ * Whether a stored route still resolves to an existing screen. Used to keep
+ * stale shared links from dumping users on the not-found screen after
+ * sign-in.
+ */
+export function isResolvableRoute(route: string): boolean {
+  const pathname = route.split(/[?#]/, 1)[0];
+  const normalized =
+    '/' +
+    pathname
+      .split('/')
+      .filter((seg) => seg && !(seg.startsWith('(') && seg.endsWith(')')))
+      .join('/');
+  return KNOWN_PATHS.has(normalized.toLowerCase());
+}
+
 let pendingRoute: string | null = null;
 
 /** Records the route a signed-out user was trying to reach. */

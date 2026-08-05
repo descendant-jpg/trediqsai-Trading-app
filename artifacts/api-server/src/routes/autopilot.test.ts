@@ -111,6 +111,8 @@ beforeEach(async () => {
   // Only fake Date so real network/socket timers keep working.
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date("2026-08-05T10:00:00"));
+  // No DB wipe needed: startFreshApp installs a brand-new in-memory db fake
+  // per test, so every case starts from freshly seeded defaults.
   await startFreshApp();
 });
 

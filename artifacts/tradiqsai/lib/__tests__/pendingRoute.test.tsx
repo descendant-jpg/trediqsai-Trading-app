@@ -14,6 +14,7 @@ import {
   buildPendingRoute,
   clearPendingRoute,
   consumePendingRoute,
+  isResolvableRoute,
   setPendingRoute,
 } from '@/lib/pendingRoute';
 
@@ -75,6 +76,20 @@ describe('buildPendingRoute', () => {
       '/ai-tools?chat=false',
     );
     expect(buildPendingRoute('/ai-tools')).toBe('/ai-tools');
+  });
+});
+
+describe('isResolvableRoute', () => {
+  it('accepts known routes, with or without query params or groups', () => {
+    expect(isResolvableRoute('/oracle')).toBe(true);
+    expect(isResolvableRoute('/profile?user=abc')).toBe(true);
+    expect(isResolvableRoute('/(tabs)/ai-tools')).toBe(true);
+    expect(isResolvableRoute('/')).toBe(true);
+  });
+
+  it('rejects routes that no longer exist', () => {
+    expect(isResolvableRoute('/old-screen')).toBe(false);
+    expect(isResolvableRoute('/signals/123')).toBe(false);
   });
 });
 
@@ -141,6 +156,22 @@ describe('usePendingRouteRedirect (deferred navigation)', () => {
     act(() => vi.runAllTimers());
 
     expect(replace).not.toHaveBeenCalled();
+  });
+
+  it('falls back to home with a notice when the stored route no longer resolves', () => {
+    const alertSpy = vi
+      .spyOn(window, 'alert')
+      .mockImplementation(() => undefined);
+    routerState.pathname = '/old-screen';
+
+    const { rerender } = render(<Harness session={null} />);
+    rerender(<Harness session={{ user: 'u1' }} />);
+    act(() => vi.runAllTimers());
+
+    expect(replace).toHaveBeenCalledTimes(1);
+    expect(replace).toHaveBeenCalledWith('/');
+    expect(alertSpy).toHaveBeenCalledTimes(1);
+    alertSpy.mockRestore();
   });
 
   it('replays the route only once across re-renders', () => {
