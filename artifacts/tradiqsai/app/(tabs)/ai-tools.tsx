@@ -37,6 +37,8 @@ const QUICK_PROMPTS = ['Analyze BTC/USD', 'Show Market Sentiment', 'Daily Movers
 const ERROR_RESPONSE =
   "I couldn't reach my AI brain just now — check your connection and tap Retry to send that again.";
 
+const RATE_LIMIT_RESPONSE =
+  "Whoa, that's a lot of questions! I need a short breather — wait a minute, then tap Retry.";
 const WELCOME: ChatMessage = {
   id: 'welcome',
   role: 'ai',
@@ -226,11 +228,11 @@ export default function AiToolsScreen() {
             ]);
             scrollToEnd();
           },
-          onError: () => {
+          onError: (err) => {
             setLastFailedText(trimmed);
             setMessages((cur) => [
               ...cur,
-              { id: `e-${Date.now()}`, role: 'ai', text: ERROR_RESPONSE, isError: true },
+              { id: `e-${Date.now()}`, role: 'ai', text: errorText(err), isError: true },
             ]);
             scrollToEnd();
           },
@@ -606,3 +608,16 @@ const styles = StyleSheet.create({
     opacity: 0.4,
   },
 });
+
+/** Pick a friendly error bubble message based on the API failure. */
+function errorText(err: unknown): string {
+  if (
+    err &&
+    typeof err === 'object' &&
+    'status' in err &&
+    (err as { status?: number }).status === 429
+  ) {
+    return RATE_LIMIT_RESPONSE;
+  }
+  return ERROR_RESPONSE;
+}

@@ -5,9 +5,16 @@ import {
   SendOracleChatResponse,
 } from "@workspace/api-zod";
 import { logger } from "../lib/logger";
+import { rateLimit } from "../middlewares/rateLimit";
 
 const router: IRouter = Router();
 
+const oracleRateLimit = rateLimit({
+  max: 20,
+  windowMs: 60_000,
+  message:
+    "The Oracle needs a breather — you've sent a lot of messages. Try again in a minute.",
+});
 const SYSTEM_PROMPT = [
   "You are the TradiQs Oracle, the in-app market AI assistant for the TradiQs trading app.",
   "You help traders think about markets: asset analysis, sentiment, notable movers, risk framing, and trading concepts.",
@@ -50,7 +57,7 @@ function normalizeMessages(
   return out;
 }
 
-router.post("/oracle/chat", async (req, res) => {
+router.post("/oracle/chat", oracleRateLimit, async (req, res) => {
   const parsed = SendOracleChatBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Invalid request body" });
