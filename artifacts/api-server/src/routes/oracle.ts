@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import OpenAI from "openai";
+import Anthropic from "@anthropic-ai/sdk";
 import {
   SendOracleChatBody,
   SendOracleChatResponse,
@@ -16,12 +16,9 @@ const SYSTEM_PROMPT = [
   "Always remind users that nothing you say is financial advice when giving anything resembling a trade idea.",
 ].join(" ");
 
-function getClient(): OpenAI | null {
-  const baseURL = process.env["AI_INTEGRATIONS_OPENAI_BASE_URL"];
-  const proxyKey = process.env["AI_INTEGRATIONS_OPENAI_API_KEY"];
-  if (baseURL && proxyKey) return new OpenAI({ baseURL, apiKey: proxyKey });
-  const apiKey = process.env["OPENAI_API_KEY"];
-  if (apiKey) return new OpenAI({ apiKey });
+function getClient(): Anthropic | null {
+  const apiKey = process.env["ANTHROPIC_API_KEY"];
+  if (apiKey) return new Anthropic({ apiKey });
   return null;
 }
 
@@ -36,23 +33,30 @@ router.post("/oracle/chat", async (req, res) => {
   if (!client) {
     res.status(503).json({
       error:
-        "The Oracle's AI backend isn't configured yet (missing OpenAI credentials).",
+        "The Oracle's AI backend isn't configured yet (missing ANTHROPIC_API_KEY).",
     });
     return;
   }
 
   try {
-    const completion = await client.chat.completions.create({
-      model: process.env["ORACLE_MODEL"] ?? "gpt-5-mini",
-      max_completion_tokens: 8192,
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        // Keep only the most recent turns to bound token usage.
-        ...parsed.data.messages.slice(-20),
-      ],
+    const message = await client.messages.create({
+      model: process.env["ORACLE_MODEL"] ?? "claude-3-5-sonnet-20240620",
+      max_tokens: 8192,
+      system: SYSTEM_PROMPT,
+      // Keep only the most recent turns to bound token usage.
+      messages: parsed.data.messages.slice(-20).map((m) => ({
+        role: m.role === "assistant" ? ("assistant" as const) : ("user" as const),
+        content: m.content,
+      })),
     });
 
-    const reply = completion.choices[0]?.message?.content?.trim();
+    const reply = message.content
+      .filter(
+        (block): block is Anthropic.TextBlock => block.type === "text",
+      )
+      .map((block) => block.text)
+      .join("")
+      .trim();
     if (!reply) {
       res.status(502).json({ error: "The Oracle returned an empty response." });
       return;
