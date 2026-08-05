@@ -1,56 +1,115 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
   Animated,
   Easing,
-  FlatList,
-  KeyboardAvoidingView,
+  Modal,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { BlurView } from 'expo-blur';
 import { Feather } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { PaywallCard } from '@/components/paywall';
 import colors from '@/constants/colors';
-import {
-  useSendOracleChat,
-  type OracleChatMessage,
-  type OracleTradingContext,
-} from '@workspace/api-client-react';
-import { useTrading } from '@/context/TradingContext';
+import { useSubscription } from '@/lib/revenuecat';
 
-import {
-  ORACLE_CHAT_PERSIST_FAILURE_THRESHOLD,
-  ORACLE_CHAT_STORAGE_KEY,
-  parseStoredMessages,
-  persistableMessages,
-  type OracleChatBubble as ChatMessage,
-} from '@/lib/oracleChatPersistence';
+const c = colors.light;
 
-const QUICK_PROMPTS = ['Analyze BTC/USD', 'Show Market Sentiment', 'Daily Movers'];
+const GREEN = '#00E676';
+const CYAN = '#00F0FF';
+const CRIMSON = '#E54B4B';
+const GOLD = '#F5C542';
 
-const ERROR_RESPONSE =
-  "I couldn't reach my AI brain just now — check your connection and tap Retry to send that again.";
-
-const RATE_LIMIT_RESPONSE =
-  "Whoa, that's a lot of questions! I need a short breather — wait a minute, then tap Retry.";
-const WELCOME: ChatMessage = {
-  id: 'welcome',
-  role: 'ai',
-  text: "I'm the TradiQs Oracle — your market AI. Ask me about any asset, sentiment, or today's movers.",
+type Bot = {
+  id: string;
+  name: string;
+  tags: string;
+  risk: 'Low' | 'Medium' | 'High';
+  winRate: string;
+  return30d: string;
+  totalTrades: number;
+  proOnly: boolean;
 };
 
-/** Pulsing cyan dot showing the Oracle is "online". */
-function PulseDot() {
+const BOTS: Bot[] = [
+  {
+    id: 'scalp-oracle',
+    name: 'Scalp Oracle AI',
+    tags: 'Crypto / 5m Scalper',
+    risk: 'Low',
+    winRate: '78.4%',
+    return30d: '+12.6%',
+    totalTrades: 1842,
+    proOnly: false,
+  },
+  {
+    id: 'breakout-engine',
+    name: 'Breakout Engine Pro',
+    tags: 'Forex & Stocks / Momentum',
+    risk: 'Medium',
+    winRate: '71.2%',
+    return30d: '+9.1%',
+    totalTrades: 967,
+    proOnly: false,
+  },
+  {
+    id: 'grid-matrix',
+    name: 'Grid Matrix AI',
+    tags: 'Range Trading',
+    risk: 'Low',
+    winRate: '82.1%',
+    return30d: '+7.4%',
+    totalTrades: 2210,
+    proOnly: false,
+  },
+  {
+    id: 'quantum-inst',
+    name: 'Quantum Institutional AI',
+    tags: 'Multi-Asset / Order Flow',
+    risk: 'High',
+    winRate: '88.7%',
+    return30d: '+21.3%',
+    totalTrades: 3405,
+    proOnly: true,
+  },
+];
+
+const RISK_COLORS: Record<Bot['risk'], string> = {
+  Low: GREEN,
+  Medium: GOLD,
+  High: CRIMSON,
+};
+
+const CAPITAL_OPTIONS = [1000, 5000, 10000, 25000] as const;
+const DRAWDOWN_OPTIONS = [5, 10, 15, 20] as const;
+
+const LOG_TEMPLATES = [
+  '[SCAN] BTCUSD 5m — sweeping liquidity below 96,180…',
+  '[EXEC] Limit order placed: XAUUSD BUY @ 2,411.80',
+  '[RISK] Trailing stop adjusted +12p on EURUSD short',
+  '[SCAN] Market structure shift detected on US30 M15',
+  '[EXEC] Partial close 50% @ TP1 — GBPJPY +100p',
+  '[GRID] Rebalancing grid levels: 27.20 → 27.85 (12 nodes)',
+  '[RISK] Exposure check passed — 3.2% of allocated capital at risk',
+  '[SCAN] Momentum spike on NAS100 — awaiting retest confirmation',
+  '[EXEC] Stop moved to breakeven on ETHUSD long',
+  '[NET] Latency 14ms — co-located feed stable',
+];
+
+/** Glowing green pulse dot for "System Active". */
+function PulseDot({ active }: { active: boolean }) {
   const scale = useRef(new Animated.Value(1)).current;
   const opacity = useRef(new Animated.Value(0.6)).current;
 
   useEffect(() => {
+    if (!active) return;
     const loop = Animated.loop(
       Animated.parallel([
         Animated.sequence([
@@ -75,340 +134,421 @@ function PulseDot() {
     );
     loop.start();
     return () => loop.stop();
-  }, [scale, opacity]);
+  }, [active, scale, opacity]);
 
+  const color = active ? GREEN : c.mutedForeground;
   return (
     <View style={styles.dotWrap}>
-      <Animated.View style={[styles.dotPulse, { opacity, transform: [{ scale }] }]} />
-      <View style={styles.dotCore} />
+      {active && (
+        <Animated.View
+          style={[styles.dotPulse, { backgroundColor: color, opacity, transform: [{ scale }] }]}
+        />
+      )}
+      <View style={[styles.dotCore, { backgroundColor: color }]} />
     </View>
   );
 }
 
-/** Animated three-dot typing indicator bubble. */
-function TypingIndicator() {
-  const anims = useRef([0, 1, 2].map(() => new Animated.Value(0.3))).current;
-
-  useEffect(() => {
-    const loops = anims.map((v, i) =>
-      Animated.loop(
-        Animated.sequence([
-          Animated.delay(i * 180),
-          Animated.timing(v, { toValue: 1, duration: 320, useNativeDriver: true }),
-          Animated.timing(v, { toValue: 0.3, duration: 320, useNativeDriver: true }),
-        ]),
-      ),
-    );
-    loops.forEach((l) => l.start());
-    return () => loops.forEach((l) => l.stop());
-  }, [anims]);
-
-  return (
-    <View style={[styles.bubble, styles.aiBubble, styles.typingBubble]}>
-      {anims.map((v, i) => (
-        <Animated.View key={i} style={[styles.typingDot, { opacity: v }]} />
-      ))}
-    </View>
-  );
+function timestamp(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
-/** AI Tools — the TradiQs Oracle chat behind the center tab button. */
 export default function AiToolsScreen() {
   const insets = useSafeAreaInsets();
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
-  const [messages, setMessages] = useState<ChatMessage[]>([WELCOME]);
-  const [input, setInput] = useState('');
-  const [lastFailedText, setLastFailedText] = useState<string | null>(null);
-  const listRef = useRef<FlatList<ChatMessage>>(null);
-  const [hydrated, setHydrated] = useState(false);
-  // Consecutive AsyncStorage write failures; drives the "history won't be
-  // saved" notice once it crosses the threshold.
-  const persistFailuresRef = useRef(0);
-  const [persistWarning, setPersistWarning] = useState(false);
+  const router = useRouter();
+  const { isSubscribed } = useSubscription();
 
-  const { mutate: sendOracleChat, isPending: isTyping } = useSendOracleChat();
-  const { balance, equity, position, unrealizedPnl, drawdownUsed, distanceToPayout } =
-    useTrading();
-
-  // Snapshot of the trading account, kept in a ref so `deliver` doesn't
-  // re-create on every 1s price tick.
-  const tradingContextRef = useRef<OracleTradingContext>({
-    balance,
-    equity,
-    drawdownUsed,
-    distanceToPayout,
+  const [masterActive, setMasterActive] = useState(true);
+  const [runningBots, setRunningBots] = useState<Record<string, boolean>>({
+    'scalp-oracle': true,
+    'breakout-engine': true,
   });
-  tradingContextRef.current = {
-    balance,
-    equity,
-    drawdownUsed,
-    distanceToPayout,
-    ...(position
-      ? {
-          openPosition: {
-            side: position.side,
-            symbol: 'QQX',
-            entryPrice: position.entryPrice,
-            size: position.size,
-            unrealizedPnl,
-          },
-        }
-      : {}),
+  const [botConfig, setBotConfig] = useState<Record<string, { capital: number; drawdown: number }>>({
+    'scalp-oracle': { capital: 10000, drawdown: 10 },
+    'breakout-engine': { capital: 15000, drawdown: 15 },
+  });
+  const [logs, setLogs] = useState<string[]>([
+    `${timestamp()} [SYS] TradiQs AutoPilot core initialized`,
+    `${timestamp()} [SYS] 2 algorithms deployed — monitoring 14 markets`,
+  ]);
+  const [configBot, setConfigBot] = useState<Bot | null>(null);
+  const [paywallOpen, setPaywallOpen] = useState(false);
+  const logScrollRef = useRef<ScrollView>(null);
+  const logIndexRef = useRef(0);
+
+  const appendLog = useCallback((line: string) => {
+    setLogs((cur) => [...cur.slice(-60), `${timestamp()} ${line}`]);
+    requestAnimationFrame(() => logScrollRef.current?.scrollToEnd({ animated: true }));
+  }, []);
+
+  // Simulated live execution feed while the system is active.
+  useEffect(() => {
+    if (!masterActive) return;
+    const id = setInterval(() => {
+      const line = LOG_TEMPLATES[logIndexRef.current % LOG_TEMPLATES.length];
+      logIndexRef.current += 1;
+      appendLog(line);
+    }, 2600);
+    return () => clearInterval(id);
+  }, [masterActive, appendLog]);
+
+  const activeCount = masterActive
+    ? Object.values(runningBots).filter(Boolean).length
+    : 0;
+  const capitalDeployed = useMemo(
+    () =>
+      masterActive
+        ? Object.entries(runningBots)
+            .filter(([, on]) => on)
+            .reduce((sum, [id]) => sum + (botConfig[id]?.capital ?? 10000), 0)
+        : 0,
+    [masterActive, runningBots, botConfig],
+  );
+
+  const toggleMaster = (value: boolean) => {
+    setMasterActive(value);
+    appendLog(value ? '[SYS] AutoPilot resumed — all bots re-armed' : '[SYS] AutoPilot paused — halting new entries');
   };
 
-  // Rehydrate the persisted conversation on mount.
-  useEffect(() => {
-    let cancelled = false;
-    AsyncStorage.getItem(ORACLE_CHAT_STORAGE_KEY)
-      .then((raw) => {
-        if (cancelled) return;
-        const stored = parseStoredMessages(raw);
-        if (stored.length > 0) setMessages([WELCOME, ...stored]);
-      })
-      .catch(() => {
-        // Ignore storage read failures — start with a fresh conversation.
-      })
-      .finally(() => {
-        if (!cancelled) setHydrated(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // Persist the conversation whenever it changes (after hydration, so the
-  // initial welcome-only state doesn't clobber a stored conversation).
-  useEffect(() => {
-    if (!hydrated) return;
-    AsyncStorage.setItem(
-      ORACLE_CHAT_STORAGE_KEY,
-      JSON.stringify(persistableMessages(messages)),
-    )
-      .then(() => {
-        // A successful write means history is safe again — clear the notice.
-        persistFailuresRef.current = 0;
-        setPersistWarning(false);
-      })
-      .catch(() => {
-        // The in-memory chat still works, but warn after repeated failures
-        // so traders know history won't survive a restart.
-        persistFailuresRef.current += 1;
-        if (persistFailuresRef.current >= ORACLE_CHAT_PERSIST_FAILURE_THRESHOLD) {
-          setPersistWarning(true);
-        }
-      });
-  }, [hydrated, messages]);
-
-  const scrollToEnd = useCallback(() => {
-    requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
-  }, []);
-
-  /** Post the conversation (baseMessages already includes the new user turn). */
-  const deliver = useCallback(
-    (trimmed: string, baseMessages: ChatMessage[]) => {
-      setMessages(baseMessages);
-      scrollToEnd();
-
-      // Build the conversation history for the AI (skip the welcome
-      // greeting and any error bubbles).
-      const history: OracleChatMessage[] = baseMessages
-        .filter((m) => m.id !== 'welcome' && !m.isError)
-        .map((m) => ({
-          role: m.role === 'user' ? ('user' as const) : ('assistant' as const),
-          content: m.text,
-        }));
-
-      sendOracleChat(
-        { data: { messages: history, tradingContext: tradingContextRef.current } },
-        {
-          onSuccess: (res) => {
-            setMessages((cur) => [
-              ...cur,
-              { id: `a-${Date.now()}`, role: 'ai', text: res.reply },
-            ]);
-            scrollToEnd();
-          },
-          onError: (err) => {
-            setLastFailedText(trimmed);
-            setMessages((cur) => [
-              ...cur,
-              { id: `e-${Date.now()}`, role: 'ai', text: errorText(err), isError: true },
-            ]);
-            scrollToEnd();
-          },
-        },
-      );
-    },
-    [scrollToEnd, sendOracleChat],
-  );
-
-  const sendMessage = useCallback(
-    (text: string) => {
-      const trimmed = text.trim();
-      if (!trimmed || isTyping) return;
-      setInput('');
-      setLastFailedText(null);
-      deliver(trimmed, [
-        ...messages,
-        { id: `u-${Date.now()}`, role: 'user', text: trimmed },
-      ]);
-    },
-    [isTyping, messages, deliver],
-  );
-
-  /** Wipe the stored conversation and reset to the welcome message. */
-  const clearConversation = useCallback(() => {
-    setMessages([WELCOME]);
-    setLastFailedText(null);
-    AsyncStorage.removeItem(ORACLE_CHAT_STORAGE_KEY).catch(() => {
-      // Ignore storage failures — the in-memory chat is already reset,
-      // and the next persist effect will overwrite the stored history.
-    });
-  }, []);
-
-  const confirmClearConversation = useCallback(() => {
-    if (Platform.OS === 'web') {
-      // Alert.alert doesn't support buttons on web.
-      // eslint-disable-next-line no-alert
-      if (window.confirm('Clear this conversation and start fresh?')) {
-        clearConversation();
-      }
-      return;
-    }
-    Alert.alert(
-      'Clear conversation',
-      'This removes your Oracle chat history and starts fresh.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Clear', style: 'destructive', onPress: clearConversation },
-      ],
+  const toggleBot = (bot: Bot, value: boolean) => {
+    setRunningBots((cur) => ({ ...cur, [bot.id]: value }));
+    const cfg = botConfig[bot.id] ?? { capital: 10000, drawdown: 10 };
+    appendLog(
+      value
+        ? `[BOT] ${bot.name} initialized with $${cfg.capital.toLocaleString()} capital allocation`
+        : `[BOT] ${bot.name} stopped — open positions managed to close`,
     );
-  }, [clearConversation]);
+  };
 
-  const hasConversation = messages.length > 1;
-
-  const retryLast = useCallback(() => {
-    if (!lastFailedText || isTyping) return;
-    const failed = lastFailedText;
-    setLastFailedText(null);
-    // Drop the error bubble; the failed user turn stays in place and is resent.
-    deliver(failed, messages.filter((m) => !m.isError));
-  }, [lastFailedText, isTyping, messages, deliver]);
-
-  const renderMessage = ({ item }: { item: ChatMessage }) => (
-    <View
-      style={[
-        styles.bubble,
-        item.role === 'user' ? styles.userBubble : styles.aiBubble,
-      ]}
-    >
-      <Text style={item.role === 'user' ? styles.userText : styles.aiText}>
-        {item.text}
-      </Text>
-      {item.isError && lastFailedText ? (
-        <TouchableOpacity
-          style={styles.retryButton}
-          onPress={retryLast}
-          disabled={isTyping}
-          activeOpacity={0.8}
-          testID="oracle-retry"
-        >
-          <Feather name="refresh-cw" size={13} color="#00F0FF" />
-          <Text style={styles.retryText}>Retry</Text>
-        </TouchableOpacity>
-      ) : null}
-    </View>
-  );
+  const saveConfig = (bot: Bot, capital: number, drawdown: number) => {
+    setBotConfig((cur) => ({ ...cur, [bot.id]: { capital, drawdown } }));
+    appendLog(
+      `[CFG] ${bot.name} reconfigured — $${capital.toLocaleString()} capital, ${drawdown}% max drawdown`,
+    );
+    setConfigBot(null);
+  };
 
   return (
     <View style={[styles.container, { paddingTop: topInset }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.title}>TradiQs Oracle</Text>
-        <PulseDot />
-        <Text style={styles.onlineText}>Online</Text>
-        <TouchableOpacity
-          style={[styles.clearButton, !hasConversation && styles.clearDisabled]}
-          onPress={confirmClearConversation}
-          disabled={!hasConversation || isTyping}
-          activeOpacity={0.8}
-          testID="oracle-clear"
-          accessibilityLabel="Clear conversation"
-        >
-          <Feather name="trash-2" size={16} color="#8A8D93" />
-        </TouchableOpacity>
-      </View>
-
-      {persistWarning ? (
-        <View style={styles.persistWarning} testID="oracle-persist-warning">
-          <Feather name="alert-triangle" size={13} color="#F5C542" />
-          <Text style={styles.persistWarningText}>
-            Chat history can't be saved right now — it won't survive a restart.
-          </Text>
-        </View>
-      ) : null}
-
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={90}
-      >
-        <FlatList
-          ref={listRef}
-          data={messages}
-          keyExtractor={(m) => m.id}
-          renderItem={renderMessage}
-          contentContainerStyle={styles.messages}
-          showsVerticalScrollIndicator={false}
-          onContentSizeChange={scrollToEnd}
-          ListFooterComponent={isTyping ? <TypingIndicator /> : null}
-        />
-
-        {/* Quick prompts */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chipsRow}
-          style={styles.chipsScroll}
-        >
-          {QUICK_PROMPTS.map((prompt) => (
-            <TouchableOpacity
-              key={prompt}
-              style={styles.chip}
-              onPress={() => sendMessage(prompt)}
-              activeOpacity={0.8}
-              disabled={isTyping}
-              testID={`chip-${prompt}`}
-            >
-              <Text style={styles.chipText}>{prompt}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {/* Input bar */}
-        <View style={styles.inputBar}>
-          <TextInput
-            style={styles.input}
-            value={input}
-            onChangeText={setInput}
-            placeholder="Ask the Oracle…"
-            placeholderTextColor="#8A8D93"
-            onSubmitEditing={() => sendMessage(input)}
-            returnKeyType="send"
-            testID="oracle-input"
-          />
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        {/* Screen header row */}
+        <View style={styles.screenHeader}>
+          <Text style={styles.screenTitle}>AI Tools</Text>
           <TouchableOpacity
-            style={[styles.sendButton, (!input.trim() || isTyping) && styles.sendDisabled]}
-            onPress={() => sendMessage(input)}
-            disabled={!input.trim() || isTyping}
+            style={styles.oracleButton}
+            onPress={() => router.push('/oracle')}
             activeOpacity={0.85}
-            testID="oracle-send"
+            testID="ask-oracle"
           >
-            <Feather name="arrow-up" size={18} color="#0A0B0E" />
+            <Feather name="message-circle" size={14} color="#0A0B0E" />
+            <Text style={styles.oracleButtonText}>Ask AI Oracle</Text>
           </TouchableOpacity>
         </View>
-      </KeyboardAvoidingView>
+
+        {/* AutoPilot summary card */}
+        <View style={styles.summaryCard}>
+          <View style={styles.summaryTop}>
+            <View style={styles.summaryTitleWrap}>
+              <Text style={styles.summaryTitle}>TradiQs AutoPilot</Text>
+              <View style={styles.systemRow}>
+                <PulseDot active={masterActive} />
+                <Text style={[styles.systemText, { color: masterActive ? GREEN : c.mutedForeground }]}>
+                  {masterActive ? 'System Active' : 'System Paused'}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.masterToggleWrap}>
+              <Text style={[styles.masterLabel, { color: masterActive ? CYAN : c.mutedForeground }]}>
+                {masterActive ? 'Active' : 'Paused'}
+              </Text>
+              <Switch
+                value={masterActive}
+                onValueChange={toggleMaster}
+                trackColor={{ false: '#22252A', true: 'rgba(0,240,255,0.35)' }}
+                thumbColor={masterActive ? CYAN : '#8A8D93'}
+                testID="master-toggle"
+              />
+            </View>
+          </View>
+
+          <View style={styles.metricsGrid}>
+            <View style={styles.metricCol}>
+              <Text style={styles.metricLabel}>ACTIVE BOTS</Text>
+              <Text style={styles.metricValue}>{activeCount} Running</Text>
+            </View>
+            <View style={styles.metricCol}>
+              <Text style={styles.metricLabel}>CAPITAL DEPLOYED</Text>
+              <Text style={styles.metricValue}>${capitalDeployed.toLocaleString()}</Text>
+            </View>
+            <View style={styles.metricCol}>
+              <Text style={styles.metricLabel}>TODAY'S BOT P&L</Text>
+              <Text style={[styles.metricValue, { color: GREEN }]}>
+                {masterActive ? '+$1,420.50' : '$0.00'}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Live console */}
+        <View style={styles.console}>
+          <View style={styles.consoleHeader}>
+            <View style={styles.consoleTitleRow}>
+              <Feather name="terminal" size={13} color={GREEN} />
+              <Text style={styles.consoleTitle}>System Live Logs</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => setLogs([])}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              testID="clear-logs"
+              accessibilityLabel="Clear logs"
+            >
+              <Feather name="trash-2" size={13} color={c.mutedForeground} />
+            </TouchableOpacity>
+          </View>
+          <ScrollView
+            ref={logScrollRef}
+            style={styles.consoleBody}
+            contentContainerStyle={styles.consoleContent}
+            nestedScrollEnabled
+            onContentSizeChange={() => logScrollRef.current?.scrollToEnd({ animated: true })}
+          >
+            {logs.length === 0 ? (
+              <Text style={styles.logLineMuted}>— log buffer cleared —</Text>
+            ) : (
+              logs.map((line, i) => (
+                <Text key={`${i}-${line}`} style={styles.logLine}>
+                  {line}
+                </Text>
+              ))
+            )}
+          </ScrollView>
+        </View>
+
+        {/* Bot roster */}
+        <Text style={styles.sectionTitle}>Available AI Algorithms</Text>
+        {BOTS.map((bot) => {
+          const locked = bot.proOnly && !isSubscribed;
+          const running = masterActive && !!runningBots[bot.id];
+          const cfg = botConfig[bot.id] ?? { capital: 10000, drawdown: 10 };
+          return (
+            <View key={bot.id} style={[styles.botCard, running && styles.botCardActive]}>
+              <View style={styles.botHeader}>
+                <View style={{ flex: 1, gap: 3 }}>
+                  <View style={styles.botNameRow}>
+                    <Text style={styles.botName}>{bot.name}</Text>
+                    {bot.proOnly && (
+                      <View style={styles.proOnlyBadge}>
+                        <Feather name="star" size={9} color={GOLD} />
+                        <Text style={styles.proOnlyText}>PRO ONLY</Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={styles.botTags}>{bot.tags}</Text>
+                </View>
+                {!locked && (
+                  <View style={styles.botControls}>
+                    <TouchableOpacity
+                      onPress={() => setConfigBot(bot)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      testID={`configure-${bot.id}`}
+                      accessibilityLabel={`Configure ${bot.name}`}
+                    >
+                      <Feather name="settings" size={16} color={c.mutedForeground} />
+                    </TouchableOpacity>
+                    <Switch
+                      value={running}
+                      disabled={!masterActive}
+                      onValueChange={(v) => toggleBot(bot, v)}
+                      trackColor={{ false: '#22252A', true: 'rgba(0,230,118,0.35)' }}
+                      thumbColor={running ? GREEN : '#8A8D93'}
+                      testID={`bot-toggle-${bot.id}`}
+                    />
+                  </View>
+                )}
+              </View>
+
+              <View style={styles.botMetrics}>
+                <View style={styles.botMetric}>
+                  <Text style={styles.botMetricLabel}>WIN RATE</Text>
+                  <Text style={styles.botMetricValue}>{locked ? '•••' : bot.winRate}</Text>
+                </View>
+                <View style={styles.botMetric}>
+                  <Text style={styles.botMetricLabel}>RISK</Text>
+                  <View style={[styles.riskBadge, { borderColor: RISK_COLORS[bot.risk] }]}>
+                    <Text style={[styles.riskBadgeText, { color: RISK_COLORS[bot.risk] }]}>
+                      {bot.risk}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.botMetric}>
+                  <Text style={styles.botMetricLabel}>30-DAY</Text>
+                  <Text style={[styles.botMetricValue, { color: GREEN }]}>
+                    {locked ? '•••' : bot.return30d}
+                  </Text>
+                </View>
+                <View style={styles.botMetric}>
+                  <Text style={styles.botMetricLabel}>TRADES</Text>
+                  <Text style={styles.botMetricValue}>
+                    {locked ? '•••' : bot.totalTrades.toLocaleString()}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.botFooter}>
+                {locked ? (
+                  <Text style={styles.botStatusMuted}>Institutional-grade order-flow engine</Text>
+                ) : (
+                  <>
+                    <Text style={[styles.botStatus, { color: running ? GREEN : c.mutedForeground }]}>
+                      {running ? '● RUNNING' : '○ PAUSED'}
+                    </Text>
+                    <Text style={styles.botAllocation}>
+                      ${cfg.capital.toLocaleString()} · {cfg.drawdown}% max DD
+                    </Text>
+                  </>
+                )}
+              </View>
+
+              {locked && (
+                <View style={styles.lockOverlay}>
+                  <BlurView
+                    intensity={Platform.OS === 'web' ? 26 : 20}
+                    tint="dark"
+                    style={StyleSheet.absoluteFill}
+                  />
+                  <View style={styles.lockContent}>
+                    <Feather name="lock" size={16} color={GOLD} />
+                    <TouchableOpacity
+                      style={styles.unlockButton}
+                      onPress={() => setPaywallOpen(true)}
+                      activeOpacity={0.85}
+                      testID={`unlock-${bot.id}`}
+                    >
+                      <Text style={styles.unlockButtonText}>Upgrade to Unlock</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+            </View>
+          );
+        })}
+      </ScrollView>
+
+      {/* Configure settings modal */}
+      <ConfigModal
+        bot={configBot}
+        initial={configBot ? botConfig[configBot.id] ?? { capital: 10000, drawdown: 10 } : null}
+        onClose={() => setConfigBot(null)}
+        onSave={saveConfig}
+      />
+
+      {/* Paywall */}
+      <Modal
+        visible={paywallOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setPaywallOpen(false)}
+      >
+        <View style={styles.paywallBackdrop}>
+          <View style={styles.paywallSheet}>
+            <TouchableOpacity
+              style={styles.paywallClose}
+              onPress={() => setPaywallOpen(false)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              testID="paywall-close"
+            >
+              <Feather name="x" size={22} color="#FFFFFF" />
+            </TouchableOpacity>
+            <PaywallCard />
+          </View>
+        </View>
+      </Modal>
     </View>
+  );
+}
+
+function ConfigModal({
+  bot,
+  initial,
+  onClose,
+  onSave,
+}: {
+  bot: Bot | null;
+  initial: { capital: number; drawdown: number } | null;
+  onClose: () => void;
+  onSave: (bot: Bot, capital: number, drawdown: number) => void;
+}) {
+  const [capital, setCapital] = useState<number>(initial?.capital ?? 10000);
+  const [drawdown, setDrawdown] = useState<number>(initial?.drawdown ?? 10);
+
+  // Re-seed selections whenever a new bot is opened.
+  useEffect(() => {
+    if (bot && initial) {
+      setCapital(initial.capital);
+      setDrawdown(initial.drawdown);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bot?.id]);
+
+  if (!bot) return null;
+
+  return (
+    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+      <View style={styles.configBackdrop}>
+        <View style={styles.configSheet}>
+          <View style={styles.configHeader}>
+            <Text style={styles.configTitle}>{bot.name}</Text>
+            <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} testID="config-close">
+              <Feather name="x" size={20} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+
+          <Text style={styles.configLabel}>CAPITAL ALLOCATION</Text>
+          <View style={styles.optionRow}>
+            {CAPITAL_OPTIONS.map((v) => (
+              <Pressable
+                key={v}
+                style={[styles.option, capital === v && styles.optionActive]}
+                onPress={() => setCapital(v)}
+                testID={`capital-${v}`}
+              >
+                <Text style={[styles.optionText, capital === v && styles.optionTextActive]}>
+                  ${v.toLocaleString()}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <Text style={styles.configLabel}>MAX BOT DRAWDOWN</Text>
+          <View style={styles.optionRow}>
+            {DRAWDOWN_OPTIONS.map((v) => (
+              <Pressable
+                key={v}
+                style={[styles.option, drawdown === v && styles.optionActive]}
+                onPress={() => setDrawdown(v)}
+                testID={`drawdown-${v}`}
+              >
+                <Text style={[styles.optionText, drawdown === v && styles.optionTextActive]}>
+                  {v}%
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <TouchableOpacity
+            style={styles.saveButton}
+            onPress={() => onSave(bot, capital, drawdown)}
+            activeOpacity={0.85}
+            testID="config-save"
+          >
+            <Text style={styles.saveButtonText}>Save Configuration</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -417,207 +557,373 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0A0B0E',
   },
-  flex: {
-    flex: 1,
+  scroll: {
+    paddingHorizontal: 16,
+    paddingBottom: 32,
+    gap: 12,
   },
-  header: {
+  screenHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#22252A',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
   },
-  title: {
+  screenTitle: {
     color: '#FFFFFF',
     fontSize: 20,
     fontFamily: 'Inter_700Bold',
   },
+  oracleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: CYAN,
+    borderRadius: 18,
+    paddingHorizontal: 13,
+    paddingVertical: 8,
+  },
+  oracleButtonText: {
+    color: '#0A0B0E',
+    fontSize: 12.5,
+    fontFamily: 'Inter_700Bold',
+  },
+  summaryCard: {
+    backgroundColor: '#16181D',
+    borderWidth: 1,
+    borderColor: '#22252A',
+    borderRadius: colors.radius,
+    padding: 16,
+    gap: 16,
+  },
+  summaryTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  summaryTitleWrap: {
+    gap: 4,
+  },
+  summaryTitle: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontFamily: 'Inter_700Bold',
+  },
+  systemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  systemText: {
+    fontSize: 11,
+    fontFamily: 'Inter_600SemiBold',
+  },
   dotWrap: {
-    width: 18,
-    height: 18,
+    width: 16,
+    height: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 4,
   },
   dotPulse: {
     position: 'absolute',
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#00F0FF',
   },
   dotCore: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#00F0FF',
   },
-  onlineText: {
-    color: '#8A8D93',
-    fontSize: 11,
-    fontFamily: 'Inter_500Medium',
-  },
-  clearButton: {
-    marginLeft: 'auto',
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+  masterToggleWrap: {
     alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#22252A',
-    backgroundColor: '#16181D',
+    gap: 3,
   },
-  clearDisabled: {
-    opacity: 0.4,
+  masterLabel: {
+    fontSize: 10,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
   },
-  persistWarning: {
+  metricsGrid: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginHorizontal: 16,
-    marginTop: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(245, 197, 66, 0.4)',
-    backgroundColor: 'rgba(245, 197, 66, 0.08)',
+    borderTopWidth: 1,
+    borderTopColor: '#22252A',
+    paddingTop: 14,
   },
-  persistWarningText: {
+  metricCol: {
     flex: 1,
-    color: '#F5C542',
-    fontSize: 12,
+    gap: 4,
+    alignItems: 'center',
+  },
+  metricLabel: {
+    color: c.mutedForeground,
+    fontSize: 8.5,
     fontFamily: 'Inter_500Medium',
-    lineHeight: 16,
+    letterSpacing: 0.6,
   },
-  messages: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    gap: 10,
-  },
-  bubble: {
-    maxWidth: '82%',
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  userBubble: {
-    alignSelf: 'flex-end',
-    backgroundColor: '#00F0FF',
-    borderBottomRightRadius: 4,
-  },
-  aiBubble: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#16181D',
-    borderWidth: 1,
-    borderColor: '#22252A',
-    borderBottomLeftRadius: 4,
-  },
-  userText: {
-    color: '#0A0B0E',
-    fontSize: 14,
-    fontFamily: 'Inter_500Medium',
-    lineHeight: 20,
-  },
-  aiText: {
+  metricValue: {
     color: '#FFFFFF',
     fontSize: 14,
-    fontFamily: 'Inter_400Regular',
-    lineHeight: 21,
+    fontFamily: 'Inter_700Bold',
   },
-  retryButton: {
+  console: {
+    backgroundColor: '#050608',
+    borderWidth: 1,
+    borderColor: '#22252A',
+    borderRadius: colors.radius,
+    overflow: 'hidden',
+  },
+  consoleHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#16181D',
+  },
+  consoleTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    alignSelf: 'flex-start',
-    marginTop: 10,
-    borderWidth: 1,
-    borderColor: '#00F0FF',
-    borderRadius: 16,
+  },
+  consoleTitle: {
+    color: c.mutedForeground,
+    fontSize: 11,
+    fontFamily: 'Inter_600SemiBold',
+    letterSpacing: 0.5,
+  },
+  consoleBody: {
+    height: 140,
+  },
+  consoleContent: {
     paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  retryText: {
-    color: '#00F0FF',
-    fontSize: 12.5,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  typingBubble: {
-    flexDirection: 'row',
-    gap: 5,
-    paddingVertical: 14,
-  },
-  typingDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: '#8A8D93',
-  },
-  chipsScroll: {
-    flexGrow: 0,
-  },
-  chipsRow: {
-    paddingHorizontal: 16,
-    paddingBottom: 10,
-    gap: 8,
-  },
-  chip: {
-    backgroundColor: '#16181D',
-    borderWidth: 1,
-    borderColor: '#00F0FF',
-    borderRadius: 20,
-    paddingHorizontal: 14,
     paddingVertical: 8,
+    gap: 3,
   },
-  chipText: {
-    color: '#00F0FF',
-    fontSize: 12.5,
-    fontFamily: 'Inter_600SemiBold',
+  logLine: {
+    color: 'rgba(0,230,118,0.75)',
+    fontSize: 10.5,
+    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' }),
+    lineHeight: 15,
   },
-  inputBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingBottom: 14,
+  logLineMuted: {
+    color: c.mutedForeground,
+    fontSize: 10.5,
+    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' }),
   },
-  input: {
-    flex: 1,
-    height: 48,
+  sectionTitle: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontFamily: 'Inter_700Bold',
+    marginTop: 4,
+  },
+  botCard: {
     backgroundColor: '#16181D',
     borderWidth: 1,
     borderColor: '#22252A',
-    borderRadius: 24,
-    paddingHorizontal: 16,
+    borderRadius: colors.radius,
+    padding: 14,
+    gap: 12,
+    overflow: 'hidden',
+  },
+  botCardActive: {
+    borderColor: 'rgba(0,230,118,0.35)',
+  },
+  botHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  botNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  botName: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 15,
+    fontFamily: 'Inter_700Bold',
+  },
+  proOnlyBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    borderWidth: 1,
+    borderColor: GOLD,
+    borderRadius: 6,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+  },
+  proOnlyText: {
+    color: GOLD,
+    fontSize: 8.5,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 0.5,
+  },
+  botTags: {
+    color: c.mutedForeground,
+    fontSize: 11,
     fontFamily: 'Inter_500Medium',
   },
-  sendButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#00F0FF',
+  botControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  botMetrics: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: '#22252A',
+    paddingTop: 10,
+  },
+  botMetric: {
+    flex: 1,
+    gap: 4,
+    alignItems: 'center',
+  },
+  botMetricLabel: {
+    color: c.mutedForeground,
+    fontSize: 8.5,
+    fontFamily: 'Inter_500Medium',
+    letterSpacing: 0.6,
+  },
+  botMetricValue: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontFamily: 'Inter_700Bold',
+  },
+  riskBadge: {
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  riskBadgeText: {
+    fontSize: 10,
+    fontFamily: 'Inter_700Bold',
+  },
+  botFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  botStatus: {
+    fontSize: 11,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 0.5,
+  },
+  botStatusMuted: {
+    color: c.mutedForeground,
+    fontSize: 11,
+    fontFamily: 'Inter_500Medium',
+  },
+  botAllocation: {
+    color: c.mutedForeground,
+    fontSize: 11,
+    fontFamily: 'Inter_500Medium',
+  },
+  lockOverlay: {
+    ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sendDisabled: {
-    opacity: 0.4,
+  lockContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  unlockButton: {
+    backgroundColor: GOLD,
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  unlockButtonText: {
+    color: '#0A0B0E',
+    fontSize: 12,
+    fontFamily: 'Inter_700Bold',
+  },
+  paywallBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  paywallSheet: {
+    gap: 10,
+  },
+  paywallClose: {
+    alignSelf: 'flex-end',
+  },
+  configBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'flex-end',
+  },
+  configSheet: {
+    backgroundColor: '#16181D',
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    borderWidth: 1,
+    borderColor: '#22252A',
+    padding: 20,
+    paddingBottom: 34,
+    gap: 12,
+  },
+  configHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  configTitle: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontFamily: 'Inter_700Bold',
+  },
+  configLabel: {
+    color: c.mutedForeground,
+    fontSize: 10,
+    fontFamily: 'Inter_600SemiBold',
+    letterSpacing: 0.8,
+    marginTop: 6,
+  },
+  optionRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  option: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#22252A',
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+    backgroundColor: '#0A0B0E',
+  },
+  optionActive: {
+    borderColor: CYAN,
+    backgroundColor: 'rgba(0,240,255,0.10)',
+  },
+  optionText: {
+    color: c.mutedForeground,
+    fontSize: 12,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  optionTextActive: {
+    color: CYAN,
+  },
+  saveButton: {
+    backgroundColor: CYAN,
+    borderRadius: 12,
+    paddingVertical: 13,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  saveButtonText: {
+    color: '#0A0B0E',
+    fontSize: 14,
+    fontFamily: 'Inter_700Bold',
   },
 });
-
-/** Pick a friendly error bubble message based on the API failure. */
-function errorText(err: unknown): string {
-  if (
-    err &&
-    typeof err === 'object' &&
-    'status' in err &&
-    (err as { status?: number }).status === 429
-  ) {
-    return RATE_LIMIT_RESPONSE;
-  }
-  return ERROR_RESPONSE;
-}

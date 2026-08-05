@@ -37,6 +37,7 @@ vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 
+vi.mock('expo-router', () => ({ useRouter: () => ({ back: vi.fn(), push: vi.fn() }) }));
 vi.mock('@expo/vector-icons', () => ({
   Feather: () => null,
 }));
@@ -76,7 +77,7 @@ vi.mock('@/context/TradingContext', () => ({
   }),
 }));
 
-import AiToolsScreen from '../ai-tools';
+import AiToolsScreen from '../../oracle';
 import { ORACLE_CHAT_STORAGE_KEY } from '@/lib/oracleChatPersistence';
 
 // ---- Helpers ----------------------------------------------------------------
