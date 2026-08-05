@@ -2,16 +2,24 @@
 /**
  * AutoPilot bot hub tests for the AI Tools tab.
  *
- * Behavior under test:
- *   - Master toggle pauses everything (active count, capital, P&L) and logs it.
+ * The screen is wired to the AutoPilot API via react-query hooks from
+ * `@workspace/api-client-react`. These tests mock that module with an
+ * in-memory fake server that mirrors the real API's behavior (state
+ * transitions + log lines), so the UI logic is exercised end-to-end:
+ *   - Master toggle pauses everything (active count, capital) and logs it.
  *   - Per-bot toggles update the "Active Bots" count and append log lines.
  *   - Config modal saves capital/drawdown per bot and re-seeds when reopened.
- *   - The simulated live-log interval is cleaned up on unmount.
+ *   - The screen polls the server on the live-log cadence.
  *   - PRO-locked bot hides metrics and opens the paywall; subscribers see all.
  *   - "Ask AI Oracle" navigates to /oracle.
  */
 import React from 'react';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { QueryClient, QueryClientProvider, notifyManager } from '@tanstack/react-query';
+
+// react-query batches cache notifications through setTimeout by default;
+// run them synchronously so assertions can follow fireEvent directly.
+notifyManager.setScheduler((cb) => cb());
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ---- Mocks ------------------------------------------------------------------
@@ -30,7 +38,8 @@ vi.mock('@expo/vector-icons', () => ({
 
 const routerPush = vi.hoisted(() => vi.fn());
 vi.mock('expo-router', () => ({
-  useRouter: () => ({ push: routerPush }),
+  useRouter: () => ({ push: routerPush, replace: vi.fn() }),
+  useLocalSearchParams: () => ({}),
 }));
 
 vi.mock('@/components/paywall', () => ({
@@ -46,7 +55,125 @@ vi.mock('@/lib/revenuecat', () => ({
   useSubscription: () => subscription,
 }));
 
+// In-memory fake of the AutoPilot API server (same seed data + log wording).
+const fakeServer = vi.hoisted(() => {
+  const seedBots = () => [
+    { id: 'scalp-oracle', name: 'Scalp Oracle AI', tags: 'Crypto / 5m Scalper', risk: 'Low', winRate: '78.4%', return30d: '+12.6%', totalTrades: 1842, proOnly: false, running: true, capital: 10000, drawdown: 10 },
+    { id: 'breakout-engine', name: 'Breakout Engine Pro', tags: 'Forex & Stocks / Momentum', risk: 'Medium', winRate: '71.2%', return30d: '+9.1%', totalTrades: 967, proOnly: false, running: true, capital: 15000, drawdown: 15 },
+    { id: 'grid-matrix', name: 'Grid Matrix AI', tags: 'Range Trading', risk: 'Low', winRate: '82.1%', return30d: '+7.4%', totalTrades: 2210, proOnly: false, running: false, capital: 10000, drawdown: 10 },
+    { id: 'quantum-inst', name: 'Quantum Institutional AI', tags: 'Multi-Asset / Order Flow', risk: 'High', winRate: '88.7%', return30d: '+21.3%', totalTrades: 3405, proOnly: true, running: false, capital: 10000, drawdown: 10 },
+  ];
+
+  const state = {
+    masterActive: true,
+    todayPnl: 1420.5,
+    bots: seedBots(),
+    logs: [] as { id: string; time: string; text: string }[],
+    logSeq: 0,
+    queryOptions: null as any,
+  };
+
+  function pushLog(text: string) {
+    state.logSeq += 1;
+    state.logs.push({ id: `l${state.logSeq}`, time: '10:00:00', text });
+  }
+
+  function snapshot() {
+    return {
+      masterActive: state.masterActive,
+      todayPnl: state.todayPnl,
+      bots: state.bots.map((b) => ({ ...b })),
+      logs: [...state.logs],
+    };
+  }
+
+  return {
+    state,
+    snapshot,
+    reset() {
+      state.masterActive = true;
+      state.todayPnl = 1420.5;
+      state.bots = seedBots();
+      state.logs = [];
+      state.logSeq = 0;
+      state.queryOptions = null;
+      pushLog('[SYS] TradiQs AutoPilot core initialized');
+      pushLog('[SYS] 2 algorithms deployed — monitoring 14 markets');
+    },
+    setMaster(active: boolean) {
+      state.masterActive = active;
+      pushLog(
+        active
+          ? '[SYS] AutoPilot resumed — all bots re-armed'
+          : '[SYS] AutoPilot paused — halting new entries',
+      );
+      return snapshot();
+    },
+    updateBot(botId: string, data: { running?: boolean; capital?: number; drawdown?: number }) {
+      const bot = state.bots.find((b) => b.id === botId)!;
+      if (data.capital !== undefined || data.drawdown !== undefined) {
+        if (data.capital !== undefined) bot.capital = data.capital;
+        if (data.drawdown !== undefined) bot.drawdown = data.drawdown;
+        pushLog(
+          `[CFG] ${bot.name} reconfigured — $${bot.capital.toLocaleString()} capital, ${bot.drawdown}% max drawdown`,
+        );
+      }
+      if (data.running !== undefined && data.running !== bot.running) {
+        bot.running = data.running;
+        pushLog(
+          data.running
+            ? `[BOT] ${bot.name} initialized with $${bot.capital.toLocaleString()} capital allocation`
+            : `[BOT] ${bot.name} stopped — open positions managed to close`,
+        );
+      }
+      return snapshot();
+    },
+    clearLogs() {
+      state.logs = [];
+      return snapshot();
+    },
+  };
+});
+
+vi.mock('@workspace/api-client-react', async () => {
+  const { useQuery } = await import('@tanstack/react-query');
+  const QUERY_KEY = ['/api/autopilot'];
+  return {
+    getGetAutopilotQueryKey: () => QUERY_KEY,
+    useGetAutopilot: (options?: any) => {
+      fakeServer.state.queryOptions = options?.query ?? null;
+      return useQuery({
+        queryKey: QUERY_KEY,
+        queryFn: async () => fakeServer.snapshot(),
+        initialData: fakeServer.snapshot(),
+      });
+    },
+    useSetAutopilotMaster: (options?: any) => ({
+      mutate: ({ data }: { data: { active: boolean } }) =>
+        options?.mutation?.onSuccess?.(fakeServer.setMaster(data.active)),
+    }),
+    useUpdateAutopilotBot: (options?: any) => ({
+      mutate: ({ botId, data }: { botId: string; data: any }) =>
+        options?.mutation?.onSuccess?.(fakeServer.updateBot(botId, data)),
+    }),
+    useClearAutopilotLogs: (options?: any) => ({
+      mutate: () => options?.mutation?.onSuccess?.(fakeServer.clearLogs()),
+    }),
+  };
+});
+
 import AiToolsScreen from '../ai-tools';
+
+function renderScreen() {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={client}>
+      <AiToolsScreen />
+    </QueryClientProvider>,
+  );
+}
 
 /** React-native-web Switch exposes a checkbox input inside the testID root. */
 function toggle(testID: string) {
@@ -63,6 +190,7 @@ function press(testID: string) {
 beforeEach(() => {
   subscription.isSubscribed = false;
   routerPush.mockClear();
+  fakeServer.reset();
 });
 
 afterEach(() => {
@@ -74,7 +202,7 @@ afterEach(() => {
 
 describe('AutoPilot summary + master toggle', () => {
   it('starts active with 2 running bots and deployed capital', () => {
-    render(<AiToolsScreen />);
+    renderScreen();
     expect(screen.getByText('System Active')).toBeTruthy();
     expect(screen.getByText('2 Running')).toBeTruthy();
     expect(screen.getByText('$25,000')).toBeTruthy(); // 10k + 15k
@@ -82,13 +210,14 @@ describe('AutoPilot summary + master toggle', () => {
   });
 
   it('master toggle pauses everything and logs the halt', () => {
-    render(<AiToolsScreen />);
+    renderScreen();
     toggle('master-toggle');
 
     expect(screen.getByText('System Paused')).toBeTruthy();
     expect(screen.getByText('0 Running')).toBeTruthy();
     expect(screen.getByText('$0')).toBeTruthy();
-    expect(screen.getByText('$0.00')).toBeTruthy();
+    // Accrued P&L is server state and survives a pause.
+    expect(screen.getByText('+$1,420.50')).toBeTruthy();
     expect(
       screen.getByText(/\[SYS\] AutoPilot paused — halting new entries/),
     ).toBeTruthy();
@@ -104,7 +233,7 @@ describe('AutoPilot summary + master toggle', () => {
 
 describe('Per-bot toggles', () => {
   it('turning a bot on bumps the Active Bots count and logs initialization', () => {
-    render(<AiToolsScreen />);
+    renderScreen();
     toggle('bot-toggle-grid-matrix');
 
     expect(screen.getByText('3 Running')).toBeTruthy();
@@ -117,7 +246,7 @@ describe('Per-bot toggles', () => {
   });
 
   it('turning a bot off drops the count and logs the stop', () => {
-    render(<AiToolsScreen />);
+    renderScreen();
     toggle('bot-toggle-scalp-oracle');
 
     expect(screen.getByText('1 Running')).toBeTruthy();
@@ -130,7 +259,7 @@ describe('Per-bot toggles', () => {
 
 describe('Config modal', () => {
   it('saves new capital/drawdown for a bot and logs the change', () => {
-    render(<AiToolsScreen />);
+    renderScreen();
     press('configure-scalp-oracle');
     press('capital-25000');
     press('drawdown-20');
@@ -148,7 +277,7 @@ describe('Config modal', () => {
   });
 
   it('re-seeds selections per bot when reopened', () => {
-    render(<AiToolsScreen />);
+    renderScreen();
 
     // Change scalp-oracle to 25k/20%, then open breakout-engine: its own
     // config (15k is not an option, drawdown 15) must not inherit 25k/20.
@@ -170,27 +299,13 @@ describe('Config modal', () => {
 });
 
 describe('Live log console', () => {
-  it('appends simulated log lines while active and clears the interval on unmount', () => {
-    vi.useFakeTimers();
-    const clearSpy = vi.spyOn(globalThis, 'clearInterval');
-    const setSpy = vi.spyOn(globalThis, 'setInterval');
-
-    const { unmount } = render(<AiToolsScreen />);
-    const intervalIds = setSpy.mock.results
-      .filter((r, i) => setSpy.mock.calls[i][1] === 2600)
-      .map((r) => r.value);
-    expect(intervalIds.length).toBe(1);
-
-    unmount();
-    const clearedIds = clearSpy.mock.calls.map((c) => c[0]);
-    expect(clearedIds).toContain(intervalIds[0]);
-
-    clearSpy.mockRestore();
-    setSpy.mockRestore();
+  it('polls the AutoPilot API on the live-log cadence', () => {
+    renderScreen();
+    expect(fakeServer.state.queryOptions?.refetchInterval).toBe(2600);
   });
 
   it('clear-logs empties the buffer', () => {
-    render(<AiToolsScreen />);
+    renderScreen();
     expect(screen.getByText(/TradiQs AutoPilot core initialized/)).toBeTruthy();
     press('clear-logs');
     expect(screen.queryByText(/TradiQs AutoPilot core initialized/)).toBeNull();
@@ -200,7 +315,7 @@ describe('Live log console', () => {
 
 describe('PRO-locked bot', () => {
   it('hides metrics and controls for non-subscribers', () => {
-    render(<AiToolsScreen />);
+    renderScreen();
     // Metrics redacted.
     expect(screen.queryByText('88.7%')).toBeNull();
     expect(screen.queryByText('+21.3%')).toBeNull();
@@ -213,7 +328,7 @@ describe('PRO-locked bot', () => {
   });
 
   it('opens the paywall from the unlock button and closes it again', () => {
-    render(<AiToolsScreen />);
+    renderScreen();
     expect(screen.queryByTestId('paywall-card')).toBeNull();
     press('unlock-quantum-inst');
     expect(screen.getByTestId('paywall-card')).toBeTruthy();
@@ -232,7 +347,7 @@ describe('PRO-locked bot', () => {
 
   it('subscribers see full metrics and controls on the PRO bot', () => {
     subscription.isSubscribed = true;
-    render(<AiToolsScreen />);
+    renderScreen();
     expect(screen.getByText('88.7%')).toBeTruthy();
     expect(screen.getByText('+21.3%')).toBeTruthy();
     expect(screen.getByText('3,405')).toBeTruthy();
@@ -244,7 +359,7 @@ describe('PRO-locked bot', () => {
 
 describe('Ask AI Oracle', () => {
   it('navigates to /oracle', () => {
-    render(<AiToolsScreen />);
+    renderScreen();
     press('ask-oracle');
     expect(routerPush).toHaveBeenCalledWith('/oracle');
   });

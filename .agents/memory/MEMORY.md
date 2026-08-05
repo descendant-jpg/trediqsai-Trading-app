@@ -1,4 +1,5 @@
 - [Stale API client declarations](api-client-stale-dist.md) — phantom TS2305 missing-export errors mean rebuild lib dist (`tsc --build --force`), not missing code.
 - [Blank white screen on Expo web](web-render-collapse.md) — GestureHandlerRootView has no default flex on web; non-router screens collapse without `style={{flex:1}}`.
 - [RNW Modal unmount in jsdom](rnw-modal-jsdom.md) — closed Modals never unmount in jsdom (portal + animationend); assert the exit-state class instead. Switch = role="switch".
+- [react-query async notifications in tests](react-query-test-batching.md) — setQueryData updates arrive via setTimeout; set notifyManager scheduler sync or use findBy* in jsdom tests.
 - [Full-file rewrites clobber merges](rewrite-clobbers-merges.md) — check `git log` on a file before wholesale rewrites; parallel task agents may have just merged into it.
