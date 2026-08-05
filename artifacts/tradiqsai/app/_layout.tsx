@@ -17,6 +17,7 @@ import {
 } from '@expo-google-fonts/inter';
 import * as Notifications from 'expo-notifications';
 import { Stack } from 'expo-router';
+import { usePendingRouteRedirect } from '@/lib/usePendingRouteRedirect';
 import * as SplashScreen from 'expo-splash-screen';
 import { setBaseUrl } from '@workspace/api-client-react';
 import { initializeRevenueCat, SubscriptionProvider } from '@/lib/revenuecat';
@@ -45,6 +46,10 @@ const queryClient = new QueryClient();
 
 function RootLayoutNav() {
   const { session, loading } = useAuth();
+
+  // Preserve a signed-out user's deep-link destination and land there
+  // after a successful sign-in (including legacy Oracle chat links).
+  usePendingRouteRedirect(session, loading);
 
   // Hold on the splash-colored blank frame while the stored session restores,
   // so signed-in users don't flash the sign-in screen on launch.
