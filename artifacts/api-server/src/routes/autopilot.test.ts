@@ -14,6 +14,44 @@ async function startFreshApp(): Promise<void> {
   // The autopilot router keeps in-memory state at module scope; re-import a
   // fresh copy per test so cases don't leak state into each other.
   vi.resetModules();
+  // Replace the Postgres-backed persistence with an in-memory fake so the
+  // tests stay hermetic (no DATABASE_URL / migrated tables required). The
+  // fake supports exactly the query shapes autopilot.ts uses: select-all,
+  // select-where, and insert ... onConflictDoUpdate (upsert).
+  vi.doMock("@workspace/db", () => {
+    const botRows = new Map<string, any>();
+    let stateRow: any = null;
+    const autopilotBotsTable = { id: {} };
+    const autopilotStateTable = { id: {} };
+    const db = {
+      select: () => ({
+        from: (table: any) => {
+          const rows =
+            table === autopilotBotsTable
+              ? [...botRows.values()]
+              : stateRow
+                ? [stateRow]
+                : [];
+          return Object.assign(Promise.resolve(rows), {
+            where: () => Promise.resolve(rows),
+          });
+        },
+      }),
+      insert: (table: any) => ({
+        values: (values: any) => ({
+          onConflictDoUpdate: () => {
+            if (table === autopilotBotsTable) {
+              botRows.set(values.id, { ...values });
+            } else {
+              stateRow = { ...values };
+            }
+            return Promise.resolve();
+          },
+        }),
+      }),
+    };
+    return { db, autopilotBotsTable, autopilotStateTable };
+  });
   const { default: autopilotRouter } = await import("./autopilot");
   const app: Express = express();
   app.use(express.json());
