@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Feather } from '@expo/vector-icons';
 import colors from '@/constants/colors';
 import {
@@ -20,13 +21,12 @@ import {
   type OracleChatMessage,
 } from '@workspace/api-client-react';
 
-interface ChatMessage {
-  id: string;
-  role: 'user' | 'ai';
-  text: string;
-  /** Marks a friendly error bubble so it can be styled/identified. */
-  isError?: boolean;
-}
+import {
+  ORACLE_CHAT_STORAGE_KEY,
+  parseStoredMessages,
+  persistableMessages,
+  type OracleChatBubble as ChatMessage,
+} from '@/lib/oracleChatPersistence';
 
 const QUICK_PROMPTS = ['Analyze BTC/USD', 'Show Market Sentiment', 'Daily Movers'];
 
@@ -114,8 +114,41 @@ export default function AiToolsScreen() {
   const [input, setInput] = useState('');
   const [lastFailedText, setLastFailedText] = useState<string | null>(null);
   const listRef = useRef<FlatList<ChatMessage>>(null);
+  const [hydrated, setHydrated] = useState(false);
 
   const { mutate: sendOracleChat, isPending: isTyping } = useSendOracleChat();
+
+  // Rehydrate the persisted conversation on mount.
+  useEffect(() => {
+    let cancelled = false;
+    AsyncStorage.getItem(ORACLE_CHAT_STORAGE_KEY)
+      .then((raw) => {
+        if (cancelled) return;
+        const stored = parseStoredMessages(raw);
+        if (stored.length > 0) setMessages([WELCOME, ...stored]);
+      })
+      .catch(() => {
+        // Ignore storage read failures — start with a fresh conversation.
+      })
+      .finally(() => {
+        if (!cancelled) setHydrated(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Persist the conversation whenever it changes (after hydration, so the
+  // initial welcome-only state doesn't clobber a stored conversation).
+  useEffect(() => {
+    if (!hydrated) return;
+    AsyncStorage.setItem(
+      ORACLE_CHAT_STORAGE_KEY,
+      JSON.stringify(persistableMessages(messages)),
+    ).catch(() => {
+      // Ignore storage write failures — the in-memory chat still works.
+    });
+  }, [hydrated, messages]);
 
   const scrollToEnd = useCallback(() => {
     requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
