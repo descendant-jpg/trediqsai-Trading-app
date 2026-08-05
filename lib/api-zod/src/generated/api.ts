@@ -37,6 +37,18 @@ export const GetAutopilotResponse = zod.object({
 
 
 /**
+ * History is scoped per user, like the rest of AutoPilot state.
+ * @summary Get recent daily AutoPilot P&L history (most recent first)
+ */
+export const GetAutopilotHistoryResponse = zod.object({
+  "days": zod.array(zod.object({
+  "day": zod.string().describe('ISO date (YYYY-MM-DD) the P&L belongs to.'),
+  "pnl": zod.number().describe('Simulated bot P&L for that day in USD.')
+})).describe('Finished days, most recent first.')
+})
+
+
+/**
  * @summary Pause or resume the caller's AutoPilot system
  */
 export const SetAutopilotMasterBody = zod.object({

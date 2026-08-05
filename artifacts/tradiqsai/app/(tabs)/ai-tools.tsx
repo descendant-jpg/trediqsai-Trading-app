@@ -19,8 +19,10 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   getGetAutopilotQueryKey,
+  getGetAutopilotHistoryQueryKey,
   useClearAutopilotLogs,
   useGetAutopilot,
+  useGetAutopilotHistory,
   useSetAutopilotMaster,
   useUpdateAutopilotBot,
   type AutopilotBot,
@@ -100,6 +102,59 @@ function formatPnl(value: number): string {
   });
   return `${value < 0 ? '-' : '+'}$${abs}`;
 }
+
+const HISTORY_DAYS_SHOWN = 7;
+
+/** "2026-08-04" → "Mon, Aug 4" (parsed as local time). */
+function formatHistoryDay(isoDay: string): string {
+  const [y, m, d] = isoDay.split('-').map(Number);
+  if (!y || !m || !d) return isoDay;
+  return new Date(y, m - 1, d).toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+/** Per-day AutoPilot P&L history: rows with proportional bars. */
+function PnlHistorySection({ days }: { days: { day: string; pnl: number }[] }) {
+  const shown = days.slice(0, HISTORY_DAYS_SHOWN);
+  const maxAbs = Math.max(...shown.map((d) => Math.abs(d.pnl)), 1);
+  return (
+    <View style={styles.historyCard} testID="pnl-history">
+      <View style={styles.consoleTitleRow}>
+        <Feather name="bar-chart-2" size={13} color={CYAN} />
+        <Text style={styles.consoleTitle}>Daily P&L History</Text>
+      </View>
+      {shown.length === 0 ? (
+        <Text style={styles.logLineMuted}>
+          No finished days yet — history appears after the first full day of trading.
+        </Text>
+      ) : (
+        shown.map((entry) => {
+          const negative = entry.pnl < 0;
+          const width = `${Math.max((Math.abs(entry.pnl) / maxAbs) * 100, 3)}%` as const;
+          return (
+            <View key={entry.day} style={styles.historyRow} testID={`pnl-history-${entry.day}`}>
+              <Text style={styles.historyDay}>{formatHistoryDay(entry.day)}</Text>
+              <View style={styles.historyBarTrack}>
+                <View
+                  style={[
+                    styles.historyBar,
+                    { width, backgroundColor: negative ? CRIMSON : GREEN },
+                  ]}
+                />
+              </View>
+              <Text style={[styles.historyPnl, { color: negative ? CRIMSON : GREEN }]}>
+                {formatPnl(entry.pnl)}
+              </Text>
+            </View>
+          );
+        })
+      )}
+    </View>
+  );
+}
 export default function AiToolsScreen() {
   const insets = useSafeAreaInsets();
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
@@ -131,6 +186,15 @@ export default function AiToolsScreen() {
     },
     [queryClient],
   );
+
+  const { data: history } = useGetAutopilotHistory({
+    query: {
+      queryKey: getGetAutopilotHistoryQueryKey(),
+      // Rollovers happen at most daily; refresh occasionally in case the
+      // screen stays open across midnight.
+      refetchInterval: 60_000,
+    },
+  });
 
   const { mutate: setMaster } = useSetAutopilotMaster({
     mutation: { onSuccess: applyState },
@@ -268,6 +332,9 @@ export default function AiToolsScreen() {
             )}
           </ScrollView>
         </View>
+
+        {/* Daily P&L history */}
+        <PnlHistorySection days={history?.days ?? []} />
 
         {/* Bot roster */}
         <Text style={styles.sectionTitle}>Available AI Algorithms</Text>
@@ -538,6 +605,42 @@ const styles = StyleSheet.create({
     color: '#0A0B0E',
     fontSize: 12.5,
     fontFamily: 'Inter_700Bold',
+  },
+  historyCard: {
+    backgroundColor: '#16181D',
+    borderWidth: 1,
+    borderColor: '#22252A',
+    borderRadius: colors.radius,
+    padding: 14,
+    gap: 10,
+  },
+  historyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  historyDay: {
+    color: c.mutedForeground,
+    fontSize: 11.5,
+    fontFamily: 'Inter_500Medium',
+    width: 88,
+  },
+  historyBarTrack: {
+    flex: 1,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#22252A',
+    overflow: 'hidden',
+  },
+  historyBar: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  historyPnl: {
+    fontSize: 12,
+    fontFamily: 'Inter_700Bold',
+    minWidth: 78,
+    textAlign: 'right',
   },
   summaryCard: {
     backgroundColor: '#16181D',

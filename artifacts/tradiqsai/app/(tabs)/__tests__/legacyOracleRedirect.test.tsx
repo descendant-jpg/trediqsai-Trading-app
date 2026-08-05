@@ -40,6 +40,13 @@ vi.mock('@tanstack/react-query', () => ({
 }));
 vi.mock('@workspace/api-client-react', () => ({
   getGetAutopilotQueryKey: () => ['/api/autopilot'],
+  getGetAutopilotHistoryQueryKey: () => ['/api/autopilot/history'],
+  useGetAutopilotHistory: () => ({
+    data: undefined,
+    isLoading: true,
+    isError: false,
+    refetch: vi.fn(),
+  }),
   useGetAutopilot: () => ({
     data: undefined,
     isLoading: true,

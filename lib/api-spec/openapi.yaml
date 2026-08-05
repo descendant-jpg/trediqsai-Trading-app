@@ -44,6 +44,29 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AutopilotState"
+  /autopilot/history:
+    get:
+      operationId: getAutopilotHistory
+      tags: [autopilot]
+      summary: Get recent daily AutoPilot P&L history (most recent first)
+      description: >-
+        History is scoped per user, like the rest of AutoPilot state.
+      security:
+        - bearerAuth: []
+        - {}
+      responses:
+        "401":
+          description: Invalid or expired auth token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutopilotError"
+        "200":
+          description: Recent finished-day P&L results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutopilotPnlHistory"
   /autopilot/master:
     put:
       operationId: setAutopilotMaster
@@ -463,6 +486,25 @@ components:
           items:
             $ref: "#/components/schemas/AutopilotLogLine"
       required: [masterActive, todayPnl, bots, logs]
+    AutopilotPnlDay:
+      type: object
+      properties:
+        day:
+          type: string
+          description: ISO date (YYYY-MM-DD) the P&L belongs to.
+        pnl:
+          type: number
+          description: Simulated bot P&L for that day in USD.
+      required: [day, pnl]
+    AutopilotPnlHistory:
+      type: object
+      properties:
+        days:
+          type: array
+          description: Finished days, most recent first.
+          items:
+            $ref: "#/components/schemas/AutopilotPnlDay"
+      required: [days]
     AutopilotMasterUpdate:
       type: object
       properties:

@@ -23,6 +23,7 @@ import type {
   AutopilotBotUpdate,
   AutopilotError,
   AutopilotMasterUpdate,
+  AutopilotPnlHistory,
   AutopilotState,
   HealthStatus,
   OracleChatError,
@@ -125,6 +126,84 @@ export function useGetAutopilot<TData = Awaited<ReturnType<typeof getAutopilot>>
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetAutopilotQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetAutopilotHistoryUrl = () => {
+
+
+
+
+  return `/api/autopilot/history`
+}
+
+/**
+ * History is scoped per user, like the rest of AutoPilot state.
+ * @summary Get recent daily AutoPilot P&L history (most recent first)
+ */
+export const getAutopilotHistory = async ( options?: Parameters<typeof customFetch>[1]): Promise<AutopilotPnlHistory> => {
+
+  return customFetch<AutopilotPnlHistory>(getGetAutopilotHistoryUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAutopilotHistoryQueryKey = () => {
+    return [
+    `/api/autopilot/history`
+    ] as const;
+    }
+
+
+export const getGetAutopilotHistoryQueryOptions = <TData = Awaited<ReturnType<typeof getAutopilotHistory>>, TError = ErrorType<AutopilotError>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAutopilotHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAutopilotHistoryQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAutopilotHistory>>> = ({ signal }) => getAutopilotHistory({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAutopilotHistory>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAutopilotHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof getAutopilotHistory>>>
+export type GetAutopilotHistoryQueryError = ErrorType<AutopilotError>
+
+
+/**
+ * @summary Get recent daily AutoPilot P&L history (most recent first)
+ */
+
+export function useGetAutopilotHistory<TData = Awaited<ReturnType<typeof getAutopilotHistory>>, TError = ErrorType<AutopilotError>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAutopilotHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAutopilotHistoryQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

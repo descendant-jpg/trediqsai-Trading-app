@@ -194,6 +194,18 @@ export interface AutopilotState {
   logs: AutopilotLogLine[];
 }
 
+export interface AutopilotPnlDay {
+  /** ISO date (YYYY-MM-DD) the P&L belongs to. */
+  day: string;
+  /** Simulated bot P&L for that day in USD. */
+  pnl: number;
+}
+
+export interface AutopilotPnlHistory {
+  /** Finished days, most recent first. */
+  days: AutopilotPnlDay[];
+}
+
 export interface AutopilotMasterUpdate {
   active: boolean;
 }

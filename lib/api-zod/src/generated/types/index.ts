@@ -12,6 +12,8 @@ export * from './autopilotBotUpdate';
 export * from './autopilotError';
 export * from './autopilotLogLine';
 export * from './autopilotMasterUpdate';
+export * from './autopilotPnlDay';
+export * from './autopilotPnlHistory';
 export * from './autopilotState';
 export * from './healthStatus';
 export * from './oracleChatError';

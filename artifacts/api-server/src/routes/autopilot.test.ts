@@ -2,13 +2,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import express, { type Express } from "express";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import { GetAutopilotResponse } from "@workspace/api-zod";
-import { db, autopilotBotsTable, autopilotStateTable } from "@workspace/db";
+import {
+  GetAutopilotResponse,
+  GetAutopilotHistoryResponse,
+} from "@workspace/api-zod";
 
 const TICK_MS = 2_600;
 
 let server: Server;
 let baseUrl: string;
+/** Rows persisted through the mocked db, inspectable/seedable from tests. */
+let historyRows: Map<string, any>;
 
 async function startFreshApp(): Promise<void> {
   // The autopilot router keeps in-memory state at module scope; re-import a
@@ -17,31 +21,39 @@ async function startFreshApp(): Promise<void> {
   // Replace the Postgres-backed persistence with an in-memory fake so the
   // tests stay hermetic (no DATABASE_URL / migrated tables required). The
   // fake supports exactly the query shapes autopilot.ts uses: select-all,
-  // select-where, and insert ... onConflictDoUpdate (upsert).
+  // select-where, and insert ... onConflictDoUpdate (upsert). The row maps
+  // live in this function's scope so they survive vi.resetModules within a
+  // test (simulating a server restart) but reset for each fresh test.
+  const botRows = new Map<string, any>();
+  const stateRows = new Map<string, any>();
+  historyRows = new Map<string, any>();
+  const rowsForRestart = historyRows;
   vi.doMock("@workspace/db", () => {
     // Rows are keyed per user, mirroring the real tables' conflict targets:
-    // (userId, botId) for bots and userId for state.
-    const botRows = new Map<string, any>();
-    const stateRows = new Map<string, any>();
+    // (userId, botId) for bots, userId for state, (userId, dayIso) for
+    // P&L history.
     const autopilotBotsTable = { id: {}, userId: {}, botId: {} };
     const autopilotStateTable = { id: {}, userId: {} };
+    const autopilotPnlHistoryTable = { userId: {}, dayIso: {} };
     // Extract the bound value from a drizzle `eq(column, value)` SQL object.
     // Its queryChunks contain the column, an operator chunk, and a Param
     // whose `.value` is the compared value (the userId in autopilot.ts).
     const eqValue = (cond: any): unknown => {
       const chunks: any[] = cond?.queryChunks ?? [];
-      const param = chunks.find(
-        (c) => c && typeof c === "object" && "value" in c && !("name" in c),
-      );
-      return param?.value;
+      // With a plain-object fake column, drizzle inlines the compared value
+      // as a raw string chunk (the only string in the chunk list).
+      return chunks.find((c) => typeof c === "string");
     };
+    const rowsFor = (table: any): Map<string, any> =>
+      table === autopilotBotsTable
+        ? botRows
+        : table === autopilotPnlHistoryTable
+          ? rowsForRestart
+          : stateRows;
     const db = {
       select: () => ({
         from: (table: any) => {
-          const all =
-            table === autopilotBotsTable
-              ? [...botRows.values()]
-              : [...stateRows.values()];
+          const all = [...rowsFor(table).values()];
           return Object.assign(Promise.resolve(all), {
             where: (cond: any) => {
               const userId = eqValue(cond);
@@ -57,6 +69,10 @@ async function startFreshApp(): Promise<void> {
               botRows.set(`${values.userId}:${values.botId ?? values.id}`, {
                 ...values,
               });
+            } else if (table === autopilotPnlHistoryTable) {
+              rowsForRestart.set(`${values.userId}:${values.dayIso}`, {
+                ...values,
+              });
             } else {
               stateRows.set(values.userId, { ...values });
             }
@@ -65,7 +81,7 @@ async function startFreshApp(): Promise<void> {
         }),
       }),
     };
-    return { db, autopilotBotsTable, autopilotStateTable };
+    return { db, autopilotBotsTable, autopilotStateTable, autopilotPnlHistoryTable };
   });
   const { default: autopilotRouter } = await import("./autopilot");
   const app: Express = express();
@@ -95,9 +111,6 @@ beforeEach(async () => {
   // Only fake Date so real network/socket timers keep working.
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date("2026-08-05T10:00:00"));
-  // Wipe persisted rows so each test starts from freshly seeded defaults.
-  await db.delete(autopilotBotsTable);
-  await db.delete(autopilotStateTable);
   await startFreshApp();
 });
 
@@ -170,6 +183,77 @@ describe("GET /autopilot", () => {
     vi.setSystemTime(Date.now() + 20 * TICK_MS);
     const { body } = await request("GET", "/autopilot");
     expect(body.todayPnl).toBe(0);
+  });
+});
+
+describe("GET /autopilot/history", () => {
+  it("records the finished day's P&L to history on rollover", async () => {
+    vi.setSystemTime(Date.now() + 10 * TICK_MS);
+    const paused = await request("PUT", "/autopilot/master", { active: false });
+    const finishedPnl = paused.body.todayPnl;
+    expect(finishedPnl).not.toBe(0);
+
+    // No history before the rollover.
+    const empty = await request("GET", "/autopilot/history");
+    expect(empty.status).toBe(200);
+    expect(empty.body.days).toEqual([]);
+
+    vi.setSystemTime(new Date("2026-08-06T09:00:00"));
+    const { status, body } = await request("GET", "/autopilot/history");
+    expect(status).toBe(200);
+    expect(() => GetAutopilotHistoryResponse.parse(body)).not.toThrow();
+    expect(body.days).toEqual([{ day: "2026-08-05", pnl: finishedPnl }]);
+
+    // The recorded day was persisted (the endpoint awaits the pending
+    // history write before responding).
+    expect([...historyRows.values()]).toEqual([
+      {
+        userId: "anonymous",
+        day: "Wed Aug 05 2026",
+        dayIso: "2026-08-05",
+        pnl: finishedPnl,
+      },
+    ]);
+  });
+
+  it("restores persisted history after a restart", async () => {
+    historyRows.set("anonymous:2026-08-03", {
+      userId: "anonymous",
+      day: "Mon Aug 03 2026",
+      dayIso: "2026-08-03",
+      pnl: -12.5,
+    });
+    historyRows.set("anonymous:2026-08-04", {
+      userId: "anonymous",
+      day: "Tue Aug 04 2026",
+      dayIso: "2026-08-04",
+      pnl: 88.25,
+    });
+    // Fresh module instance = simulated server restart; the mocked db rows
+    // survive because they live in the enclosing test scope.
+    vi.resetModules();
+    const { default: freshRouter } = await import("./autopilot");
+    const app = express();
+    app.use(express.json());
+    app.use(freshRouter);
+    const restarted = await new Promise<Server>((resolve) => {
+      const s = app.listen(0, "127.0.0.1", () => resolve(s));
+    });
+    try {
+      const { address, port } = restarted.address() as AddressInfo;
+      const res = await fetch(`http://${address}:${port}/autopilot/history`);
+      const body = (await res.json()) as any;
+      expect(res.status).toBe(200);
+      // Most recent first.
+      expect(body.days).toEqual([
+        { day: "2026-08-04", pnl: 88.25 },
+        { day: "2026-08-03", pnl: -12.5 },
+      ]);
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        restarted.close((err) => (err ? reject(err) : resolve())),
+      );
+    }
   });
 });
 
@@ -396,5 +480,39 @@ describe("autopilot per-user state", () => {
     const res = await call("/autopilot", { token: "garbage" });
     expect(res.status).toBe(401);
     expect(res.body.error).toMatch(/invalid or expired/i);
+  });
+
+  it("scopes P&L history per user on rollover", async () => {
+    // Seed Alice's state, let ticks elapse, then pause to freeze her P&L.
+    await call("/autopilot", { token: "token-alice3" });
+    vi.setSystemTime(Date.now() + 10 * TICK_MS);
+    const alice = await call("/autopilot/master", {
+      method: "PUT",
+      token: "token-alice3",
+      body: { active: false },
+    });
+    const alicePnl = alice.body.todayPnl;
+    expect(alicePnl).not.toBe(0);
+    // Bob's state exists but he pauses immediately, so his day finishes ~0.
+    await call("/autopilot/master", {
+      method: "PUT",
+      token: "token-bob3",
+      body: { active: false },
+    });
+
+    vi.setSystemTime(new Date("2026-08-06T09:00:00"));
+    const aliceHistory = await call("/autopilot/history", {
+      token: "token-alice3",
+    });
+    expect(aliceHistory.status).toBe(200);
+    expect(aliceHistory.body.days).toEqual([
+      { day: "2026-08-05", pnl: alicePnl },
+    ]);
+
+    const bobHistory = await call("/autopilot/history", {
+      token: "token-bob3",
+    });
+    expect(bobHistory.body.days).toHaveLength(1);
+    expect(bobHistory.body.days[0]!.pnl).not.toBe(alicePnl);
   });
 });

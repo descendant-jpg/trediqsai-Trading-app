@@ -43,3 +43,23 @@ export const autopilotStateTable = pgTable("autopilot_state", {
 });
 
 export type AutopilotStateRow = typeof autopilotStateTable.$inferSelect;
+
+/**
+ * One finished day of simulated AutoPilot P&L per user, recorded on day
+ * rollover.
+ */
+export const autopilotPnlHistoryTable = pgTable(
+  "autopilot_pnl_history",
+  {
+    userId: text("user_id").notNull(),
+    /** Calendar day the P&L belongs to, as `Date.prototype.toDateString()`. */
+    day: text("day").notNull(),
+    /** ISO date (YYYY-MM-DD) for stable ordering and client display. */
+    dayIso: text("day_iso").notNull(),
+    pnl: doublePrecision("pnl").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.dayIso] })],
+);
+
+export type AutopilotPnlHistoryRow =
+  typeof autopilotPnlHistoryTable.$inferSelect;

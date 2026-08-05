@@ -1,10 +1,16 @@
 import { Router, type IRouter } from "express";
 import {
   GetAutopilotResponse,
+  GetAutopilotHistoryResponse,
   SetAutopilotMasterBody,
   UpdateAutopilotBotBody,
 } from "@workspace/api-zod";
-import { db, autopilotBotsTable, autopilotStateTable } from "@workspace/db";
+import {
+  db,
+  autopilotBotsTable,
+  autopilotStateTable,
+  autopilotPnlHistoryTable,
+} from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { identity, requestUserId, type TokenVerifier } from "../middlewares/identity";
@@ -44,6 +50,8 @@ const MAX_LOGS = 80;
 const MAX_USERS = 500;
 /** Minimum interval between background state saves per user. */
 const PERSIST_INTERVAL_MS = 10_000;
+/** Max finished days of P&L history kept and served per user. */
+const HISTORY_LIMIT = 30;
 
 /** Identity for unauthenticated callers (kept in sync with middleware). */
 const ANONYMOUS = "anonymous";
@@ -109,6 +117,16 @@ function nowClock(atMs: number): string {
   return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
+/** `Date.toDateString()` day → ISO date (YYYY-MM-DD), in local time. */
+function toIsoDay(dateString: string): string {
+  const d = new Date(dateString);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+/** One finished day of P&L (day = YYYY-MM-DD), most recent first. */
+type HistoryEntry = { day: string; pnl: number };
+
 type UserAutopilot = {
   bots: BotState[];
   masterActive: boolean;
@@ -119,6 +137,10 @@ type UserAutopilot = {
   logSeq: number;
   templateIndex: number;
   lastPersistAt: number;
+  /** Recent finished-day P&L results, most recent first. */
+  history: HistoryEntry[];
+  /** Last fire-and-forget history write; awaited by the history endpoint. */
+  historyWrite: Promise<void>;
 };
 
 function pushLog(state: UserAutopilot, text: string, atMs = Date.now()) {
@@ -140,6 +162,8 @@ function defaultUserState(bootAt: number): UserAutopilot {
     logSeq: 0,
     templateIndex: 0,
     lastPersistAt: 0,
+    history: [],
+    historyWrite: Promise.resolve(),
   };
 }
 
@@ -192,6 +216,39 @@ function persistStateThrottled(userId: string, state: UserAutopilot): void {
 }
 
 /**
+ * Save a finished day's P&L into the user's in-memory history (most recent
+ * first) and persist it. Called from the day-rollover in advanceSimulation,
+ * which is synchronous, so the DB write is fire-and-forget with error
+ * logging; the history endpoint awaits `state.historyWrite` before reading.
+ */
+function recordFinishedDay(
+  userId: string,
+  state: UserAutopilot,
+  pnlDay: string,
+  pnl: number,
+): void {
+  const dayIso = toIsoDay(pnlDay);
+  const rounded = Math.round(pnl * 100) / 100;
+  state.history = [
+    { day: dayIso, pnl: rounded },
+    ...state.history.filter((e) => e.day !== dayIso),
+  ].slice(0, HISTORY_LIMIT);
+  state.historyWrite = db
+    .insert(autopilotPnlHistoryTable)
+    .values({ userId, day: pnlDay, dayIso, pnl: rounded })
+    .onConflictDoUpdate({
+      target: [autopilotPnlHistoryTable.userId, autopilotPnlHistoryTable.dayIso],
+      set: { day: pnlDay, pnl: rounded },
+    })
+    .then(
+      () => undefined,
+      (err: unknown) => {
+        logger.error({ err, userId }, "Failed to persist autopilot P&L history");
+      },
+    );
+}
+
+/**
  * Load a user's persisted AutoPilot state, or seed (and persist) defaults
  * for a first-time user. Unknown bot rows are ignored; failure to load
  * surfaces as a request error instead of silently resetting state.
@@ -201,7 +258,7 @@ async function loadUserState(userId: string): Promise<UserAutopilot> {
   // begins (e.g. at server boot for the anonymous seed), not when the DB
   // round-trip completes.
   const bootAt = Date.now();
-  const [botRows, stateRows] = await Promise.all([
+  const [botRows, stateRows, historyRows] = await Promise.all([
     db
       .select()
       .from(autopilotBotsTable)
@@ -210,8 +267,16 @@ async function loadUserState(userId: string): Promise<UserAutopilot> {
       .select()
       .from(autopilotStateTable)
       .where(eq(autopilotStateTable.userId, userId)),
+    db
+      .select()
+      .from(autopilotPnlHistoryTable)
+      .where(eq(autopilotPnlHistoryTable.userId, userId)),
   ]);
   const state = defaultUserState(bootAt);
+  state.history = historyRows
+    .map((row) => ({ day: row.dayIso, pnl: row.pnl }))
+    .sort((a, b) => (a.day < b.day ? 1 : -1))
+    .slice(0, HISTORY_LIMIT);
   for (const row of botRows) {
     const bot = state.bots.find((b) => b.id === row.botId);
     if (!bot) continue;
@@ -276,12 +341,14 @@ stateFor(ANONYMOUS).catch(() => {});
 /**
  * Advance a user's simulation lazily: while the system is active and at
  * least one bot runs, every elapsed tick produces a log line and a P&L
- * increment that scales with deployed capital. P&L resets each day.
+ * increment that scales with deployed capital. P&L resets each day; the
+ * finished day's result is recorded to the user's history.
  */
-function advanceSimulation(state: UserAutopilot): void {
+function advanceSimulation(userId: string, state: UserAutopilot): void {
   const now = Date.now();
   const today = new Date(now).toDateString();
   if (today !== state.pnlDay) {
+    recordFinishedDay(userId, state, state.pnlDay, state.todayPnl);
     state.pnlDay = today;
     state.todayPnl = 0;
   }
@@ -316,7 +383,7 @@ function advanceSimulation(state: UserAutopilot): void {
 }
 
 function snapshot(userId: string, state: UserAutopilot) {
-  advanceSimulation(state);
+  advanceSimulation(userId, state);
   persistStateThrottled(userId, state);
   return GetAutopilotResponse.parse({
     masterActive: state.masterActive,
@@ -345,6 +412,21 @@ export function createAutopilotRouter(verifier?: TokenVerifier): IRouter {
     }
   });
 
+  router.get("/autopilot/history", async (_req, res, next) => {
+    try {
+      const userId = requestUserId(res);
+      const state = await stateFor(userId);
+      advanceSimulation(userId, state);
+      persistStateThrottled(userId, state);
+      // Ensure a rollover triggered by this request has been persisted
+      // before responding (write errors are already caught and logged).
+      await state.historyWrite;
+      res.json(GetAutopilotHistoryResponse.parse({ days: state.history }));
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.put("/autopilot/master", async (req, res, next) => {
     const parsed = SetAutopilotMasterBody.safeParse(req.body);
     if (!parsed.success) {
@@ -354,7 +436,7 @@ export function createAutopilotRouter(verifier?: TokenVerifier): IRouter {
     try {
       const userId = requestUserId(res);
       const state = await stateFor(userId);
-      advanceSimulation(state);
+      advanceSimulation(userId, state);
       state.masterActive = parsed.data.active;
       state.lastTickAt = Date.now();
       pushLog(
@@ -384,7 +466,7 @@ export function createAutopilotRouter(verifier?: TokenVerifier): IRouter {
         res.status(400).json({ error: "Invalid request body" });
         return;
       }
-      advanceSimulation(state);
+      advanceSimulation(userId, state);
       const { running, capital, drawdown } = parsed.data;
       if (capital !== undefined || drawdown !== undefined) {
         if (capital !== undefined) bot.capital = capital;
@@ -415,7 +497,7 @@ export function createAutopilotRouter(verifier?: TokenVerifier): IRouter {
     try {
       const userId = requestUserId(res);
       const state = await stateFor(userId);
-      advanceSimulation(state);
+      advanceSimulation(userId, state);
       state.logs = [];
       await persistState(userId, state);
       res.json(snapshot(userId, state));

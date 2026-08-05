@@ -71,6 +71,7 @@ const fakeServer = vi.hoisted(() => {
     logs: [] as { id: string; time: string; text: string }[],
     logSeq: 0,
     queryOptions: null as any,
+    historyDays: [] as { day: string; pnl: number }[],
   };
 
   function pushLog(text: string) {
@@ -97,6 +98,7 @@ const fakeServer = vi.hoisted(() => {
       state.logs = [];
       state.logSeq = 0;
       state.queryOptions = null;
+      state.historyDays = [];
       pushLog('[SYS] TradiQs AutoPilot core initialized');
       pushLog('[SYS] 2 algorithms deployed — monitoring 14 markets');
     },
@@ -138,8 +140,16 @@ const fakeServer = vi.hoisted(() => {
 vi.mock('@workspace/api-client-react', async () => {
   const { useQuery } = await import('@tanstack/react-query');
   const QUERY_KEY = ['/api/autopilot'];
+  const HISTORY_KEY = ['/api/autopilot/history'];
   return {
     getGetAutopilotQueryKey: () => QUERY_KEY,
+    getGetAutopilotHistoryQueryKey: () => HISTORY_KEY,
+    useGetAutopilotHistory: () =>
+      useQuery({
+        queryKey: HISTORY_KEY,
+        queryFn: async () => ({ days: fakeServer.state.historyDays }),
+        initialData: { days: fakeServer.state.historyDays },
+      }),
     useGetAutopilot: (options?: any) => {
       fakeServer.state.queryOptions = options?.query ?? null;
       return useQuery({
@@ -354,6 +364,32 @@ describe('PRO-locked bot', () => {
     expect(screen.getByTestId('bot-toggle-quantum-inst')).toBeTruthy();
     expect(screen.queryByTestId('unlock-quantum-inst')).toBeNull();
     expect(screen.queryByText('•••')).toBeNull();
+  });
+});
+
+describe('Daily P&L history', () => {
+  it('shows an empty state before any day has finished', () => {
+    renderScreen();
+    const section = within(screen.getByTestId('pnl-history'));
+    expect(section.getByText('Daily P&L History')).toBeTruthy();
+    expect(
+      section.getByText(
+        'No finished days yet — history appears after the first full day of trading.',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('lists recent finished days with formatted dates and P&L', () => {
+    fakeServer.state.historyDays = [
+      { day: '2026-08-04', pnl: 231.4 },
+      { day: '2026-08-03', pnl: -58.25 },
+    ];
+    renderScreen();
+    const section = within(screen.getByTestId('pnl-history'));
+    expect(section.getByText('Tue, Aug 4')).toBeTruthy();
+    expect(section.getByText('+$231.40')).toBeTruthy();
+    expect(section.getByText('Mon, Aug 3')).toBeTruthy();
+    expect(section.getByText('-$58.25')).toBeTruthy();
   });
 });
 
