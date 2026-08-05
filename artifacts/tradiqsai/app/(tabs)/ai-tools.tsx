@@ -25,6 +25,7 @@ import {
 import { useTrading } from '@/context/TradingContext';
 
 import {
+  ORACLE_CHAT_PERSIST_FAILURE_THRESHOLD,
   ORACLE_CHAT_STORAGE_KEY,
   parseStoredMessages,
   persistableMessages,
@@ -118,6 +119,10 @@ export default function AiToolsScreen() {
   const [lastFailedText, setLastFailedText] = useState<string | null>(null);
   const listRef = useRef<FlatList<ChatMessage>>(null);
   const [hydrated, setHydrated] = useState(false);
+  // Consecutive AsyncStorage write failures; drives the "history won't be
+  // saved" notice once it crosses the threshold.
+  const persistFailuresRef = useRef(0);
+  const [persistWarning, setPersistWarning] = useState(false);
 
   const { mutate: sendOracleChat, isPending: isTyping } = useSendOracleChat();
   const { balance, equity, position, unrealizedPnl, drawdownUsed, distanceToPayout } =
@@ -176,9 +181,20 @@ export default function AiToolsScreen() {
     AsyncStorage.setItem(
       ORACLE_CHAT_STORAGE_KEY,
       JSON.stringify(persistableMessages(messages)),
-    ).catch(() => {
-      // Ignore storage write failures — the in-memory chat still works.
-    });
+    )
+      .then(() => {
+        // A successful write means history is safe again — clear the notice.
+        persistFailuresRef.current = 0;
+        setPersistWarning(false);
+      })
+      .catch(() => {
+        // The in-memory chat still works, but warn after repeated failures
+        // so traders know history won't survive a restart.
+        persistFailuresRef.current += 1;
+        if (persistFailuresRef.current >= ORACLE_CHAT_PERSIST_FAILURE_THRESHOLD) {
+          setPersistWarning(true);
+        }
+      });
   }, [hydrated, messages]);
 
   const scrollToEnd = useCallback(() => {
@@ -321,6 +337,15 @@ export default function AiToolsScreen() {
         </TouchableOpacity>
       </View>
 
+      {persistWarning ? (
+        <View style={styles.persistWarning} testID="oracle-persist-warning">
+          <Feather name="alert-triangle" size={13} color="#F5C542" />
+          <Text style={styles.persistWarningText}>
+            Chat history can't be saved right now — it won't survive a restart.
+          </Text>
+        </View>
+      ) : null}
+
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -445,6 +470,26 @@ const styles = StyleSheet.create({
   },
   clearDisabled: {
     opacity: 0.4,
+  },
+  persistWarning: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 16,
+    marginTop: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 197, 66, 0.4)',
+    backgroundColor: 'rgba(245, 197, 66, 0.08)',
+  },
+  persistWarningText: {
+    flex: 1,
+    color: '#F5C542',
+    fontSize: 12,
+    fontFamily: 'Inter_500Medium',
+    lineHeight: 16,
   },
   messages: {
     paddingHorizontal: 16,

@@ -19,6 +19,13 @@ export const ORACLE_CHAT_STORAGE_KEY = 'oracle-chat-history-v1';
 /** Keep only the most recent turns in storage. */
 export const ORACLE_CHAT_STORAGE_LIMIT = 50;
 
+/**
+ * Consecutive persistence failures before warning the trader that their
+ * chat history won't survive a restart. A single transient failure is
+ * usually recovered by the next write, so we only surface repeated ones.
+ */
+export const ORACLE_CHAT_PERSIST_FAILURE_THRESHOLD = 2;
+
 /** Parse a stored conversation, dropping anything malformed. */
 export function parseStoredMessages(raw: string | null): OracleChatBubble[] {
   if (!raw) return [];
