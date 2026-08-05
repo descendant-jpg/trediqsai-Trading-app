@@ -51,19 +51,35 @@ export default function PortfolioScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [closingId, setClosingId] = useState<string | null>(null);
+  const [balance, setBalance] = useState<number | null>(null);
 
   const fetchTrades = useCallback(async () => {
     if (!session) return;
     try {
-      const { data, error } = await supabase
-        .from('trades')
-        .select('id, user_id, asset, side, entry_price, close_price, status, pnl')
-        .eq('user_id', session.user.id)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      const rows = (data ?? []) as TradeRecord[];
+      const [tradesRes, profileRes] = await Promise.all([
+        supabase
+          .from('trades')
+          .select('id, user_id, asset, side, entry_price, close_price, status, pnl')
+          .eq('user_id', session.user.id)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('profiles')
+          .select('balance')
+          .eq('id', session.user.id)
+          .single(),
+      ]);
+      if (tradesRes.error) throw tradesRes.error;
+      const rows = (tradesRes.data ?? []) as TradeRecord[];
       setOpenTrades(rows.filter((t) => t.status === 'OPEN'));
       setTradeHistory(rows.filter((t) => t.status === 'CLOSED'));
+      // Balance is optional — the profiles table may not exist until the
+      // drawdown SQL has been run; don't block the trade lists on it. Clear
+      // it when unavailable so a stale value never leaks into the equity.
+      if (!profileRes.error && profileRes.data?.balance != null) {
+        setBalance(Number(profileRes.data.balance));
+      } else {
+        setBalance(null);
+      }
     } catch (err: any) {
       showAlert('Portfolio', err?.message ?? 'Failed to load trades.');
     } finally {
@@ -199,9 +215,52 @@ export default function PortfolioScreen() {
 
   const data = viewMode === 'active' ? openTrades : tradeHistory;
 
+  // --- Account analytics (computed from Supabase data) ---
+  const closedCount = tradeHistory.length;
+  const winCount = tradeHistory.filter((t) => (t.pnl ?? 0) > 0).length;
+  const winRate = closedCount > 0 ? (winCount / closedCount) * 100 : null;
+  const totalPnl = tradeHistory.reduce((sum, t) => sum + (t.pnl ?? 0), 0);
+  const unrealizedTotal = openTrades.reduce((sum, t) => {
+    if (t.asset !== LIVE_FEED_ASSET || livePrice <= 0) return sum;
+    return sum + (t.side === 'BUY' ? livePrice - t.entry_price : t.entry_price - livePrice);
+  }, 0);
+  const equity = balance != null ? balance + unrealizedTotal : null;
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Portfolio</Text>
+
+      {/* Account Analytics dashboard */}
+      <View style={styles.analyticsCard}>
+        <Text style={styles.analyticsHeading}>ACCOUNT ANALYTICS</Text>
+        <View style={styles.equityBlock}>
+          <Text style={styles.label}>Total Simulated Equity</Text>
+          <Text style={styles.equityValue} testID="analytics-equity">
+            {equity != null ? `$${formatPrice(equity)}` : '—'}
+          </Text>
+        </View>
+        <View style={styles.statsRow}>
+          <View style={styles.statCell}>
+            <Text style={styles.label}>Win Rate</Text>
+            <Text style={styles.statValue} testID="analytics-winrate">
+              {winRate != null ? `${winRate.toFixed(1)}%` : '—'}
+            </Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statCell}>
+            <Text style={styles.label}>Total P&L</Text>
+            <Text
+              style={[
+                styles.statValue,
+                { color: totalPnl >= 0 ? '#2ECA8B' : '#E54B4B' },
+              ]}
+              testID="analytics-pnl"
+            >
+              {totalPnl >= 0 ? '+' : '-'}${formatPrice(Math.abs(totalPnl))}
+            </Text>
+          </View>
+        </View>
+      </View>
 
       {/* Sticky mode toggle */}
       <View style={styles.toggle}>
@@ -266,6 +325,52 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
     paddingHorizontal: 20,
     marginBottom: 14,
+  },
+  analyticsCard: {
+    marginHorizontal: 20,
+    marginBottom: 12,
+    backgroundColor: '#16181D',
+    borderWidth: 1,
+    borderColor: '#22252A',
+    borderRadius: colors.radius,
+    padding: 16,
+    gap: 12,
+  },
+  analyticsHeading: {
+    color: '#8A8D93',
+    fontSize: 11,
+    fontFamily: 'Inter_600SemiBold',
+    letterSpacing: 1.2,
+  },
+  equityBlock: {
+    gap: 2,
+  },
+  equityValue: {
+    color: '#00F0FF',
+    fontSize: 26,
+    fontFamily: 'Inter_700Bold',
+  },
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#22252A',
+    paddingTop: 12,
+  },
+  statCell: {
+    flex: 1,
+    gap: 2,
+  },
+  statDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: '#22252A',
+    marginRight: 16,
+  },
+  statValue: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontFamily: 'Inter_700Bold',
   },
   toggle: {
     flexDirection: 'row',

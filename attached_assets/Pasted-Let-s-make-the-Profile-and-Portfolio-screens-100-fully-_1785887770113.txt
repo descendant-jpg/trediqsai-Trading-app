@@ -1,0 +1,40 @@
+Let's make the Profile and Portfolio screens 100% fully functional. We need to wire up all the dummy buttons to real logic using Supabase, React Native state, and the Expo Linking API.
+
+### Task 1: Complete the Portfolio Screen
+Update `PortfolioScreen.tsx` to include an "Account Analytics" dashboard at the top of the screen before the trade lists.
+1. Add a Dashboard Card displaying:
+   - "Total Simulated Equity" (Calculate this dynamically from the user's Supabase balance).
+   - "Win Rate" (Calculate the percentage of CLOSED trades that have a positive profit_loss).
+   - "Total P&L" (Sum of all profit_loss from CLOSED trades).
+2. Ensure the toggle between "Open Positions" and "Trade History" works seamlessly.
+
+### Task 2: Make the Profile Screen Interactive
+Update `ProfileScreen.tsx` to ensure every single button works. Use React Native `Modal` components for settings that require UI overlays.
+
+1. Functional Change Password:
+   - When clicked, open a Modal with a "New Password" input field.
+   - Wire the save button to `supabase.auth.updateUser({ password: newPassword })`.
+   - Wrap in try/catch and show an Alert on success or error.
+
+2. Functional Notifications Settings:
+   - When clicked, open a Modal titled "Notification Preferences".
+   - Include 3 functional Switch components: "Trade Execution Alerts", "Daily Market News", and "Partner Signals".
+   - Store these switch states locally using `AsyncStorage` so they persist when the app is closed.
+
+3. Functional Delete Account:
+   - When clicked, show a critical `Alert.alert` asking "Are you sure? This cannot be undone."
+   - If they confirm, execute a Supabase RPC call or simply call `supabase.auth.signOut()` and show a message that their account has been flagged for deletion in the database.
+
+4. Functional Social & Contact Links (Use `Linking.openURL`):
+   - "Contact Us": Must open `mailto:support@tradiqsai.com`.
+   - "Telegram Channel" / "Telegram Group": Must open a placeholder `https://t.me/...` link.
+   - "Terms and Conditions" & "Privacy Policy": Open Modals containing scrollable placeholder text for App Store compliance.
+
+5. Functional Language & Partner Program:
+   - Language: Open a Modal allowing them to select English, Spanish, or French (store in state).
+   - Partner Program (Crypto, Forex, Stocks): Open a Modal explaining the affiliate broker program.
+
+6. Sign Out:
+   - Must call `supabase.auth.signOut()` and immediately clear the user session, routing them back to the Auth Screen.
+
+Ensure all Modals use the strict #0A0B0E Terminal Black background, #16181D card backgrounds, and #FFFFFF text. All interactive states must have proper error handling and user feedback alerts.
