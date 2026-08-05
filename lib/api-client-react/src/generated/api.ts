@@ -68,7 +68,8 @@ export const getGetAutopilotUrl = () => {
 }
 
 /**
- * @summary Get the AutoPilot state (roster, config, logs, P&L)
+ * AutoPilot state is scoped per user. Authenticated callers (bearer token) get their own independent state; unauthenticated callers share a single anonymous state.
+ * @summary Get the caller's AutoPilot state (roster, config, logs, P&L)
  */
 export const getAutopilot = async ( options?: Parameters<typeof customFetch>[1]): Promise<AutopilotState> => {
 
@@ -92,7 +93,7 @@ export const getGetAutopilotQueryKey = () => {
     }
 
 
-export const getGetAutopilotQueryOptions = <TData = Awaited<ReturnType<typeof getAutopilot>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAutopilot>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetAutopilotQueryOptions = <TData = Awaited<ReturnType<typeof getAutopilot>>, TError = ErrorType<AutopilotError>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAutopilot>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -111,14 +112,14 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type GetAutopilotQueryResult = NonNullable<Awaited<ReturnType<typeof getAutopilot>>>
-export type GetAutopilotQueryError = ErrorType<unknown>
+export type GetAutopilotQueryError = ErrorType<AutopilotError>
 
 
 /**
- * @summary Get the AutoPilot state (roster, config, logs, P&L)
+ * @summary Get the caller's AutoPilot state (roster, config, logs, P&L)
  */
 
-export function useGetAutopilot<TData = Awaited<ReturnType<typeof getAutopilot>>, TError = ErrorType<unknown>>(
+export function useGetAutopilot<TData = Awaited<ReturnType<typeof getAutopilot>>, TError = ErrorType<AutopilotError>>(
   options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAutopilot>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
@@ -145,7 +146,7 @@ export const getSetAutopilotMasterUrl = () => {
 }
 
 /**
- * @summary Pause or resume the whole AutoPilot system
+ * @summary Pause or resume the caller's AutoPilot system
  */
 export const setAutopilotMaster = async (autopilotMasterUpdate: AutopilotMasterUpdate, options?: Parameters<typeof customFetch>[1]): Promise<AutopilotState> => {
 
@@ -194,7 +195,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type SetAutopilotMasterMutationError = ErrorType<unknown>
 
     /**
- * @summary Pause or resume the whole AutoPilot system
+ * @summary Pause or resume the caller's AutoPilot system
  */
 export const useSetAutopilotMaster = <TError = ErrorType<unknown>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setAutopilotMaster>>, TError,{data: BodyType<AutopilotMasterUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -216,7 +217,7 @@ export const getUpdateAutopilotBotUrl = (botId: string,) => {
 }
 
 /**
- * @summary Update a bot's running state or configuration
+ * @summary Update one of the caller's bots (running state or configuration)
  */
 export const updateAutopilotBot = async (botId: string,
     autopilotBotUpdate: AutopilotBotUpdate, options?: Parameters<typeof customFetch>[1]): Promise<AutopilotState> => {
@@ -266,7 +267,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type UpdateAutopilotBotMutationError = ErrorType<AutopilotError>
 
     /**
- * @summary Update a bot's running state or configuration
+ * @summary Update one of the caller's bots (running state or configuration)
  */
 export const useUpdateAutopilotBot = <TError = ErrorType<AutopilotError>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAutopilotBot>>, TError,{botId: string;data: BodyType<AutopilotBotUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -288,7 +289,7 @@ export const getClearAutopilotLogsUrl = () => {
 }
 
 /**
- * @summary Clear the AutoPilot log buffer
+ * @summary Clear the caller's AutoPilot log buffer
  */
 export const clearAutopilotLogs = async ( options?: Parameters<typeof customFetch>[1]): Promise<AutopilotState> => {
 
@@ -337,7 +338,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type ClearAutopilotLogsMutationError = ErrorType<unknown>
 
     /**
- * @summary Clear the AutoPilot log buffer
+ * @summary Clear the caller's AutoPilot log buffer
  */
 export const useClearAutopilotLogs = <TError = ErrorType<unknown>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof clearAutopilotLogs>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}

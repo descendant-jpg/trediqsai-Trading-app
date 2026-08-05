@@ -3,6 +3,7 @@ import express, { type Express } from "express";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { GetAutopilotResponse } from "@workspace/api-zod";
+import { db, autopilotBotsTable, autopilotStateTable } from "@workspace/db";
 
 const TICK_MS = 2_600;
 
@@ -41,6 +42,9 @@ beforeEach(async () => {
   // Only fake Date so real network/socket timers keep working.
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date("2026-08-05T10:00:00"));
+  // Wipe persisted rows so each test starts from freshly seeded defaults.
+  await db.delete(autopilotBotsTable);
+  await db.delete(autopilotStateTable);
   await startFreshApp();
 });
 
@@ -226,5 +230,118 @@ describe("DELETE /autopilot/logs", () => {
     // New log lines accumulate again afterwards.
     const paused = await request("PUT", "/autopilot/master", { active: false });
     expect(paused.body.logs).toHaveLength(1);
+  });
+});
+
+// ---- Per-user state isolation -------------------------------------------
+
+// Fake verifier: token "token-<id>" resolves to user "<id>"; anything else
+// is rejected as invalid.
+const verifier = async (token: string) =>
+  token.startsWith("token-") ? token.slice(6) : null;
+
+describe("autopilot per-user state", () => {
+  let authServer: Server;
+  let authBase: string;
+
+  beforeEach(async () => {
+    // Reuse the same fresh module instance loaded by the file-level
+    // beforeEach so this suite gets its own clean per-user store too.
+    const { createAutopilotRouter } = await import("./autopilot");
+    const app = express();
+    app.use(express.json());
+    app.use("/api", createAutopilotRouter(verifier));
+    await new Promise<void>((resolve) => {
+      authServer = app.listen(0, "127.0.0.1", () => resolve());
+    });
+    const { address, port } = authServer.address() as AddressInfo;
+    authBase = `http://${address}:${port}/api`;
+  });
+
+  afterEach(async () => {
+    await new Promise<void>((resolve, reject) =>
+      authServer.close((err) => (err ? reject(err) : resolve())),
+    );
+  });
+
+  async function call(
+    path: string,
+    {
+      method = "GET",
+      token,
+      body,
+    }: { method?: string; token?: string; body?: unknown } = {},
+  ) {
+    const res = await fetch(`${authBase}${path}`, {
+      method,
+      headers: {
+        "content-type": "application/json",
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+    });
+    return { status: res.status, body: (await res.json()) as any };
+  }
+
+  it("keeps two users' bot configurations independent", async () => {
+    // Alice stops a bot and reconfigures capital.
+    const alice = await call("/autopilot/bots/scalp-oracle", {
+      method: "PUT",
+      token: "token-alice",
+      body: { running: false, capital: 25000 },
+    });
+    expect(alice.status).toBe(200);
+    const aliceBot = alice.body.bots.find((b: any) => b.id === "scalp-oracle");
+    expect(aliceBot).toMatchObject({ running: false, capital: 25000 });
+
+    // Bob still sees the defaults.
+    const bob = await call("/autopilot", { token: "token-bob" });
+    expect(bob.status).toBe(200);
+    const bobBot = bob.body.bots.find((b: any) => b.id === "scalp-oracle");
+    expect(bobBot).toMatchObject({ running: true, capital: 10000 });
+  });
+
+  it("scopes the master switch and logs per user", async () => {
+    const alice = await call("/autopilot/master", {
+      method: "PUT",
+      token: "token-alice2",
+      body: { active: false },
+    });
+    expect(alice.body.masterActive).toBe(false);
+
+    const bob = await call("/autopilot", { token: "token-bob2" });
+    expect(bob.body.masterActive).toBe(true);
+
+    // Alice clears her logs; Bob keeps his.
+    const cleared = await call("/autopilot/logs", {
+      method: "DELETE",
+      token: "token-alice2",
+    });
+    expect(cleared.body.logs).toHaveLength(0);
+    const bobAgain = await call("/autopilot", { token: "token-bob2" });
+    expect(bobAgain.body.logs.length).toBeGreaterThan(0);
+  });
+
+  it("gives unauthenticated callers a shared anonymous state", async () => {
+    const first = await call("/autopilot");
+    expect(first.status).toBe(200);
+    await call("/autopilot/bots/grid-matrix", {
+      method: "PUT",
+      body: { running: true },
+    });
+    const second = await call("/autopilot");
+    const bot = second.body.bots.find((b: any) => b.id === "grid-matrix");
+    expect(bot.running).toBe(true);
+
+    // ...and a signed-in user is unaffected by anonymous changes.
+    const carol = await call("/autopilot", { token: "token-carol" });
+    const carolBot = carol.body.bots.find((b: any) => b.id === "grid-matrix");
+    expect(carolBot.running).toBe(false);
+  });
+
+  it("rejects invalid tokens with 401", async () => {
+    const res = await call("/autopilot", { token: "garbage" });
+    expect(res.status).toBe(401);
+    expect(res.body.error).toMatch(/invalid or expired/i);
   });
 });

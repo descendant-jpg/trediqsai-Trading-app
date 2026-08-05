@@ -9,7 +9,8 @@ import * as zod from 'zod';
 
 
 /**
- * @summary Get the AutoPilot state (roster, config, logs, P&L)
+ * AutoPilot state is scoped per user. Authenticated callers (bearer token) get their own independent state; unauthenticated callers share a single anonymous state.
+ * @summary Get the caller's AutoPilot state (roster, config, logs, P&L)
  */
 export const GetAutopilotResponse = zod.object({
   "masterActive": zod.boolean(),
@@ -36,7 +37,7 @@ export const GetAutopilotResponse = zod.object({
 
 
 /**
- * @summary Pause or resume the whole AutoPilot system
+ * @summary Pause or resume the caller's AutoPilot system
  */
 export const SetAutopilotMasterBody = zod.object({
   "active": zod.boolean()
@@ -67,7 +68,7 @@ export const SetAutopilotMasterResponse = zod.object({
 
 
 /**
- * @summary Update a bot's running state or configuration
+ * @summary Update one of the caller's bots (running state or configuration)
  */
 export const UpdateAutopilotBotParams = zod.object({
   "botId": zod.coerce.string()
@@ -104,7 +105,7 @@ export const UpdateAutopilotBotResponse = zod.object({
 
 
 /**
- * @summary Clear the AutoPilot log buffer
+ * @summary Clear the caller's AutoPilot log buffer
  */
 export const ClearAutopilotLogsResponse = zod.object({
   "masterActive": zod.boolean(),

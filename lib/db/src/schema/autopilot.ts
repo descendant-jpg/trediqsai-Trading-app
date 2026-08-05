@@ -6,21 +6,31 @@ import {
   integer,
   bigint,
   jsonb,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 
-/** Per-bot mutable configuration (toggle + allocation settings). */
-export const autopilotBotsTable = pgTable("autopilot_bots", {
-  id: text("id").primaryKey(),
-  running: boolean("running").notNull(),
-  capital: doublePrecision("capital").notNull(),
-  drawdown: doublePrecision("drawdown").notNull(),
-});
+/**
+ * Per-user, per-bot mutable configuration (toggle + allocation settings).
+ * AutoPilot state is scoped to the caller's auth identity; unauthenticated
+ * callers share the "anonymous" user id.
+ */
+export const autopilotBotsTable = pgTable(
+  "autopilot_bots",
+  {
+    userId: text("user_id").notNull(),
+    botId: text("bot_id").notNull(),
+    running: boolean("running").notNull(),
+    capital: doublePrecision("capital").notNull(),
+    drawdown: doublePrecision("drawdown").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.botId] })],
+);
 
 export type AutopilotBotRow = typeof autopilotBotsTable.$inferSelect;
 
-/** Singleton row holding global AutoPilot state (master toggle, P&L, logs). */
+/** One row per user holding AutoPilot state (master toggle, P&L, logs). */
 export const autopilotStateTable = pgTable("autopilot_state", {
-  id: integer("id").primaryKey(),
+  userId: text("user_id").primaryKey(),
   masterActive: boolean("master_active").notNull(),
   todayPnl: doublePrecision("today_pnl").notNull(),
   pnlDay: text("pnl_day").notNull(),

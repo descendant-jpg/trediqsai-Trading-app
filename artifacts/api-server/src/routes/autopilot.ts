@@ -7,8 +7,7 @@ import {
 import { db, autopilotBotsTable, autopilotStateTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { logger } from "../lib/logger";
-
-const router: IRouter = Router();
+import { identity, requestUserId, type TokenVerifier } from "../middlewares/identity";
 
 type BotState = {
   id: string;
@@ -41,8 +40,15 @@ const LOG_TEMPLATES = [
 
 const TICK_MS = 2_600;
 const MAX_LOGS = 80;
+/** Cap the number of per-user states kept in memory (LRU-evicted). */
+const MAX_USERS = 500;
+/** Minimum interval between background state saves per user. */
+const PERSIST_INTERVAL_MS = 10_000;
 
-const bots: BotState[] = [
+/** Identity for unauthenticated callers (kept in sync with middleware). */
+const ANONYMOUS = "anonymous";
+
+const DEFAULT_BOTS: readonly BotState[] = [
   {
     id: "scalp-oracle",
     name: "Scalp Oracle AI",
@@ -103,17 +109,19 @@ function nowClock(atMs: number): string {
   return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
-const state = {
-  masterActive: true,
-  todayPnl: 0,
-  pnlDay: new Date().toDateString(),
-  logs: [] as LogLine[],
-  lastTickAt: Date.now(),
-  logSeq: 0,
-  templateIndex: 0,
+type UserAutopilot = {
+  bots: BotState[];
+  masterActive: boolean;
+  todayPnl: number;
+  pnlDay: string;
+  logs: LogLine[];
+  lastTickAt: number;
+  logSeq: number;
+  templateIndex: number;
+  lastPersistAt: number;
 };
 
-function pushLog(text: string, atMs = Date.now()) {
+function pushLog(state: UserAutopilot, text: string, atMs = Date.now()) {
   state.logSeq += 1;
   state.logs.push({ id: `l${state.logSeq}`, time: nowClock(atMs), text });
   if (state.logs.length > MAX_LOGS) {
@@ -121,28 +129,41 @@ function pushLog(text: string, atMs = Date.now()) {
   }
 }
 
-const STATE_ROW_ID = 1;
-const PERSIST_INTERVAL_MS = 10_000;
-let lastPersistAt = 0;
+function defaultUserState(bootAt: number): UserAutopilot {
+  return {
+    bots: DEFAULT_BOTS.map((b) => ({ ...b })),
+    masterActive: true,
+    todayPnl: 0,
+    pnlDay: new Date(bootAt).toDateString(),
+    logs: [],
+    lastTickAt: bootAt,
+    logSeq: 0,
+    templateIndex: 0,
+    lastPersistAt: 0,
+  };
+}
 
-async function persistBot(bot: BotState): Promise<void> {
+// ---- Persistence (per user) ----------------------------------------------
+
+async function persistBot(userId: string, bot: BotState): Promise<void> {
   await db
     .insert(autopilotBotsTable)
     .values({
-      id: bot.id,
+      userId,
+      botId: bot.id,
       running: bot.running,
       capital: bot.capital,
       drawdown: bot.drawdown,
     })
     .onConflictDoUpdate({
-      target: autopilotBotsTable.id,
+      target: [autopilotBotsTable.userId, autopilotBotsTable.botId],
       set: { running: bot.running, capital: bot.capital, drawdown: bot.drawdown },
     });
 }
 
-async function persistState(): Promise<void> {
+async function persistState(userId: string, state: UserAutopilot): Promise<void> {
   const values = {
-    id: STATE_ROW_ID,
+    userId,
     masterActive: state.masterActive,
     todayPnl: state.todayPnl,
     pnlDay: state.pnlDay,
@@ -155,37 +176,44 @@ async function persistState(): Promise<void> {
     .insert(autopilotStateTable)
     .values(values)
     .onConflictDoUpdate({
-      target: autopilotStateTable.id,
+      target: autopilotStateTable.userId,
       set: values,
     });
-  lastPersistAt = Date.now();
+  state.lastPersistAt = Date.now();
 }
 
 /** Throttled background save so simulated P&L survives restarts too. */
-function persistStateThrottled(): void {
-  if (Date.now() - lastPersistAt < PERSIST_INTERVAL_MS) return;
-  lastPersistAt = Date.now();
-  persistState().catch((err) => {
-    logger.error({ err }, "Failed to persist autopilot state");
+function persistStateThrottled(userId: string, state: UserAutopilot): void {
+  if (Date.now() - state.lastPersistAt < PERSIST_INTERVAL_MS) return;
+  state.lastPersistAt = Date.now();
+  persistState(userId, state).catch((err) => {
+    logger.error({ err, userId }, "Failed to persist autopilot state");
   });
 }
 
 /**
- * Load persisted AutoPilot state on boot. Unknown bot rows are ignored;
- * missing rows fall back to the in-code defaults and are written on first
- * mutation. Failure to load is fatal for autopilot routes (readyPromise
- * rejects), so we surface errors instead of silently resetting state.
+ * Load a user's persisted AutoPilot state, or seed (and persist) defaults
+ * for a first-time user. Unknown bot rows are ignored; failure to load
+ * surfaces as a request error instead of silently resetting state.
  */
-async function loadPersistedState(): Promise<void> {
+async function loadUserState(userId: string): Promise<UserAutopilot> {
+  // Captured synchronously so the simulation clock starts when the load
+  // begins (e.g. at server boot for the anonymous seed), not when the DB
+  // round-trip completes.
+  const bootAt = Date.now();
   const [botRows, stateRows] = await Promise.all([
-    db.select().from(autopilotBotsTable),
+    db
+      .select()
+      .from(autopilotBotsTable)
+      .where(eq(autopilotBotsTable.userId, userId)),
     db
       .select()
       .from(autopilotStateTable)
-      .where(eq(autopilotStateTable.id, STATE_ROW_ID)),
+      .where(eq(autopilotStateTable.userId, userId)),
   ]);
+  const state = defaultUserState(bootAt);
   for (const row of botRows) {
-    const bot = bots.find((b) => b.id === row.id);
+    const bot = state.bots.find((b) => b.id === row.botId);
     if (!bot) continue;
     bot.running = row.running;
     bot.capital = row.capital;
@@ -200,33 +228,57 @@ async function loadPersistedState(): Promise<void> {
     state.lastTickAt = Math.max(saved.lastTickAt, Date.now() - 60_000);
     state.logSeq = saved.logSeq;
     state.templateIndex = saved.templateIndex;
-    pushLog("[SYS] AutoPilot state restored — resuming operations");
+    pushLog(state, "[SYS] AutoPilot state restored — resuming operations");
   } else {
-    pushLog("[SYS] TradiQs AutoPilot core initialized");
-    pushLog("[SYS] 2 algorithms deployed — monitoring 14 markets");
-    await persistState();
+    pushLog(state, "[SYS] TradiQs AutoPilot core initialized");
+    pushLog(state, "[SYS] 2 algorithms deployed — monitoring 14 markets");
+    await persistState(userId, state);
   }
+  return state;
 }
 
-const readyPromise = loadPersistedState().catch((err) => {
-  logger.error({ err }, "Failed to load persisted autopilot state");
-  throw err;
-});
-
-// Hold requests until persisted state has been loaded.
-router.use((_req, res, next) => {
-  readyPromise.then(
-    () => next(),
-    () => res.status(503).json({ error: "AutoPilot state unavailable" }),
-  );
-});
+/**
+ * Per-user AutoPilot state, keyed by the caller's auth identity. Values are
+ * promises so concurrent first requests from one user share a single load.
+ */
+const users = new Map<string, Promise<UserAutopilot>>();
 
 /**
- * Advance the simulation lazily: while the system is active and at least one
- * bot runs, every elapsed tick produces a log line and a P&L increment that
- * scales with deployed capital. P&L resets at the start of each day.
+ * Fetch (or lazily load) the caller's AutoPilot state. Re-inserting on
+ * every access keeps the Map in most-recently-used order so eviction under
+ * MAX_USERS pressure drops the least recently active user (their state is
+ * persisted and reloads on next access).
  */
-function advanceSimulation(): void {
+function stateFor(userId: string): Promise<UserAutopilot> {
+  let entry = users.get(userId);
+  if (entry) {
+    users.delete(userId);
+  } else {
+    entry = loadUserState(userId);
+    // A failed load must not be cached, or the user is stuck with the error.
+    entry.catch(() => users.delete(userId));
+    if (users.size >= MAX_USERS) {
+      const oldest = users.keys().next().value;
+      if (oldest !== undefined) users.delete(oldest);
+    }
+  }
+  users.set(userId, entry);
+  return entry;
+}
+
+// Seed the anonymous state at boot so its simulation clock starts with the
+// server (matching pre-scoping behavior for signed-out callers). Errors are
+// swallowed here; the first request will retry and surface them.
+stateFor(ANONYMOUS).catch(() => {});
+
+// ---- Simulation -----------------------------------------------------------
+
+/**
+ * Advance a user's simulation lazily: while the system is active and at
+ * least one bot runs, every elapsed tick produces a log line and a P&L
+ * increment that scales with deployed capital. P&L resets each day.
+ */
+function advanceSimulation(state: UserAutopilot): void {
   const now = Date.now();
   const today = new Date(now).toDateString();
   if (today !== state.pnlDay) {
@@ -234,7 +286,7 @@ function advanceSimulation(): void {
     state.todayPnl = 0;
   }
 
-  const runningBots = bots.filter((b) => b.running);
+  const runningBots = state.bots.filter((b) => b.running);
   if (!state.masterActive || runningBots.length === 0) {
     state.lastTickAt = now;
     return;
@@ -249,6 +301,7 @@ function advanceSimulation(): void {
   for (let i = 0; i < ticks; i++) {
     const tickAt = state.lastTickAt + (i + 1) * TICK_MS;
     pushLog(
+      state,
       LOG_TEMPLATES[state.templateIndex % LOG_TEMPLATES.length]!,
       tickAt,
     );
@@ -262,92 +315,116 @@ function advanceSimulation(): void {
   if (ticks > 0) state.lastTickAt += ticks * TICK_MS;
 }
 
-function snapshot() {
-  advanceSimulation();
-  persistStateThrottled();
+function snapshot(userId: string, state: UserAutopilot) {
+  advanceSimulation(state);
+  persistStateThrottled(userId, state);
   return GetAutopilotResponse.parse({
     masterActive: state.masterActive,
     todayPnl: Math.round(state.todayPnl * 100) / 100,
-    bots,
+    bots: state.bots,
     logs: state.logs,
   });
 }
 
-router.get("/autopilot", (_req, res) => {
-  res.json(snapshot());
-});
+// ---- Routes ----------------------------------------------------------------
 
-router.put("/autopilot/master", async (req, res, next) => {
-  const parsed = SetAutopilotMasterBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: "Invalid request body" });
-    return;
-  }
-  advanceSimulation();
-  state.masterActive = parsed.data.active;
-  state.lastTickAt = Date.now();
-  pushLog(
-    parsed.data.active
-      ? "[SYS] AutoPilot resumed — all bots re-armed"
-      : "[SYS] AutoPilot paused — halting new entries",
-  );
-  try {
-    await persistState();
-  } catch (err) {
-    next(err);
-    return;
-  }
-  res.json(snapshot());
-});
+/**
+ * Build the AutoPilot router. The token verifier is injectable for tests;
+ * production uses the default Supabase-backed verifier.
+ */
+export function createAutopilotRouter(verifier?: TokenVerifier): IRouter {
+  const router: IRouter = Router();
+  router.use("/autopilot", identity(verifier));
 
-router.put("/autopilot/bots/:botId", async (req, res, next) => {
-  const bot = bots.find((b) => b.id === req.params["botId"]);
-  if (!bot) {
-    res.status(404).json({ error: "Unknown bot" });
-    return;
-  }
-  const parsed = UpdateAutopilotBotBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: "Invalid request body" });
-    return;
-  }
-  advanceSimulation();
-  const { running, capital, drawdown } = parsed.data;
-  if (capital !== undefined || drawdown !== undefined) {
-    if (capital !== undefined) bot.capital = capital;
-    if (drawdown !== undefined) bot.drawdown = drawdown;
-    pushLog(
-      `[CFG] ${bot.name} reconfigured — $${bot.capital.toLocaleString()} capital, ${bot.drawdown}% max drawdown`,
-    );
-  }
-  if (running !== undefined && running !== bot.running) {
-    bot.running = running;
-    pushLog(
-      running
-        ? `[BOT] ${bot.name} initialized with $${bot.capital.toLocaleString()} capital allocation`
-        : `[BOT] ${bot.name} stopped — open positions managed to close`,
-    );
-  }
-  try {
-    await persistBot(bot);
-    await persistState();
-  } catch (err) {
-    next(err);
-    return;
-  }
-  res.json(snapshot());
-});
+  router.get("/autopilot", async (_req, res, next) => {
+    try {
+      const userId = requestUserId(res);
+      res.json(snapshot(userId, await stateFor(userId)));
+    } catch (err) {
+      next(err);
+    }
+  });
 
-router.delete("/autopilot/logs", async (_req, res, next) => {
-  advanceSimulation();
-  state.logs = [];
-  try {
-    await persistState();
-  } catch (err) {
-    next(err);
-    return;
-  }
-  res.json(snapshot());
-});
+  router.put("/autopilot/master", async (req, res, next) => {
+    const parsed = SetAutopilotMasterBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid request body" });
+      return;
+    }
+    try {
+      const userId = requestUserId(res);
+      const state = await stateFor(userId);
+      advanceSimulation(state);
+      state.masterActive = parsed.data.active;
+      state.lastTickAt = Date.now();
+      pushLog(
+        state,
+        parsed.data.active
+          ? "[SYS] AutoPilot resumed — all bots re-armed"
+          : "[SYS] AutoPilot paused — halting new entries",
+      );
+      await persistState(userId, state);
+      res.json(snapshot(userId, state));
+    } catch (err) {
+      next(err);
+    }
+  });
 
-export default router;
+  router.put("/autopilot/bots/:botId", async (req, res, next) => {
+    const parsed = UpdateAutopilotBotBody.safeParse(req.body);
+    try {
+      const userId = requestUserId(res);
+      const state = await stateFor(userId);
+      const bot = state.bots.find((b) => b.id === req.params["botId"]);
+      if (!bot) {
+        res.status(404).json({ error: "Unknown bot" });
+        return;
+      }
+      if (!parsed.success) {
+        res.status(400).json({ error: "Invalid request body" });
+        return;
+      }
+      advanceSimulation(state);
+      const { running, capital, drawdown } = parsed.data;
+      if (capital !== undefined || drawdown !== undefined) {
+        if (capital !== undefined) bot.capital = capital;
+        if (drawdown !== undefined) bot.drawdown = drawdown;
+        pushLog(
+          state,
+          `[CFG] ${bot.name} reconfigured — $${bot.capital.toLocaleString()} capital, ${bot.drawdown}% max drawdown`,
+        );
+      }
+      if (running !== undefined && running !== bot.running) {
+        bot.running = running;
+        pushLog(
+          state,
+          running
+            ? `[BOT] ${bot.name} initialized with $${bot.capital.toLocaleString()} capital allocation`
+            : `[BOT] ${bot.name} stopped — open positions managed to close`,
+        );
+      }
+      await persistBot(userId, bot);
+      await persistState(userId, state);
+      res.json(snapshot(userId, state));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.delete("/autopilot/logs", async (_req, res, next) => {
+    try {
+      const userId = requestUserId(res);
+      const state = await stateFor(userId);
+      advanceSimulation(state);
+      state.logs = [];
+      await persistState(userId, state);
+      res.json(snapshot(userId, state));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  return router;
+}
+
+export default createAutopilotRouter();

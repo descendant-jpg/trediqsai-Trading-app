@@ -19,8 +19,17 @@ import * as Notifications from 'expo-notifications';
 import { Stack } from 'expo-router';
 import { usePendingRouteRedirect } from '@/lib/usePendingRouteRedirect';
 import * as SplashScreen from 'expo-splash-screen';
-import { setBaseUrl } from '@workspace/api-client-react';
+import { setAuthTokenGetter, setBaseUrl } from '@workspace/api-client-react';
+import { isSupabaseConfigured, supabase } from '@/utils/supabase';
 import { initializeRevenueCat, SubscriptionProvider } from '@/lib/revenuecat';
+
+// Attach the Supabase access token to every API call so server-side state
+// (e.g. AutoPilot bot settings) is scoped to the signed-in trader.
+setAuthTokenGetter(async () => {
+  if (!isSupabaseConfigured) return null;
+  const { data } = await supabase.auth.getSession();
+  return data.session?.access_token ?? null;
+});
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -46,6 +55,17 @@ const queryClient = new QueryClient();
 
 function RootLayoutNav() {
   const { session, loading } = useAuth();
+
+  // Server-side state is per-user: drop cached API data whenever the
+  // signed-in user changes so one trader never sees another's data.
+  const userId = session?.user?.id ?? null;
+  const prevUserId = React.useRef(userId);
+  useEffect(() => {
+    if (prevUserId.current !== userId) {
+      prevUserId.current = userId;
+      queryClient.clear();
+    }
+  }, [userId]);
 
   // Preserve a signed-out user's deep-link destination and land there
   // after a successful sign-in (including legacy Oracle chat links).
