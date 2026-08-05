@@ -27,20 +27,33 @@ const STATUS_STYLES: Record<string, { color: string; label: string }> = {
   LOST: { color: '#E54B4B', label: 'LOST' },
 };
 
-function TargetsRow({ signal, actionColor }: { signal: Signal; actionColor: string }) {
+/**
+ * Paywall policy for Pro signals (locked = pro signal + non-subscriber):
+ * - Free users MAY see: symbol, name, PRO tag, BUY/SELL direction, timestamp.
+ * - Premium (hidden when locked): rationale (replaced by a generic teaser),
+ *   confidence %, WON/LOST outcome, and Entry/TP/SL values (redacted to
+ *   placeholders so the real numbers never render, in addition to the blur).
+ */
+const LOCKED_PLACEHOLDER = '•••';
+
+function TargetsRow({ signal, locked }: { signal: Signal; locked: boolean }) {
   return (
     <View style={styles.metaRow}>
       <View style={styles.metaItem}>
         <Text style={styles.metaLabel}>Entry</Text>
-        <Text style={styles.metaValue}>{signal.price}</Text>
+        <Text style={styles.metaValue}>{locked ? LOCKED_PLACEHOLDER : signal.price}</Text>
       </View>
       <View style={styles.metaItem}>
         <Text style={styles.metaLabel}>Take Profit</Text>
-        <Text style={[styles.metaValue, { color: '#2ECA8B' }]}>{signal.target}</Text>
+        <Text style={[styles.metaValue, { color: '#2ECA8B' }]}>
+          {locked ? LOCKED_PLACEHOLDER : signal.target}
+        </Text>
       </View>
       <View style={styles.metaItem}>
         <Text style={styles.metaLabel}>Stop Loss</Text>
-        <Text style={[styles.metaValue, { color: '#E54B4B' }]}>{signal.stopLoss}</Text>
+        <Text style={[styles.metaValue, { color: '#E54B4B' }]}>
+          {locked ? LOCKED_PLACEHOLDER : signal.stopLoss}
+        </Text>
       </View>
     </View>
   );
@@ -72,9 +85,19 @@ function SignalCard({
           </Text>
         </View>
         <View style={styles.badgeRow}>
-          <View style={[styles.statusBadge, { borderColor: status.color }]}>
-            <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
-          </View>
+          {locked ? (
+            <View
+              style={[styles.statusBadge, { borderColor: c.secondary, flexDirection: 'row', alignItems: 'center', gap: 3 }]}
+              testID={`locked-status-${signal.id}`}
+            >
+              <Feather name="lock" size={9} color={c.secondary} />
+              <Text style={[styles.statusText, { color: c.secondary }]}>PRO</Text>
+            </View>
+          ) : (
+            <View style={[styles.statusBadge, { borderColor: status.color }]}>
+              <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
+            </View>
+          )}
           <View style={[styles.actionPill, { backgroundColor: actionColor }]}>
             <Feather name={isBuy ? 'trending-up' : 'trending-down'} size={12} color="#0A0B0E" />
             <Text style={styles.actionText}>{signal.action}</Text>
@@ -89,17 +112,23 @@ function SignalCard({
             <Text style={styles.proTagText}>PRO</Text>
           </View>
         )}
-        <Text style={styles.confidence}>
-          <Text style={{ color: accent }}>{signal.confidence}%</Text> confidence
-        </Text>
+        {locked ? (
+          <Text style={styles.confidence}>Confidence locked</Text>
+        ) : (
+          <Text style={styles.confidence}>
+            <Text style={{ color: accent }}>{signal.confidence}%</Text> confidence
+          </Text>
+        )}
         <Text style={styles.time}>{signal.time}</Text>
       </View>
 
-      <Text style={styles.rationale}>{signal.rationale}</Text>
+      <Text style={[styles.rationale, locked && { fontStyle: 'italic', opacity: 0.6 }]}>
+        {locked ? LOCKED_RATIONALE_TEASER : signal.rationale}
+      </Text>
 
       {/* Entry / TP / SL — blurred behind the premium gate for locked pro signals */}
       <View>
-        <TargetsRow signal={signal} actionColor={actionColor} />
+        <TargetsRow signal={signal} locked={locked} />
         {locked && (
           <View style={styles.lockOverlay}>
             <BlurView
@@ -503,3 +532,6 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
   },
 });
+
+export const LOCKED_RATIONALE_TEASER =
+  'AI rationale locked — upgrade to Pro to see why this trade was called.';
