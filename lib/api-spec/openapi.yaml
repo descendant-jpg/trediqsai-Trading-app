@@ -84,50 +84,104 @@ paths:
                 $ref: "#/components/schemas/HealthStatus"
 components:
   schemas:
+    SignalEntry:
+      type: object
+      properties:
+        price:
+          type: number
+      required: [price]
+    SignalStopLoss:
+      type: object
+      properties:
+        price:
+          type: number
+        pips:
+          type: number
+        isBreakeven:
+          type: boolean
+      required: [price, pips, isBreakeven]
+    SignalTakeProfit:
+      type: object
+      properties:
+        id:
+          type: number
+          enum: [1, 2, 3]
+        price:
+          type: number
+        pips:
+          type: number
+        percentage:
+          type: string
+        isHit:
+          type: boolean
+      required: [id, price, pips, percentage, isHit]
+    SignalTimeline:
+      type: object
+      properties:
+        created:
+          type: string
+        closed:
+          type: string
+      required: [created]
     Signal:
       type: object
       properties:
         id:
           type: string
-        symbol:
+        asset:
           type: string
         name:
           type: string
-        action:
+        direction:
           type: string
           enum: [BUY, SELL]
-        confidence:
-          type: number
-        price:
-          type: string
-        target:
-          type: string
-        stopLoss:
+        timeframe:
           type: string
         status:
           type: string
-          enum: [ACTIVE, WON, LOST]
-        timeframe:
+          enum: [Won, SL Hit, Active, Pending]
+        rr:
           type: string
+        confidence:
+          type: string
+        risk:
+          type: string
+          enum: [Low, Medium, High]
+        potentialPips:
+          type: string
+        entry:
+          $ref: "#/components/schemas/SignalEntry"
+        stopLoss:
+          $ref: "#/components/schemas/SignalStopLoss"
+        takeProfits:
+          type: array
+          items:
+            $ref: "#/components/schemas/SignalTakeProfit"
+        timeline:
+          $ref: "#/components/schemas/SignalTimeline"
+        isPremium:
+          type: boolean
         time:
           type: string
-        pro:
-          type: boolean
         rationale:
           type: string
       required:
         - id
-        - symbol
+        - asset
         - name
-        - action
-        - confidence
-        - price
-        - target
-        - stopLoss
-        - status
+        - direction
         - timeframe
+        - status
+        - rr
+        - confidence
+        - risk
+        - potentialPips
+        - entry
+        - stopLoss
+        - takeProfits
+        - timeline
+        - isPremium
         - time
-        - pro
         - rationale
     Trader:
       type: object

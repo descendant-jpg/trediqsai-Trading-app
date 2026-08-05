@@ -10,7 +10,8 @@ export type SignalStatus = typeof SignalStatus[keyof typeof SignalStatus];
 
 
 export const SignalStatus = {
-  ACTIVE: 'ACTIVE',
-  WON: 'WON',
-  LOST: 'LOST',
+  Won: 'Won',
+  SL_Hit: 'SL Hit',
+  Active: 'Active',
+  Pending: 'Pending',
 } as const;

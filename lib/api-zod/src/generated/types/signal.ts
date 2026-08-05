@@ -5,21 +5,30 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { SignalAction } from './signalAction';
+import type { SignalDirection } from './signalDirection';
+import type { SignalEntry } from './signalEntry';
+import type { SignalRisk } from './signalRisk';
 import type { SignalStatus } from './signalStatus';
+import type { SignalStopLoss } from './signalStopLoss';
+import type { SignalTakeProfit } from './signalTakeProfit';
+import type { SignalTimeline } from './signalTimeline';
 
 export interface Signal {
   id: string;
-  symbol: string;
+  asset: string;
   name: string;
-  action: SignalAction;
-  confidence: number;
-  price: string;
-  target: string;
-  stopLoss: string;
-  status: SignalStatus;
+  direction: SignalDirection;
   timeframe: string;
+  status: SignalStatus;
+  rr: string;
+  confidence: string;
+  risk: SignalRisk;
+  potentialPips: string;
+  entry: SignalEntry;
+  stopLoss: SignalStopLoss;
+  takeProfits: SignalTakeProfit[];
+  timeline: SignalTimeline;
+  isPremium: boolean;
   time: string;
-  pro: boolean;
   rationale: string;
 }

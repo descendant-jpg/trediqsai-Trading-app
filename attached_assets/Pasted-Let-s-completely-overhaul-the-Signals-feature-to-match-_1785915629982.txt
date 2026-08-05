@@ -1,0 +1,44 @@
+Let's completely overhaul the Signals feature to match a high-end, professional trading UI, tailored strictly to our established aesthetic. 
+
+### Critical Updates & Branding
+1. Header Title: Change the main screen title to exactly "TradiQsAI Signal".
+2. NO ADS: Strictly do not include any banner ads, sponsored banners, or third-party broker ads anywhere in the UI. It must look like a premium, proprietary in-house tool.
+
+### 1. Data Model & State Update
+Update the mock signal data to be much more complex. Each signal object must include:
+- `id`, `asset` (e.g., XAUUSD), `direction` ('BUY' | 'SELL'), `timeframe` (e.g., 'H1').
+- `status` ('Won', 'SL Hit', 'Active', 'Pending').
+- `rr` (Risk:Reward, e.g., '1:5.0').
+- `confidence` (e.g., '75%'), `risk` ('Low', 'Medium', 'High'), `potentialPips` (e.g., '+400p').
+- `entry`: { price: number }.
+- `stopLoss`: { price: number, pips: number, isBreakeven: boolean }.
+- `takeProfits`: Array of 3 objects { id: 1|2|3, price: number, pips: number, percentage: string, isHit: boolean }.
+- `timeline`: { created: string, closed: string }.
+- `isPremium`: boolean.
+
+### 2. Main Signals Feed UI (SignalsScreen.tsx)
+- Background: #0A0B0E (Terminal Black).
+- Trial Banner: At the top, below the header, add a dark banner: "10 of 10 trial signals remaining" with a small "Upgrade" button.
+- Filter Chips: A horizontal scroll view with pill buttons: "Free", "Premium", "All", "Active", "Pending", "Closed".
+- Signal Card Layout (Retain the glowing/neon border aesthetic from our current design, Background #16181D):
+  - **Header Row:** Asset name (bold, left), Direction pill (Electric Cyan #00F0FF for BUY, Muted Crimson #E54B4B for SELL). On the right, display the status and time elapsed.
+  - **Main Data Grid (3 columns):**
+    - Col 1: ENTRY (Label gray, Price white).
+    - Col 2: SL (Show 'SL - BE' if breakeven, Label gray, Price red).
+    - Col 3: TP1 (Green checkmark if hit, Label Electric Cyan, Price white).
+  - **Secondary Targets Row:** Below the grid, show TP2 and TP3 with hollow circles (or checks if hit), their prices, and the pip target in a small pill.
+  - **Progress Row:** Text like "2/3 targets hit" with small dot indicators.
+  - **Bottom Action Row:** A "Chart" icon, "Trade Now" (Electric Cyan text), and "Details >".
+  - Make the entire card clickable to open the Detail View.
+- The Premium Gate: If `isPremium` is true, blur out the Entry/TP/SL numbers and the rationale. Overlay a padlock icon and a prominent "Upgrade to Pro to Unlock" button on top of the blurred section.
+
+### 3. Signal Detail View (SignalDetailScreen.tsx or Modal)
+When a card is clicked, open a full-screen view:
+- **Header:** Asset, Direction, Time ago, Timeframe.
+- **Quick Stats Row:** 4 columns showing R:R, CONFIDENCE (%), RISK (colored dot), and POTENTIAL.
+- **Price Map (Visual Timeline):** A horizontal visual indicator. A line with a red 'X' on the left (Risk/SL), a blue dot for Entry, and green dots spreading to the right for TP1, TP2, TP3.
+- **Entry & SL Blocks:** Two square cards side-by-side (Entry Trigger vs. Stop Loss specs).
+- **Take Profit List:** A vertical list of TP1, TP2, TP3 showing hit status, pips, percentage, and exact price. Add a small progress bar.
+- **Timeline:** A vertical line timeline showing "Created" and "Closed" timestamps.
+
+Ensure all typography uses clean, crisp fonts to maintain the data-heavy, professional terminal feel.

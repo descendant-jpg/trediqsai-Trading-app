@@ -6,10 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type SignalAction = typeof SignalAction[keyof typeof SignalAction];
+export type SignalDirection = typeof SignalDirection[keyof typeof SignalDirection];
 
 
-export const SignalAction = {
+export const SignalDirection = {
   BUY: 'BUY',
   SELL: 'SELL',
 } as const;

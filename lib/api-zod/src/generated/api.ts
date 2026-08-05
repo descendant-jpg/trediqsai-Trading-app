@@ -45,17 +45,36 @@ export const SendOracleChatResponse = zod.object({
  */
 export const GetSignalsResponseItem = zod.object({
   "id": zod.string(),
-  "symbol": zod.string(),
+  "asset": zod.string(),
   "name": zod.string(),
-  "action": zod.enum(['BUY', 'SELL']),
-  "confidence": zod.number(),
-  "price": zod.string(),
-  "target": zod.string(),
-  "stopLoss": zod.string(),
-  "status": zod.enum(['ACTIVE', 'WON', 'LOST']),
+  "direction": zod.enum(['BUY', 'SELL']),
   "timeframe": zod.string(),
+  "status": zod.enum(['Won', 'SL Hit', 'Active', 'Pending']),
+  "rr": zod.string(),
+  "confidence": zod.string(),
+  "risk": zod.enum(['Low', 'Medium', 'High']),
+  "potentialPips": zod.string(),
+  "entry": zod.object({
+  "price": zod.number()
+}),
+  "stopLoss": zod.object({
+  "price": zod.number(),
+  "pips": zod.number(),
+  "isBreakeven": zod.boolean()
+}),
+  "takeProfits": zod.array(zod.object({
+  "id": zod.union([zod.literal(1),zod.literal(2),zod.literal(3)]),
+  "price": zod.number(),
+  "pips": zod.number(),
+  "percentage": zod.string(),
+  "isHit": zod.boolean()
+})),
+  "timeline": zod.object({
+  "created": zod.string(),
+  "closed": zod.string().optional()
+}),
+  "isPremium": zod.boolean(),
   "time": zod.string(),
-  "pro": zod.boolean(),
   "rationale": zod.string()
 })
 export const GetSignalsResponse = zod.array(GetSignalsResponseItem)

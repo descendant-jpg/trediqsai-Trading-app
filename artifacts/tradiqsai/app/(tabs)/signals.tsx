@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -15,6 +16,7 @@ import { BlurView } from 'expo-blur';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { ManageSubscriptionCard, PaywallCard, ProWindDownBanner } from '@/components/paywall';
+import SignalDetailModal from '@/components/SignalDetailModal';
 import colors from '@/constants/colors';
 import { useGetSignals, type Signal } from '@workspace/api-client-react';
 import { useSubscription } from '@/lib/revenuecat';
@@ -22,38 +24,114 @@ import { useSubscription } from '@/lib/revenuecat';
 const c = colors.light;
 
 const STATUS_STYLES: Record<string, { color: string; label: string }> = {
-  ACTIVE: { color: '#00F0FF', label: 'ACTIVE' },
-  WON: { color: '#2ECA8B', label: 'WON' },
-  LOST: { color: '#E54B4B', label: 'LOST' },
+  Active: { color: '#00F0FF', label: 'ACTIVE' },
+  Pending: { color: '#F5A623', label: 'PENDING' },
+  Won: { color: '#2ECA8B', label: 'WON' },
+  'SL Hit': { color: '#E54B4B', label: 'SL HIT' },
 };
 
+const FILTERS = ['All', 'Free', 'Premium', 'Active', 'Pending', 'Closed'] as const;
+type Filter = (typeof FILTERS)[number];
+
 /**
- * Paywall policy for Pro signals (locked = pro signal + non-subscriber):
- * - Free users MAY see: symbol, name, PRO tag, BUY/SELL direction, timestamp.
+ * Paywall policy for Premium signals (locked = isPremium + non-subscriber):
+ * - Free users MAY see: asset, name, PRO tag, BUY/SELL direction, timeframe, timestamp.
  * - Premium (hidden when locked): rationale (replaced by a generic teaser),
- *   confidence %, WON/LOST outcome, and Entry/TP/SL values (redacted to
- *   placeholders so the real numbers never render, in addition to the blur).
+ *   Won/SL Hit outcome, and Entry/TP/SL values (redacted to placeholders so
+ *   the real numbers never render, in addition to the blur).
  */
 const LOCKED_PLACEHOLDER = '•••';
 
-function TargetsRow({ signal, locked }: { signal: Signal; locked: boolean }) {
+export const LOCKED_RATIONALE_TEASER =
+  'AI rationale locked — upgrade to Pro to see why this trade was called.';
+
+function matchesFilter(signal: Signal, filter: Filter): boolean {
+  switch (filter) {
+    case 'All':
+      return true;
+    case 'Free':
+      return !signal.isPremium;
+    case 'Premium':
+      return signal.isPremium;
+    case 'Active':
+      return signal.status === 'Active';
+    case 'Pending':
+      return signal.status === 'Pending';
+    case 'Closed':
+      return signal.status === 'Won' || signal.status === 'SL Hit';
+  }
+}
+
+function TargetsBlock({ signal, locked }: { signal: Signal; locked: boolean }) {
+  const tp1 = signal.takeProfits[0];
+  const rest = signal.takeProfits.slice(1);
+  const hits = signal.takeProfits.filter((tp) => tp.isHit).length;
+
   return (
-    <View style={styles.metaRow}>
-      <View style={styles.metaItem}>
-        <Text style={styles.metaLabel}>Entry</Text>
-        <Text style={styles.metaValue}>{locked ? LOCKED_PLACEHOLDER : signal.price}</Text>
+    <View style={{ gap: 10 }}>
+      {/* Main 3-column grid */}
+      <View style={styles.metaRow}>
+        <View style={styles.metaItem}>
+          <Text style={styles.metaLabel}>Entry</Text>
+          <Text style={styles.metaValue}>{locked ? LOCKED_PLACEHOLDER : signal.entry.price}</Text>
+        </View>
+        <View style={styles.metaItem}>
+          <Text style={styles.metaLabel}>SL</Text>
+          <Text style={[styles.metaValue, { color: '#E54B4B' }]}>
+            {locked
+              ? LOCKED_PLACEHOLDER
+              : signal.stopLoss.isBreakeven
+                ? 'SL - BE'
+                : signal.stopLoss.price}
+          </Text>
+        </View>
+        <View style={styles.metaItem}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Text style={[styles.metaLabel, { color: '#00F0FF' }]}>TP1</Text>
+            {!locked && tp1?.isHit && <Feather name="check-circle" size={10} color="#2ECA8B" />}
+          </View>
+          <Text style={styles.metaValue}>{locked ? LOCKED_PLACEHOLDER : tp1?.price}</Text>
+        </View>
       </View>
-      <View style={styles.metaItem}>
-        <Text style={styles.metaLabel}>Take Profit</Text>
-        <Text style={[styles.metaValue, { color: '#2ECA8B' }]}>
-          {locked ? LOCKED_PLACEHOLDER : signal.target}
-        </Text>
+
+      {/* Secondary targets row */}
+      <View style={styles.secondaryRow}>
+        {rest.map((tp) => (
+          <View key={tp.id} style={styles.secondaryTarget}>
+            {!locked && tp.isHit ? (
+              <View style={[styles.tpCircle, { backgroundColor: '#2ECA8B', borderColor: '#2ECA8B' }]}>
+                <Feather name="check" size={8} color="#0A0B0E" />
+              </View>
+            ) : (
+              <View style={styles.tpCircle} />
+            )}
+            <Text style={styles.secondaryLabel}>TP{tp.id}</Text>
+            <Text style={styles.secondaryPrice}>{locked ? LOCKED_PLACEHOLDER : tp.price}</Text>
+            <View style={styles.pipPill}>
+              <Text style={styles.pipPillText}>{locked ? '•••' : `+${tp.pips}p`}</Text>
+            </View>
+          </View>
+        ))}
       </View>
-      <View style={styles.metaItem}>
-        <Text style={styles.metaLabel}>Stop Loss</Text>
-        <Text style={[styles.metaValue, { color: '#E54B4B' }]}>
-          {locked ? LOCKED_PLACEHOLDER : signal.stopLoss}
+
+      {/* Progress row */}
+      <View style={styles.progressRow}>
+        <Text style={styles.progressText}>
+          {locked ? 'Targets locked' : `${hits}/${signal.takeProfits.length} targets hit`}
         </Text>
+        {!locked && (
+          <View style={styles.progressDots}>
+            {signal.takeProfits.map((tp) => (
+              <View
+                key={tp.id}
+                style={[
+                  styles.progressDot,
+                  tp.isHit && { backgroundColor: '#2ECA8B', borderColor: '#2ECA8B' },
+                ]}
+              />
+            ))}
+          </View>
+        )}
       </View>
     </View>
   );
@@ -62,29 +140,43 @@ function TargetsRow({ signal, locked }: { signal: Signal; locked: boolean }) {
 function SignalCard({
   signal,
   locked,
+  onOpen,
   onTrade,
   onUpgrade,
 }: {
   signal: Signal;
   locked: boolean;
+  onOpen: (signal: Signal) => void;
   onTrade: (signal: Signal) => void;
   onUpgrade: () => void;
 }) {
-  const isBuy = signal.action === 'BUY';
-  const actionColor = isBuy ? '#00F0FF' : '#E54B4B';
-  const accent = signal.pro ? c.secondary : c.primary;
-  const status = STATUS_STYLES[signal.status] ?? STATUS_STYLES.ACTIVE;
+  const isBuy = signal.direction === 'BUY';
+  const dirColor = isBuy ? '#00F0FF' : '#E54B4B';
+  const accent = signal.isPremium ? c.secondary : c.primary;
+  const status = STATUS_STYLES[signal.status] ?? STATUS_STYLES.Active;
 
   return (
-    <View style={[styles.card, { borderLeftColor: accent }]}>
+    <Pressable
+      style={[styles.card, { borderLeftColor: accent }]}
+      onPress={() => (locked ? onUpgrade() : onOpen(signal))}
+      testID={`signal-card-${signal.id}`}
+    >
+      {/* Header row */}
       <View style={styles.cardHeader}>
         <View style={styles.symbolRow}>
-          <Text style={styles.symbol}>{signal.symbol}</Text>
-          <Text style={styles.name} numberOfLines={1}>
-            {signal.name}
-          </Text>
+          <Text style={styles.symbol}>{signal.asset}</Text>
+          <View style={[styles.dirPill, { backgroundColor: dirColor }]}>
+            <Feather name={isBuy ? 'trending-up' : 'trending-down'} size={11} color="#0A0B0E" />
+            <Text style={styles.dirText}>{signal.direction}</Text>
+          </View>
+          {signal.isPremium && (
+            <View style={styles.proTag}>
+              <Feather name="star" size={9} color={c.secondary} />
+              <Text style={styles.proTagText}>PRO</Text>
+            </View>
+          )}
         </View>
-        <View style={styles.badgeRow}>
+        <View style={styles.headerRight}>
           {locked ? (
             <View
               style={[styles.statusBadge, { borderColor: c.secondary, flexDirection: 'row', alignItems: 'center', gap: 3 }]}
@@ -98,37 +190,26 @@ function SignalCard({
               <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
             </View>
           )}
-          <View style={[styles.actionPill, { backgroundColor: actionColor }]}>
-            <Feather name={isBuy ? 'trending-up' : 'trending-down'} size={12} color="#0A0B0E" />
-            <Text style={styles.actionText}>{signal.action}</Text>
-          </View>
+          <Text style={styles.time}>{signal.time}</Text>
         </View>
       </View>
 
       <View style={styles.subRow}>
-        {signal.pro && (
-          <View style={styles.proTag}>
-            <Feather name="star" size={9} color={c.secondary} />
-            <Text style={styles.proTagText}>PRO</Text>
-          </View>
-        )}
-        {locked ? (
-          <Text style={styles.confidence}>Confidence locked</Text>
-        ) : (
-          <Text style={styles.confidence}>
-            <Text style={{ color: accent }}>{signal.confidence}%</Text> confidence
-          </Text>
-        )}
-        <Text style={styles.time}>{signal.time}</Text>
+        <Text style={styles.name} numberOfLines={1}>
+          {signal.name}
+        </Text>
+        <View style={styles.tfPill}>
+          <Text style={styles.tfPillText}>{signal.timeframe}</Text>
+        </View>
       </View>
 
       <Text style={[styles.rationale, locked && { fontStyle: 'italic', opacity: 0.6 }]}>
         {locked ? LOCKED_RATIONALE_TEASER : signal.rationale}
       </Text>
 
-      {/* Entry / TP / SL — blurred behind the premium gate for locked pro signals */}
+      {/* Entry / SL / TP — blurred behind the premium gate for locked signals */}
       <View>
-        <TargetsRow signal={signal} locked={locked} />
+        <TargetsBlock signal={signal} locked={locked} />
         {locked && (
           <View style={styles.lockOverlay}>
             <BlurView
@@ -151,26 +232,38 @@ function SignalCard({
         )}
       </View>
 
+      {/* Bottom action row */}
       {!locked && (
-        <TouchableOpacity
-          activeOpacity={0.85}
-          style={[styles.tradeButton, { backgroundColor: actionColor }]}
-          onPress={() => onTrade(signal)}
-          testID={`trade-signal-${signal.id}`}
-        >
-          <Feather
-            name={isBuy ? 'trending-up' : 'trending-down'}
-            size={14}
-            color={isBuy ? c.background : '#FFFFFF'}
-          />
-          <Text
-            style={[styles.tradeButtonText, { color: isBuy ? c.background : '#FFFFFF' }]}
+        <View style={styles.actionRow}>
+          <TouchableOpacity
+            style={styles.actionItem}
+            onPress={() => onOpen(signal)}
+            hitSlop={{ top: 8, bottom: 8 }}
           >
-            Trade this — {signal.action} {signal.symbol}
-          </Text>
-        </TouchableOpacity>
+            <Feather name="bar-chart-2" size={14} color={c.mutedForeground} />
+            <Text style={styles.actionMuted}>Chart</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.actionItem}
+            onPress={() => onTrade(signal)}
+            hitSlop={{ top: 8, bottom: 8 }}
+            testID={`trade-signal-${signal.id}`}
+          >
+            <Feather name="zap" size={14} color="#00F0FF" />
+            <Text style={styles.actionTrade}>Trade Now</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.actionItem}
+            onPress={() => onOpen(signal)}
+            hitSlop={{ top: 8, bottom: 8 }}
+            testID={`details-${signal.id}`}
+          >
+            <Text style={styles.actionMuted}>Details</Text>
+            <Feather name="chevron-right" size={14} color={c.mutedForeground} />
+          </TouchableOpacity>
+        </View>
       )}
-    </View>
+    </Pressable>
   );
 }
 
@@ -181,13 +274,20 @@ export default function AISignalsScreen() {
   const { isSubscribed, isLoading: subLoading, verificationPending } = useSubscription();
   const router = useRouter();
   const [paywallOpen, setPaywallOpen] = useState(false);
+  const [filter, setFilter] = useState<Filter>('All');
+  const [detailSignal, setDetailSignal] = useState<Signal | null>(null);
 
   const isLoading = signalsLoading || subLoading;
+
+  const filtered = useMemo(
+    () => (signals ?? []).filter((s) => matchesFilter(s, filter)),
+    [signals, filter],
+  );
 
   const handleTrade = (signal: Signal) => {
     router.push({
       pathname: '/(tabs)',
-      params: { symbol: signal.symbol, direction: signal.action },
+      params: { symbol: signal.asset, direction: signal.direction },
     });
   };
 
@@ -195,13 +295,43 @@ export default function AISignalsScreen() {
     <View style={[styles.container, { paddingTop: topInset }]}>
       <View style={styles.header}>
         <Feather name="zap" size={20} color={c.primary} />
-        <Text style={styles.headerTitle}>AI Signals</Text>
+        <Text style={styles.headerTitle}>TradiQsAI Signal</Text>
         {isSubscribed && (
           <View style={styles.proBadge}>
             <Feather name="star" size={11} color={c.secondary} />
             <Text style={styles.proBadgeText}>PRO</Text>
           </View>
         )}
+      </View>
+
+      {!isSubscribed && (
+        <View style={styles.trialBanner} testID="trial-banner">
+          <Text style={styles.trialText}>10 of 10 trial signals remaining</Text>
+          <TouchableOpacity
+            style={styles.trialUpgrade}
+            onPress={() => setPaywallOpen(true)}
+            testID="trial-upgrade"
+          >
+            <Text style={styles.trialUpgradeText}>Upgrade</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      <View style={styles.filterWrap}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+          {FILTERS.map((f) => (
+            <Pressable
+              key={f}
+              style={[styles.filterChip, filter === f && styles.filterChipActive]}
+              onPress={() => setFilter(f)}
+              testID={`filter-${f}`}
+            >
+              <Text style={[styles.filterChipText, filter === f && styles.filterChipTextActive]}>
+                {f}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
       </View>
 
       {verificationPending && (
@@ -228,18 +358,24 @@ export default function AISignalsScreen() {
         </View>
       ) : (
         <FlatList
-          data={signals ?? []}
+          data={filtered}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <SignalCard
               signal={item}
-              locked={item.pro && !isSubscribed}
+              locked={item.isPremium && !isSubscribed}
+              onOpen={setDetailSignal}
               onTrade={handleTrade}
               onUpgrade={() => setPaywallOpen(true)}
             />
           )}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={styles.stateBox}>
+              <Text style={styles.stateText}>No signals match this filter.</Text>
+            </View>
+          }
           ListHeaderComponent={
             isSubscribed ? (
               <View style={{ gap: 12 }}>
@@ -249,6 +385,11 @@ export default function AISignalsScreen() {
             ) : null
           }
         />
+      )}
+
+      {/* Signal detail view */}
+      {detailSignal && (
+        <SignalDetailModal signal={detailSignal} onClose={() => setDetailSignal(null)} />
       )}
 
       {/* Paywall modal opened from a locked signal card */}
@@ -279,7 +420,7 @@ export default function AISignalsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: c.background,
+    backgroundColor: '#0A0B0E',
   },
   header: {
     flexDirection: 'row',
@@ -311,6 +452,63 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
     letterSpacing: 0.5,
   },
+  trialBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: 16,
+    marginBottom: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: c.border,
+    backgroundColor: '#16181D',
+  },
+  trialText: {
+    color: c.mutedForeground,
+    fontSize: 12,
+    fontFamily: 'Inter_500Medium',
+  },
+  trialUpgrade: {
+    backgroundColor: '#00F0FF',
+    borderRadius: 7,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  trialUpgradeText: {
+    color: '#0A0B0E',
+    fontSize: 11,
+    fontFamily: 'Inter_700Bold',
+  },
+  filterWrap: {
+    marginBottom: 10,
+  },
+  filterRow: {
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  filterChip: {
+    borderWidth: 1,
+    borderColor: c.border,
+    borderRadius: 16,
+    paddingHorizontal: 13,
+    paddingVertical: 6,
+    backgroundColor: '#16181D',
+  },
+  filterChipActive: {
+    borderColor: '#00F0FF',
+    backgroundColor: 'rgba(0,240,255,0.12)',
+  },
+  filterChipText: {
+    color: c.mutedForeground,
+    fontSize: 12,
+    fontFamily: 'Inter_500Medium',
+  },
+  filterChipTextActive: {
+    color: '#00F0FF',
+    fontFamily: 'Inter_700Bold',
+  },
   verifyBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -336,13 +534,17 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   card: {
-    backgroundColor: c.card,
+    backgroundColor: '#16181D',
     borderRadius: colors.radius,
     borderWidth: 1,
     borderColor: c.border,
     borderLeftWidth: 3,
     padding: 14,
     gap: 10,
+    ...Platform.select({
+      web: { boxShadow: '0 0 12px rgba(0,240,255,0.06)' } as object,
+      default: {},
+    }),
   },
   cardHeader: {
     flexDirection: 'row',
@@ -352,7 +554,7 @@ const styles = StyleSheet.create({
   },
   symbolRow: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'center',
     gap: 8,
     flex: 1,
   },
@@ -361,16 +563,46 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'Inter_700Bold',
   },
+  dirPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    borderRadius: 7,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  dirText: {
+    color: '#0A0B0E',
+    fontSize: 11,
+    fontFamily: 'Inter_700Bold',
+  },
+  headerRight: {
+    alignItems: 'flex-end',
+    gap: 3,
+  },
   name: {
     color: c.mutedForeground,
     fontSize: 12,
     fontFamily: 'Inter_400Regular',
     flexShrink: 1,
   },
-  badgeRow: {
+  subRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
+  },
+  tfPill: {
+    borderWidth: 1,
+    borderColor: c.border,
+    borderRadius: 5,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  tfPillText: {
+    color: c.mutedForeground,
+    fontSize: 9,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 0.5,
   },
   statusBadge: {
     borderWidth: 1,
@@ -382,24 +614,6 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontFamily: 'Inter_700Bold',
     letterSpacing: 0.8,
-  },
-  actionPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  actionText: {
-    color: '#0A0B0E',
-    fontSize: 12,
-    fontFamily: 'Inter_700Bold',
-  },
-  subRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
   },
   proTag: {
     flexDirection: 'row',
@@ -418,16 +632,10 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
     letterSpacing: 0.5,
   },
-  confidence: {
-    color: c.mutedForeground,
-    fontSize: 12,
-    fontFamily: 'Inter_500Medium',
-  },
   time: {
     color: c.mutedForeground,
     fontSize: 11,
     fontFamily: 'Inter_400Regular',
-    marginLeft: 'auto',
   },
   rationale: {
     color: c.foreground,
@@ -458,6 +666,66 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'Inter_700Bold',
   },
+  secondaryRow: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  secondaryTarget: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  tpCircle: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 1.5,
+    borderColor: c.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  secondaryLabel: {
+    color: c.mutedForeground,
+    fontSize: 10,
+    fontFamily: 'Inter_700Bold',
+  },
+  secondaryPrice: {
+    color: c.foreground,
+    fontSize: 11,
+    fontFamily: 'Inter_500Medium',
+  },
+  pipPill: {
+    backgroundColor: 'rgba(46,202,139,0.12)',
+    borderRadius: 5,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  pipPillText: {
+    color: '#2ECA8B',
+    fontSize: 9,
+    fontFamily: 'Inter_700Bold',
+  },
+  progressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  progressText: {
+    color: c.mutedForeground,
+    fontSize: 11,
+    fontFamily: 'Inter_500Medium',
+  },
+  progressDots: {
+    flexDirection: 'row',
+    gap: 5,
+  },
+  progressDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: c.border,
+  },
   lockOverlay: {
     ...StyleSheet.absoluteFillObject,
     borderRadius: 8,
@@ -481,12 +749,35 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'Inter_700Bold',
   },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: c.border,
+    paddingTop: 10,
+  },
+  actionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  actionMuted: {
+    color: c.mutedForeground,
+    fontSize: 12,
+    fontFamily: 'Inter_500Medium',
+  },
+  actionTrade: {
+    color: '#00F0FF',
+    fontSize: 12,
+    fontFamily: 'Inter_700Bold',
+  },
   stateBox: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    paddingBottom: 60,
+    paddingVertical: 40,
   },
   stateText: {
     color: c.mutedForeground,
@@ -505,20 +796,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'Inter_700Bold',
   },
-  tradeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    borderRadius: 10,
-    paddingVertical: 10,
-    marginTop: 2,
-  },
-  tradeButtonText: {
-    fontSize: 13,
-    fontFamily: 'Inter_700Bold',
-    letterSpacing: 0.3,
-  },
   paywallBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
@@ -532,6 +809,3 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
   },
 });
-
-export const LOCKED_RATIONALE_TEASER =
-  'AI rationale locked — upgrade to Pro to see why this trade was called.';

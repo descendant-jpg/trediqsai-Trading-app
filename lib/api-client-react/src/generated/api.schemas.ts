@@ -5,10 +5,42 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-export type SignalAction = typeof SignalAction[keyof typeof SignalAction];
+export interface SignalEntry {
+  price: number;
+}
+
+export interface SignalStopLoss {
+  price: number;
+  pips: number;
+  isBreakeven: boolean;
+}
+
+export type SignalTakeProfitId = typeof SignalTakeProfitId[keyof typeof SignalTakeProfitId];
 
 
-export const SignalAction = {
+export const SignalTakeProfitId = {
+  NUMBER_1: 1,
+  NUMBER_2: 2,
+  NUMBER_3: 3,
+} as const;
+
+export interface SignalTakeProfit {
+  id: SignalTakeProfitId;
+  price: number;
+  pips: number;
+  percentage: string;
+  isHit: boolean;
+}
+
+export interface SignalTimeline {
+  created: string;
+  closed?: string;
+}
+
+export type SignalDirection = typeof SignalDirection[keyof typeof SignalDirection];
+
+
+export const SignalDirection = {
   BUY: 'BUY',
   SELL: 'SELL',
 } as const;
@@ -17,24 +49,38 @@ export type SignalStatus = typeof SignalStatus[keyof typeof SignalStatus];
 
 
 export const SignalStatus = {
-  ACTIVE: 'ACTIVE',
-  WON: 'WON',
-  LOST: 'LOST',
+  Won: 'Won',
+  SL_Hit: 'SL Hit',
+  Active: 'Active',
+  Pending: 'Pending',
+} as const;
+
+export type SignalRisk = typeof SignalRisk[keyof typeof SignalRisk];
+
+
+export const SignalRisk = {
+  Low: 'Low',
+  Medium: 'Medium',
+  High: 'High',
 } as const;
 
 export interface Signal {
   id: string;
-  symbol: string;
+  asset: string;
   name: string;
-  action: SignalAction;
-  confidence: number;
-  price: string;
-  target: string;
-  stopLoss: string;
-  status: SignalStatus;
+  direction: SignalDirection;
   timeframe: string;
+  status: SignalStatus;
+  rr: string;
+  confidence: string;
+  risk: SignalRisk;
+  potentialPips: string;
+  entry: SignalEntry;
+  stopLoss: SignalStopLoss;
+  takeProfits: SignalTakeProfit[];
+  timeline: SignalTimeline;
+  isPremium: boolean;
   time: string;
-  pro: boolean;
   rationale: string;
 }
 
