@@ -8,7 +8,7 @@ import colors from '@/constants/colors';
 const c = colors.light;
 const isWeb = Platform.OS === 'web';
 
-/** Distinct center button for AI Tools: larger icon in a cyan-ringed pod. */
+/** Distinct button for AI Tools: larger icon in a cyan-ringed pod. */
 function AiToolsIcon({ color, focused }: { color: string; focused: boolean }) {
   return (
     <View
@@ -75,6 +75,15 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="learning"
+        options={{
+          title: 'Academy',
+          tabBarIcon: ({ color }) => (
+            <Feather name="book-open" size={22} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="portfolio"
         options={{
           title: 'Portfolio',
@@ -108,7 +117,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#16181D',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: -6,
   },
   centerPodFocused: {
     backgroundColor: '#00F0FF',

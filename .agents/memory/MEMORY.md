@@ -6,3 +6,4 @@
 - [Full-file rewrites clobber merges](rewrite-clobbers-merges.md) — check `git log` on a file before wholesale rewrites; parallel task agents may have just merged into it.
 - [Supabase token verification](supabase-token-verification.md) — server verifies bearer tokens via Supabase /auth/v1/user (no JWT secret available); reuse identity() middleware for per-user state.
 - [Cross-task test breakage](cross-task-test-breakage.md) — full-suite validation fails on parallel-merge test/subject mismatches; confirm via git stash, repair the test harness minimally.
+- [Dev DB schema drift](dev-db-schema-drift.md) — schema merges don't migrate the dev DB; API 500s with Failed query mean drop dev-only tables + drizzle push (non-TTY prompts block plain push).
