@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Alert,
   Animated,
   Easing,
   FlatList,
@@ -207,6 +208,37 @@ export default function AiToolsScreen() {
     [isTyping, messages, deliver],
   );
 
+  /** Wipe the stored conversation and reset to the welcome message. */
+  const clearConversation = useCallback(() => {
+    setMessages([WELCOME]);
+    setLastFailedText(null);
+    AsyncStorage.removeItem(ORACLE_CHAT_STORAGE_KEY).catch(() => {
+      // Ignore storage failures — the in-memory chat is already reset,
+      // and the next persist effect will overwrite the stored history.
+    });
+  }, []);
+
+  const confirmClearConversation = useCallback(() => {
+    if (Platform.OS === 'web') {
+      // Alert.alert doesn't support buttons on web.
+      // eslint-disable-next-line no-alert
+      if (window.confirm('Clear this conversation and start fresh?')) {
+        clearConversation();
+      }
+      return;
+    }
+    Alert.alert(
+      'Clear conversation',
+      'This removes your Oracle chat history and starts fresh.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Clear', style: 'destructive', onPress: clearConversation },
+      ],
+    );
+  }, [clearConversation]);
+
+  const hasConversation = messages.length > 1;
+
   const retryLast = useCallback(() => {
     if (!lastFailedText || isTyping) return;
     const failed = lastFailedText;
@@ -247,6 +279,16 @@ export default function AiToolsScreen() {
         <Text style={styles.title}>TradiQs Oracle</Text>
         <PulseDot />
         <Text style={styles.onlineText}>Online</Text>
+        <TouchableOpacity
+          style={[styles.clearButton, !hasConversation && styles.clearDisabled]}
+          onPress={confirmClearConversation}
+          disabled={!hasConversation || isTyping}
+          activeOpacity={0.8}
+          testID="oracle-clear"
+          accessibilityLabel="Clear conversation"
+        >
+          <Feather name="trash-2" size={16} color="#8A8D93" />
+        </TouchableOpacity>
       </View>
 
       <KeyboardAvoidingView
@@ -359,6 +401,20 @@ const styles = StyleSheet.create({
     color: '#8A8D93',
     fontSize: 11,
     fontFamily: 'Inter_500Medium',
+  },
+  clearButton: {
+    marginLeft: 'auto',
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#22252A',
+    backgroundColor: '#16181D',
+  },
+  clearDisabled: {
+    opacity: 0.4,
   },
   messages: {
     paddingHorizontal: 16,
