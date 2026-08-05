@@ -216,7 +216,7 @@ describe("POST /oracle/chat", () => {
     });
     expect(res.status).toBe(429);
     expect(res.headers.get("retry-after")).toBeTruthy();
-    const body = await res.json();
+    const body = (await res.json()) as { error: string };
     expect(body.error).toContain("The Oracle needs a breather");
   });
 });
