@@ -62,6 +62,7 @@ export default function AuthScreen() {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [referralCode, setReferralCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [appleAvailable, setAppleAvailable] = useState(false);
 
@@ -140,13 +141,19 @@ export default function AuthScreen() {
       // may not be readable yet. Staging it prevents the "Choose a Username"
       // prompt from flashing while that insert commits.
       setPendingSignupUsername(name);
+      const refCode = referralCode.trim();
       const {
         data: { session },
         error,
       } = await supabase.auth.signUp({
         email: email.trim(),
         password,
-        options: { data: { username: name } },
+        options: {
+          data: {
+            username: name,
+            ...(refCode ? { referral_code: refCode } : {}),
+          },
+        },
       });
       if (error) throw error;
       // The handle_new_user trigger inserts { user_id, username, email }
@@ -309,6 +316,16 @@ export default function AuthScreen() {
                 autoComplete="email"
                 keyboardType="email-address"
                 testID="auth-email"
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Referral Code (optional)"
+                placeholderTextColor="#8A8D93"
+                value={referralCode}
+                onChangeText={setReferralCode}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                testID="auth-referral-code"
               />
             </>
           )}

@@ -6,6 +6,7 @@ import {
   Modal,
   Platform,
   ScrollView,
+  Share,
   StyleSheet,
   Switch,
   Text,
@@ -171,6 +172,8 @@ export default function ProfileScreen() {
   const { tradingDayTz, setTradingDayTz } = useTrading();
   const [tzPickerOpen, setTzPickerOpen] = useState(false);
   const [username, setUsername] = useState<string | null>(null);
+  const [referralCode, setReferralCode] = useState<string | null>(null);
+  const [referralCount, setReferralCount] = useState<number | null>(null);
   const [activeModal, setActiveModal] = useState<ActiveModal>(null);
 
   // Change password
@@ -195,12 +198,22 @@ export default function ProfileScreen() {
     let cancelled = false;
     (async () => {
       if (!session) return;
-      const { data } = await supabase
-        .from('profiles')
-        .select('username')
-        .eq('id', session.user.id)
-        .single();
-      if (!cancelled) setUsername(data?.username ?? null);
+      const [{ data }, { count }] = await Promise.all([
+        supabase
+          .from('profiles')
+          .select('username, referral_code')
+          .eq('id', session.user.id)
+          .single(),
+        supabase
+          .from('referrals')
+          .select('id', { count: 'exact', head: true })
+          .eq('referrer_id', session.user.id),
+      ]);
+      if (!cancelled) {
+        setUsername(data?.username ?? null);
+        setReferralCode(data?.referral_code ?? null);
+        setReferralCount(count ?? 0);
+      }
     })();
     return () => {
       cancelled = true;
@@ -307,7 +320,35 @@ export default function ProfileScreen() {
     }
   };
 
-  const referralLink = `https://tradiqsai.com/r/${username ?? 'trader'}`;
+  const referralLink = referralCode
+    ? `https://tradiqsai.com/r/${referralCode}`
+    : null;
+
+  const handleShareReferral = async () => {
+    if (!referralLink) return;
+    const message = `Join me on TradiQs AI — use my invite link: ${referralLink}`;
+    try {
+      if (Platform.OS === 'web') {
+        // Native share sheet where supported; clipboard fallback elsewhere.
+        if (typeof navigator !== 'undefined' && (navigator as any).share) {
+          await (navigator as any).share({ title: 'TradiQs AI', text: message, url: referralLink });
+        } else if (typeof navigator !== 'undefined' && navigator.clipboard) {
+          await navigator.clipboard.writeText(referralLink);
+          showAlert('Copied', 'Referral link copied to clipboard.');
+        } else {
+          showAlert('Your referral link', referralLink);
+        }
+      } else {
+        await Share.share(
+          Platform.OS === 'ios'
+            ? { message, url: referralLink }
+            : { message },
+        );
+      }
+    } catch {
+      // User dismissed the share sheet — nothing to do.
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -359,9 +400,23 @@ export default function ProfileScreen() {
           <View style={styles.referralBlock}>
             <Text style={styles.referralLabel}>Your referral link</Text>
             <Text style={styles.referralLink} numberOfLines={1}>
-              {referralLink}
+              {referralLink ?? 'Loading…'}
             </Text>
-            <Text style={styles.referralCount}>Users Joined: 0</Text>
+            <View style={styles.referralRow}>
+              <Text style={styles.referralCount}>
+                Users Joined: {referralCount ?? '—'}
+              </Text>
+              <TouchableOpacity
+                style={[styles.shareButton, !referralLink && styles.disabled]}
+                onPress={handleShareReferral}
+                disabled={!referralLink}
+                activeOpacity={0.85}
+                testID="profile-share-referral"
+              >
+                <Feather name="share-2" size={14} color="#0A0B0E" />
+                <Text style={styles.shareButtonText}>Share</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </Section>
 
@@ -753,6 +808,26 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'Inter_500Medium',
     marginTop: 4,
+  },
+  referralRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  shareButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#00F0FF',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  shareButtonText: {
+    color: '#0A0B0E',
+    fontSize: 13,
+    fontFamily: 'Inter_600SemiBold',
   },
   signOutButton: {
     height: 54,
