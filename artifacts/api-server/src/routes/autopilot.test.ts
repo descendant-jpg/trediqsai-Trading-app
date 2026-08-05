@@ -20,20 +20,31 @@ async function startFreshApp(): Promise<void> {
   // select-where, and insert ... onConflictDoUpdate (upsert).
   vi.doMock("@workspace/db", () => {
     const botRows = new Map<string, any>();
-    let stateRow: any = null;
-    const autopilotBotsTable = { id: {} };
-    const autopilotStateTable = { id: {} };
+    const stateRows = new Map<string, any>();
+    const autopilotBotsTable = { id: {}, userId: {}, botId: {} };
+    const autopilotStateTable = { id: {}, userId: {} };
+    // Extract the bound value from a drizzle `eq(column, value)` SQL object.
+    // Its queryChunks contain the column, an operator chunk, and a Param
+    // whose `.value` is the compared value (the userId in autopilot.ts).
+    const eqValue = (cond: any): unknown => {
+      const chunks: any[] = cond?.queryChunks ?? [];
+      const param = chunks.find(
+        (c) => c && typeof c === "object" && "value" in c && !("name" in c),
+      );
+      return param?.value;
+    };
     const db = {
       select: () => ({
         from: (table: any) => {
-          const rows =
+          const all =
             table === autopilotBotsTable
               ? [...botRows.values()]
-              : stateRow
-                ? [stateRow]
-                : [];
-          return Object.assign(Promise.resolve(rows), {
-            where: () => Promise.resolve(rows),
+              : [...stateRows.values()];
+          return Object.assign(Promise.resolve(all), {
+            where: (cond: any) => {
+              const userId = eqValue(cond);
+              return Promise.resolve(all.filter((r) => r.userId === userId));
+            },
           });
         },
       }),
@@ -41,9 +52,11 @@ async function startFreshApp(): Promise<void> {
         values: (values: any) => ({
           onConflictDoUpdate: () => {
             if (table === autopilotBotsTable) {
-              botRows.set(values.id, { ...values });
+              botRows.set(`${values.userId}:${values.botId ?? values.id}`, {
+                ...values,
+              });
             } else {
-              stateRow = { ...values };
+              stateRows.set(values.userId, { ...values });
             }
             return Promise.resolve();
           },
