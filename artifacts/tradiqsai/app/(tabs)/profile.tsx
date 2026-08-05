@@ -47,23 +47,10 @@ function showConfirm(title: string, message: string, onConfirm: () => void) {
   }
 }
 
-const NOTIFICATION_PREFS_KEY = 'tradiqs.notificationPrefs.v1';
 const LANGUAGE_KEY = 'tradiqs.language.v1';
 
 const LANGUAGES = ['English', 'Spanish', 'French'] as const;
 type Language = (typeof LANGUAGES)[number];
-
-interface NotificationPrefs {
-  tradeAlerts: boolean;
-  marketNews: boolean;
-  partnerSignals: boolean;
-}
-
-const DEFAULT_PREFS: NotificationPrefs = {
-  tradeAlerts: true,
-  marketNews: false,
-  partnerSignals: false,
-};
 
 const TELEGRAM_CHANNEL_URL = 'https://t.me/tradiqsai';
 const TELEGRAM_GROUP_URL = 'https://t.me/tradiqsai_chat';
@@ -158,7 +145,6 @@ function SheetModal({
 type ActiveModal =
   | null
   | 'password'
-  | 'notifications'
   | 'language'
   | 'terms'
   | 'privacy'
@@ -180,9 +166,6 @@ export default function ProfileScreen() {
   // Change password
   const [newPassword, setNewPassword] = useState('');
   const [savingPassword, setSavingPassword] = useState(false);
-
-  // Notification prefs (persisted in AsyncStorage)
-  const [prefs, setPrefs] = useState<NotificationPrefs>(DEFAULT_PREFS);
 
   // Language (persisted in AsyncStorage)
   const [language, setLanguage] = useState<Language>('English');
@@ -232,11 +215,7 @@ export default function ProfileScreen() {
   useEffect(() => {
     (async () => {
       try {
-        const [rawPrefs, rawLang] = await Promise.all([
-          AsyncStorage.getItem(NOTIFICATION_PREFS_KEY),
-          AsyncStorage.getItem(LANGUAGE_KEY),
-        ]);
-        if (rawPrefs) setPrefs({ ...DEFAULT_PREFS, ...JSON.parse(rawPrefs) });
+        const rawLang = await AsyncStorage.getItem(LANGUAGE_KEY);
         if (rawLang && (LANGUAGES as readonly string[]).includes(rawLang)) {
           setLanguage(rawLang as Language);
         }
@@ -245,12 +224,6 @@ export default function ProfileScreen() {
       }
     })();
   }, []);
-
-  const updatePref = (key: keyof NotificationPrefs, value: boolean) => {
-    const next = { ...prefs, [key]: value };
-    setPrefs(next);
-    AsyncStorage.setItem(NOTIFICATION_PREFS_KEY, JSON.stringify(next)).catch(() => {});
-  };
 
   const selectLanguage = (lang: Language) => {
     setLanguage(lang);
@@ -467,7 +440,7 @@ export default function ProfileScreen() {
           <ListItem
             icon="bell"
             label="Notifications"
-            onPress={() => setActiveModal('notifications')}
+            onPress={() => router.push('/notification-settings')}
             testID="profile-notifications"
           />
         </Section>
@@ -601,32 +574,6 @@ export default function ProfileScreen() {
             <Text style={styles.primaryButtonText}>Save Password</Text>
           )}
         </TouchableOpacity>
-      </SheetModal>
-
-      {/* Notification Preferences */}
-      <SheetModal
-        visible={activeModal === 'notifications'}
-        title="Notification Preferences"
-        onClose={() => setActiveModal(null)}
-      >
-        {(
-          [
-            ['tradeAlerts', 'Trade Execution Alerts'],
-            ['marketNews', 'Daily Market News'],
-            ['partnerSignals', 'Partner Signals'],
-          ] as [keyof NotificationPrefs, string][]
-        ).map(([key, label]) => (
-          <View key={key} style={styles.switchRow}>
-            <Text style={styles.switchLabel}>{label}</Text>
-            <Switch
-              value={prefs[key]}
-              onValueChange={(v) => updatePref(key, v)}
-              trackColor={{ false: '#22252A', true: '#00F0FF' }}
-              thumbColor="#FFFFFF"
-              testID={`switch-${key}`}
-            />
-          </View>
-        ))}
       </SheetModal>
 
       {/* Language */}
@@ -941,22 +888,6 @@ const styles = StyleSheet.create({
   },
   disabled: {
     opacity: 0.7,
-  },
-  switchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#16181D',
-    borderWidth: 1,
-    borderColor: '#22252A',
-    borderRadius: colors.radius,
-    paddingHorizontal: 14,
-    height: 54,
-  },
-  switchLabel: {
-    color: '#FFFFFF',
-    fontSize: 14.5,
-    fontFamily: 'Inter_500Medium',
   },
   languageRow: {
     flexDirection: 'row',
