@@ -174,6 +174,7 @@ export default function ProfileScreen() {
   const [username, setUsername] = useState<string | null>(null);
   const [referralCode, setReferralCode] = useState<string | null>(null);
   const [referralCount, setReferralCount] = useState<number | null>(null);
+  const [referralEarned, setReferralEarned] = useState<number | null>(null);
   const [activeModal, setActiveModal] = useState<ActiveModal>(null);
 
   // Change password
@@ -198,7 +199,7 @@ export default function ProfileScreen() {
     let cancelled = false;
     (async () => {
       if (!session) return;
-      const [{ data }, { count }] = await Promise.all([
+      const [{ data }, { data: refRows, count }] = await Promise.all([
         supabase
           .from('profiles')
           .select('username, referral_code')
@@ -206,13 +207,20 @@ export default function ProfileScreen() {
           .single(),
         supabase
           .from('referrals')
-          .select('id', { count: 'exact', head: true })
+          .select('reward_amount', { count: 'exact' })
           .eq('referrer_id', session.user.id),
       ]);
       if (!cancelled) {
         setUsername(data?.username ?? null);
         setReferralCode(data?.referral_code ?? null);
         setReferralCount(count ?? 0);
+        setReferralEarned(
+          (refRows ?? []).reduce(
+            (sum, row: { reward_amount: number | null }) =>
+              sum + (Number(row.reward_amount) || 0),
+            0,
+          ),
+        );
       }
     })();
     return () => {
@@ -403,9 +411,17 @@ export default function ProfileScreen() {
               {referralLink ?? 'Loading…'}
             </Text>
             <View style={styles.referralRow}>
-              <Text style={styles.referralCount}>
-                Users Joined: {referralCount ?? '—'}
-              </Text>
+              <View>
+                <Text style={styles.referralCount}>
+                  Users Joined: {referralCount ?? '—'}
+                </Text>
+                <Text style={styles.referralEarned} testID="profile-referral-earned">
+                  Earned: {referralEarned == null
+                    ? '—'
+                    : `$${referralEarned.toLocaleString('en-US')}`}{' '}
+                  bonus balance
+                </Text>
+              </View>
               <TouchableOpacity
                 style={[styles.shareButton, !referralLink && styles.disabled]}
                 onPress={handleShareReferral}
@@ -808,6 +824,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'Inter_500Medium',
     marginTop: 4,
+  },
+  referralEarned: {
+    color: '#22C55E',
+    fontSize: 12,
+    fontFamily: 'Inter_500Medium',
+    marginTop: 2,
   },
   referralRow: {
     flexDirection: 'row',

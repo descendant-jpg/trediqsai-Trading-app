@@ -59,7 +59,54 @@ create policy "referrals_select_own"
   on public.referrals for select
   using (auth.uid() = referrer_id);
 
--- ── 3. Attribute signups + assign codes in handle_new_user ──────────
+-- ── 3. Referral rewards ──────────────────────────────────────────────
+-- Reward rule: every verified referral credits the referrer with $500 of
+-- bonus simulated balance. The amount is recorded on the referral row so
+-- the client can show what was earned, and applied server-side by trigger
+-- (clients cannot write balances or referral rows).
+alter table public.referrals
+  add column if not exists reward_amount numeric not null default 500;
+
+create or replace function public.grant_referral_reward()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update public.profiles
+     set balance = balance + new.reward_amount
+   where id = new.referrer_id;
+  return new;
+end;
+$$;
+
+drop trigger if exists referrals_grant_reward on public.referrals;
+create trigger referrals_grant_reward
+  after insert on public.referrals
+  for each row execute function public.grant_referral_reward();
+
+-- Backfill: pay out any referrals recorded before the reward rule existed.
+-- (Idempotent: only rows still flagged as unpaid are settled.)
+alter table public.referrals
+  add column if not exists reward_paid boolean not null default false;
+
+update public.profiles p
+   set balance = balance + r.total
+  from (
+    select referrer_id, sum(reward_amount) as total
+      from public.referrals
+     where not reward_paid
+     group by referrer_id
+  ) r
+ where p.id = r.referrer_id;
+
+update public.referrals set reward_paid = true where not reward_paid;
+
+-- New rows are paid immediately by the trigger, so mark them paid on insert.
+alter table public.referrals alter column reward_paid set default true;
+
+-- ── 4. Attribute signups + assign codes in handle_new_user ──────────
 -- Extends the trigger from usernames.sql: every new profile gets a
 -- referral code, and if signUp metadata carried a valid referral_code,
 -- a referrals row is recorded for its owner.
