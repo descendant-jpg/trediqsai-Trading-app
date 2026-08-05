@@ -22,6 +22,31 @@ function getClient(): Anthropic | null {
   return null;
 }
 
+type ChatTurn = { role: "user" | "assistant"; content: string };
+
+/**
+ * Anthropic requires strictly alternating user/assistant turns starting with
+ * "user". Keep the most recent turns to bound token usage, merge adjacent
+ * same-role messages, and drop a leading assistant turn.
+ */
+function normalizeMessages(
+  messages: Array<{ role: string; content: string }>,
+): ChatTurn[] {
+  const recent = messages.slice(-20);
+  const out: ChatTurn[] = [];
+  for (const m of recent) {
+    const role = m.role === "assistant" ? ("assistant" as const) : ("user" as const);
+    const prev = out[out.length - 1];
+    if (prev && prev.role === role) {
+      prev.content = `${prev.content}\n\n${m.content}`;
+    } else {
+      out.push({ role, content: m.content });
+    }
+  }
+  while (out.length > 0 && out[0]!.role === "assistant") out.shift();
+  return out;
+}
+
 router.post("/oracle/chat", async (req, res) => {
   const parsed = SendOracleChatBody.safeParse(req.body);
   if (!parsed.success) {
@@ -38,16 +63,18 @@ router.post("/oracle/chat", async (req, res) => {
     return;
   }
 
+  const chatMessages = normalizeMessages(parsed.data.messages);
+  if (chatMessages.length === 0) {
+    res.status(400).json({ error: "No user message to respond to." });
+    return;
+  }
+
   try {
     const message = await client.messages.create({
-      model: process.env["ORACLE_MODEL"] ?? "claude-3-5-sonnet-20240620",
+      model: process.env["ORACLE_MODEL"] ?? "claude-sonnet-5",
       max_tokens: 8192,
       system: SYSTEM_PROMPT,
-      // Keep only the most recent turns to bound token usage.
-      messages: parsed.data.messages.slice(-20).map((m) => ({
-        role: m.role === "assistant" ? ("assistant" as const) : ("user" as const),
-        content: m.content,
-      })),
+      messages: chatMessages,
     });
 
     const reply = message.content
