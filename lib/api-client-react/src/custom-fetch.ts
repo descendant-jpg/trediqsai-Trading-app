@@ -44,6 +44,66 @@ export function setAuthTokenGetter(getter: AuthTokenGetter | null): void {
   _authTokenGetter = getter;
 }
 
+/**
+ * Refreshes the auth session and returns a fresh bearer token, or `null`
+ * when the session could not be refreshed (e.g. refresh token revoked).
+ */
+export type AuthSessionRefresher = () => Promise<string | null>;
+
+/**
+ * Called when the API keeps rejecting the token even after a refresh
+ * (or the refresh itself failed). Typically signs the user out so the
+ * app routes back to the auth screen instead of showing a dead error.
+ */
+export type AuthFailureHandler = () => void | Promise<void>;
+
+let _authSessionRefresher: AuthSessionRefresher | null = null;
+let _authFailureHandler: AuthFailureHandler | null = null;
+// Dedupe concurrent refreshes: many queries can 401 at once (e.g. app
+// resumed after long background) — only one refresh should run.
+let _refreshInFlight: Promise<string | null> | null = null;
+
+/**
+ * Register a refresher invoked when the API returns 401. The request is
+ * retried once with the fresh token; if the refresh fails or the retry
+ * still returns 401, the auth failure handler is invoked.
+ * Pass `null` to clear.
+ */
+export function setAuthSessionRefresher(refresher: AuthSessionRefresher | null): void {
+  _authSessionRefresher = refresher;
+  _refreshInFlight = null;
+}
+
+/**
+ * Register a handler for persistent auth failures (401 after refresh+retry).
+ * Pass `null` to clear.
+ */
+export function setAuthFailureHandler(handler: AuthFailureHandler | null): void {
+  _authFailureHandler = handler;
+}
+
+function refreshAuthSession(): Promise<string | null> {
+  if (!_authSessionRefresher) return Promise.resolve(null);
+  if (!_refreshInFlight) {
+    _refreshInFlight = Promise.resolve()
+      .then(() => _authSessionRefresher!())
+      .catch(() => null)
+      .finally(() => {
+        _refreshInFlight = null;
+      });
+  }
+  return _refreshInFlight;
+}
+
+function notifyAuthFailure(): void {
+  if (!_authFailureHandler) return;
+  try {
+    void Promise.resolve(_authFailureHandler()).catch(() => {});
+  } catch {
+    // Never let sign-out errors mask the original 401.
+  }
+}
+
 function isRequest(input: RequestInfo | URL): input is Request {
   return typeof Request !== "undefined" && input instanceof Request;
 }
@@ -360,7 +420,26 @@ export async function customFetch<T = unknown>(
 
   const requestInfo = { method, url: resolveUrl(input) };
 
-  const response = await fetch(input, { ...init, method, headers });
+  // Keep a re-usable copy of Request inputs: their body is consumed by the
+  // first fetch, so a 401 retry needs a clone taken beforehand.
+  const retryInput =
+    _authSessionRefresher && isRequest(input) ? input.clone() : input;
+
+  let response = await fetch(input, { ...init, method, headers });
+
+  // Session may have expired between auto-refreshes (e.g. app resumed after
+  // a long background). Force one token refresh and retry; on persistent
+  // 401 hand off to the auth failure handler (typically signs the user out).
+  if (response.status === 401 && _authSessionRefresher) {
+    const freshToken = await refreshAuthSession();
+    if (freshToken) {
+      headers.set("authorization", `Bearer ${freshToken}`);
+      response = await fetch(retryInput, { ...init, method, headers });
+    }
+    if (response.status === 401) {
+      notifyAuthFailure();
+    }
+  }
 
   if (!response.ok) {
     const errorData = await parseErrorBody(response, method);

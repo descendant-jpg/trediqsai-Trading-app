@@ -19,7 +19,11 @@ import * as Notifications from 'expo-notifications';
 import { Stack } from 'expo-router';
 import { usePendingRouteRedirect } from '@/lib/usePendingRouteRedirect';
 import * as SplashScreen from 'expo-splash-screen';
-import { setAuthTokenGetter, setBaseUrl } from '@workspace/api-client-react';
+import {
+  setAuthFailureHandler,
+  setAuthSessionRefresher,
+  setAuthTokenGetter,
+} from '@workspace/api-client-react';
 import { isSupabaseConfigured, supabase } from '@/utils/supabase';
 import { initializeRevenueCat, SubscriptionProvider } from '@/lib/revenuecat';
 
@@ -29,6 +33,24 @@ setAuthTokenGetter(async () => {
   if (!isSupabaseConfigured) return null;
   const { data } = await supabase.auth.getSession();
   return data.session?.access_token ?? null;
+});
+
+// When the API rejects a token (401) — e.g. it expired while the app was
+// backgrounded — force a session refresh so the request can be retried once
+// with a fresh token.
+setAuthSessionRefresher(async () => {
+  if (!isSupabaseConfigured) return null;
+  const { data, error } = await supabase.auth.refreshSession();
+  if (error) return null;
+  return data.session?.access_token ?? null;
+});
+
+// If the refresh fails (or the retry still 401s) the session is beyond
+// recovery: sign out so the app routes to the sign-in screen instead of
+// leaving a dead error state.
+setAuthFailureHandler(async () => {
+  if (!isSupabaseConfigured) return;
+  await supabase.auth.signOut();
 });
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.

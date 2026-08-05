@@ -19,6 +19,8 @@ async function startFreshApp(): Promise<void> {
   // fake supports exactly the query shapes autopilot.ts uses: select-all,
   // select-where, and insert ... onConflictDoUpdate (upsert).
   vi.doMock("@workspace/db", () => {
+    // Rows are keyed per user, mirroring the real tables' conflict targets:
+    // (userId, botId) for bots and userId for state.
     const botRows = new Map<string, any>();
     const stateRows = new Map<string, any>();
     const autopilotBotsTable = { id: {}, userId: {}, botId: {} };
