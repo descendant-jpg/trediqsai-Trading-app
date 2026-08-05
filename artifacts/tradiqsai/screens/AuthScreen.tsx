@@ -14,7 +14,9 @@ import {
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { makeRedirectUri } from 'expo-auth-session';
 import * as QueryParams from 'expo-auth-session/build/QueryParams';
+import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
+import { extractReferralCode } from '@/lib/referralLink';
 import { supabase } from '@/utils/supabase';
 import { setPendingSignupUsername } from '@/context/AuthContext';
 import colors from '@/constants/colors';
@@ -65,6 +67,27 @@ export default function AuthScreen() {
   const [referralCode, setReferralCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [appleAvailable, setAppleAvailable] = useState(false);
+
+  // Referral deep links: opening https://tradiqsai.com/r/<code> (or the
+  // tradiqsai:// scheme, or ?ref= on web) pre-fills the code and jumps to
+  // the Create Account form so the invite loop closes without typing.
+  const incomingUrl = Linking.useURL();
+
+  useEffect(() => {
+    const applyFromUrl = (url: string | null) => {
+      const code = extractReferralCode(url);
+      if (code) {
+        setReferralCode(code);
+        setIsLoginMode(false);
+      }
+    };
+    if (incomingUrl) {
+      applyFromUrl(incomingUrl);
+    } else {
+      // Cold start: useURL can miss the initial URL, so fetch it explicitly.
+      Linking.getInitialURL().then(applyFromUrl).catch(() => {});
+    }
+  }, [incomingUrl]);
 
   useEffect(() => {
     // Native Apple sign-in exists only on iOS devices that support it.
