@@ -28,7 +28,7 @@ import {
   type AutopilotBot,
   type AutopilotState,
 } from '@workspace/api-client-react';
-import { PaywallCard } from '@/components/paywall';
+import { PaywallModal } from '@/components/PaywallModal';
 import colors from '@/constants/colors';
 import { legacyOracleRedirectTarget } from '@/lib/legacyOracleRedirect';
 import { useSubscription } from '@/lib/revenuecat';
@@ -465,26 +465,7 @@ export default function AiToolsScreen() {
       />
 
       {/* Paywall */}
-      <Modal
-        visible={paywallOpen}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setPaywallOpen(false)}
-      >
-        <View style={styles.paywallBackdrop}>
-          <View style={styles.paywallSheet}>
-            <TouchableOpacity
-              style={styles.paywallClose}
-              onPress={() => setPaywallOpen(false)}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              testID="paywall-close"
-            >
-              <Feather name="x" size={22} color="#FFFFFF" />
-            </TouchableOpacity>
-            <PaywallCard />
-          </View>
-        </View>
-      </Modal>
+      <PaywallModal visible={paywallOpen} onClose={() => setPaywallOpen(false)} />
     </View>
   );
 }
@@ -898,18 +879,6 @@ const styles = StyleSheet.create({
     color: '#0A0B0E',
     fontSize: 12,
     fontFamily: 'Inter_700Bold',
-  },
-  paywallBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-  paywallSheet: {
-    gap: 10,
-  },
-  paywallClose: {
-    alignSelf: 'flex-end',
   },
   configBackdrop: {
     flex: 1,

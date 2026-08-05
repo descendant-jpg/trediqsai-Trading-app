@@ -15,7 +15,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { ManageSubscriptionCard, PaywallCard, ProWindDownBanner } from '@/components/paywall';
+import { ManageSubscriptionCard, ProWindDownBanner } from '@/components/paywall';
+import { PaywallModal } from '@/components/PaywallModal';
 import SignalDetailModal from '@/components/SignalDetailModal';
 import colors from '@/constants/colors';
 import { useGetSignals, type Signal } from '@workspace/api-client-react';
@@ -393,26 +394,7 @@ export default function AISignalsScreen() {
       )}
 
       {/* Paywall modal opened from a locked signal card */}
-      <Modal
-        visible={paywallOpen}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setPaywallOpen(false)}
-      >
-        <View style={styles.paywallBackdrop}>
-          <View style={styles.paywallSheet}>
-            <TouchableOpacity
-              style={styles.paywallClose}
-              onPress={() => setPaywallOpen(false)}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              testID="paywall-close"
-            >
-              <Feather name="x" size={22} color="#FFFFFF" />
-            </TouchableOpacity>
-            <PaywallCard />
-          </View>
-        </View>
-      </Modal>
+      <PaywallModal visible={paywallOpen} onClose={() => setPaywallOpen(false)} />
     </View>
   );
 }
@@ -795,17 +777,5 @@ const styles = StyleSheet.create({
     color: c.primary,
     fontSize: 13,
     fontFamily: 'Inter_700Bold',
-  },
-  paywallBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-  paywallSheet: {
-    gap: 10,
-  },
-  paywallClose: {
-    alignSelf: 'flex-end',
   },
 });

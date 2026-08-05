@@ -32,8 +32,11 @@ vi.mock('expo-router', () => ({
 
 vi.mock('@/components/paywall', () => ({
   ManageSubscriptionCard: () => null,
-  PaywallCard: () => null,
   ProWindDownBanner: () => null,
+}));
+
+vi.mock('@/components/PaywallModal', () => ({
+  PaywallModal: () => null,
 }));
 
 vi.mock('@/components/SignalDetailModal', () => ({

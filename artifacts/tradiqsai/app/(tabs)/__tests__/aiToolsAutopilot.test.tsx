@@ -42,8 +42,13 @@ vi.mock('expo-router', () => ({
   useLocalSearchParams: () => ({}),
 }));
 
-vi.mock('@/components/paywall', () => ({
-  PaywallCard: () => <div data-testid="paywall-card" />,
+vi.mock('@/components/PaywallModal', () => ({
+  PaywallModal: ({ visible, onClose }: { visible: boolean; onClose: () => void }) =>
+    visible ? (
+      <div data-testid="paywall-card">
+        <button data-testid="paywall-close" onClick={onClose} />
+      </div>
+    ) : null,
 }));
 
 const subscription = vi.hoisted(() => ({
@@ -343,16 +348,8 @@ describe('PRO-locked bot', () => {
     press('unlock-quantum-inst');
     expect(screen.getByTestId('paywall-card')).toBeTruthy();
 
-    // react-native-web's Modal only unmounts after a CSS animationend event,
-    // which jsdom never delivers (the portal lives outside React's root, so
-    // delegated animation events never reach the handler). Assert the exit
-    // state instead: on close, the animation wrapper switches to its slide-out
-    // style, which disables pointer events until the modal is removed.
-    const animWrapper = () =>
-      document.querySelector('[class*="animationKeyframes"]') as HTMLElement;
-    expect(animWrapper().className).not.toContain('pointerEvents');
     press('paywall-close');
-    expect(animWrapper().className).toContain('pointerEvents');
+    expect(screen.queryByTestId('paywall-card')).toBeNull();
   });
 
   it('subscribers see full metrics and controls on the PRO bot', () => {

@@ -31,7 +31,7 @@ vi.mock('react-native-safe-area-context', () => ({
 }));
 vi.mock('@expo/vector-icons', () => ({ Feather: () => null }));
 vi.mock('expo-blur', () => ({ BlurView: () => null }));
-vi.mock('@/components/paywall', () => ({ PaywallCard: () => null }));
+vi.mock('@/components/PaywallModal', () => ({ PaywallModal: () => null }));
 vi.mock('@/lib/revenuecat', () => ({
   useSubscription: () => ({ isSubscribed: false }),
 }));
