@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { OracleChatMessage } from './oracleChatMessage';
+import type { OracleTradingContext } from './oracleTradingContext';
 
 export interface OracleChatRequest {
   /**
@@ -13,4 +14,5 @@ export interface OracleChatRequest {
      * @maxItems 40
      */
   messages: OracleChatMessage[];
+  tradingContext?: OracleTradingContext;
 }

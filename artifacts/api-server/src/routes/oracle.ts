@@ -16,6 +16,9 @@ const SYSTEM_PROMPT = [
   "Always remind users that nothing you say is financial advice when giving anything resembling a trade idea.",
 ].join(" ");
 
+type TradingContext = NonNullable<
+  ReturnType<typeof SendOracleChatBody.parse>["tradingContext"]
+>;
 function getClient(): Anthropic | null {
   const apiKey = process.env["ANTHROPIC_API_KEY"];
   if (apiKey) return new Anthropic({ apiKey });
@@ -55,6 +58,7 @@ router.post("/oracle/chat", async (req, res) => {
   }
 
   const client = getClient();
+
   if (!client) {
     res.status(503).json({
       error:
@@ -73,7 +77,9 @@ router.post("/oracle/chat", async (req, res) => {
     const message = await client.messages.create({
       model: process.env["ORACLE_MODEL"] ?? "claude-sonnet-5",
       max_tokens: 8192,
-      system: SYSTEM_PROMPT,
+      system: parsed.data.tradingContext
+        ? `${SYSTEM_PROMPT}\n\n${buildContextPrompt(parsed.data.tradingContext)}`
+        : SYSTEM_PROMPT,
       messages: chatMessages,
     });
 
@@ -97,3 +103,35 @@ router.post("/oracle/chat", async (req, res) => {
 });
 
 export default router;
+
+/**
+ * Renders the caller's account snapshot into a system-prompt block so the
+ * Oracle can give trade-specific advice (e.g. flagging that a suggested
+ * trade conflicts with an open position).
+ */
+function buildContextPrompt(ctx: TradingContext): string {
+  const money = (n: number) =>
+    `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const lines = [
+    "Trader account snapshot (simulated funded-account challenge, USD):",
+    `- Balance: ${money(ctx.balance)}; Equity: ${money(ctx.equity)}.`,
+  ];
+  const pos = ctx.openPosition;
+  if (pos) {
+    const pnlSign = pos.unrealizedPnl >= 0 ? "+" : "-";
+    lines.push(
+      `- Open position: ${pos.side} ${pos.size} ${pos.symbol} from ${money(pos.entryPrice)}, unrealized P&L ${pnlSign}${money(Math.abs(pos.unrealizedPnl))}.`,
+    );
+  } else {
+    lines.push("- Open position: none (flat).");
+  }
+  const ddPct = Math.round(Math.min(Math.max(ctx.drawdownUsed, 0), 1) * 100);
+  const riskMode =
+    ddPct >= 80 ? "critical" : ddPct >= 50 ? "elevated" : "normal";
+  lines.push(
+    `- Daily drawdown used: ${ddPct}% of the limit (risk mode: ${riskMode}).`,
+    `- Profit still needed to reach payout: ${money(Math.max(ctx.distanceToPayout, 0))}.`,
+    "Use this context to personalise answers: reference the trader's open position and risk state when relevant, and warn when an idea would add exposure to an existing position or endanger the drawdown limit. Do not repeat the whole snapshot back unless asked.",
+  );
+  return lines.join("\n");
+}

@@ -20,7 +20,9 @@ import colors from '@/constants/colors';
 import {
   useSendOracleChat,
   type OracleChatMessage,
+  type OracleTradingContext,
 } from '@workspace/api-client-react';
+import { useTrading } from '@/context/TradingContext';
 
 import {
   ORACLE_CHAT_STORAGE_KEY,
@@ -118,6 +120,34 @@ export default function AiToolsScreen() {
   const [hydrated, setHydrated] = useState(false);
 
   const { mutate: sendOracleChat, isPending: isTyping } = useSendOracleChat();
+  const { balance, equity, position, unrealizedPnl, drawdownUsed, distanceToPayout } =
+    useTrading();
+
+  // Snapshot of the trading account, kept in a ref so `deliver` doesn't
+  // re-create on every 1s price tick.
+  const tradingContextRef = useRef<OracleTradingContext>({
+    balance,
+    equity,
+    drawdownUsed,
+    distanceToPayout,
+  });
+  tradingContextRef.current = {
+    balance,
+    equity,
+    drawdownUsed,
+    distanceToPayout,
+    ...(position
+      ? {
+          openPosition: {
+            side: position.side,
+            symbol: 'QQX',
+            entryPrice: position.entryPrice,
+            size: position.size,
+            unrealizedPnl,
+          },
+        }
+      : {}),
+  };
 
   // Rehydrate the persisted conversation on mount.
   useEffect(() => {
@@ -171,7 +201,7 @@ export default function AiToolsScreen() {
         }));
 
       sendOracleChat(
-        { data: { messages: history } },
+        { data: { messages: history, tradingContext: tradingContextRef.current } },
         {
           onSuccess: (res) => {
             setMessages((cur) => [

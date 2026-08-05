@@ -51,9 +51,6 @@ export interface Trader {
 }
 
 export type OracleChatMessageRole = typeof OracleChatMessageRole[keyof typeof OracleChatMessageRole];
-export interface HealthStatus {
-  status: string;
-}
 
 
 export const OracleChatMessageRole = {
@@ -66,18 +63,53 @@ export interface OracleChatMessage {
   content: string;
 }
 
+export type OracleTradingContextOpenPositionSide = typeof OracleTradingContextOpenPositionSide[keyof typeof OracleTradingContextOpenPositionSide];
+
+
+export const OracleTradingContextOpenPositionSide = {
+  LONG: 'LONG',
+  SHORT: 'SHORT',
+} as const;
+
+export type OracleTradingContextOpenPosition = {
+  side: OracleTradingContextOpenPositionSide;
+  symbol: string;
+  entryPrice: number;
+  size: number;
+  unrealizedPnl: number;
+} | null;
+
+/**
+ * Snapshot of the caller's simulated trading account, used to personalise Oracle answers. All monetary values are USD.
+ */
+export interface OracleTradingContext {
+  balance: number;
+  equity: number;
+  openPosition?: OracleTradingContextOpenPosition;
+  /** Fraction (0-1) of the daily drawdown limit consumed. */
+  drawdownUsed: number;
+  /** Dollars of profit still needed to reach payout. */
+  distanceToPayout: number;
+}
+
 export interface OracleChatRequest {
   /**
      * @minItems 1
      * @maxItems 40
      */
   messages: OracleChatMessage[];
+  tradingContext?: OracleTradingContext;
+}
+
+export interface OracleChatResponse {
+  reply: string;
 }
 
 export interface OracleChatError {
   error: string;
 }
 
-export interface OracleChatResponse {
-  reply: string;
+export interface HealthStatus {
+  status: string;
 }
+

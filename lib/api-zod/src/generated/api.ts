@@ -9,6 +9,38 @@ import * as zod from 'zod';
 
 
 /**
+ * @summary Send a chat message to the TradiQs Oracle AI
+ */
+export const sendOracleChatBodyMessagesMax = 40;
+
+
+
+export const SendOracleChatBody = zod.object({
+  "messages": zod.array(zod.object({
+  "role": zod.enum(['user', 'assistant']),
+  "content": zod.string()
+})).min(1).max(sendOracleChatBodyMessagesMax),
+  "tradingContext": zod.object({
+  "balance": zod.number(),
+  "equity": zod.number(),
+  "openPosition": zod.object({
+  "side": zod.enum(['LONG', 'SHORT']),
+  "symbol": zod.string(),
+  "entryPrice": zod.number(),
+  "size": zod.number(),
+  "unrealizedPnl": zod.number()
+}).nullish(),
+  "drawdownUsed": zod.number().describe('Fraction (0-1) of the daily drawdown limit consumed.'),
+  "distanceToPayout": zod.number().describe('Dollars of profit still needed to reach payout.')
+}).optional().describe('Snapshot of the caller\'s simulated trading account, used to personalise Oracle answers. All monetary values are USD.')
+})
+
+export const SendOracleChatResponse = zod.object({
+  "reply": zod.string()
+})
+
+
+/**
  * @summary List AI trading signals
  */
 export const GetSignalsResponseItem = zod.object({
@@ -55,18 +87,3 @@ export const HealthCheckResponse = zod.object({
 })
 
 
-/**
- * @summary Send a chat message to the TradiQs Oracle AI
- */
-export const sendOracleChatBodyMessagesMax = 40;
-
-export const SendOracleChatBody = zod.object({
-  "messages": zod.array(zod.object({
-  "role": zod.enum(['user', 'assistant']),
-  "content": zod.string()
-})).min(1).max(sendOracleChatBodyMessagesMax)
-})
-
-export const SendOracleChatResponse = zod.object({
-  "reply": zod.string()
-})
