@@ -1,0 +1,79 @@
+Review replit.md for our project rules, then [Let's execute a major application consolidation and feature upgrade in a single task.
+
+### 1. Navigation Consolidation (Strict 5 Bottom Tabs)
+
+- Update the main bottom tab navigator to strictly render 5 tabs:
+
+  1. Home (Icon: Line Chart)
+
+  2. Signals (Icon: Lightning Bolt)
+
+  3. AITools (Center Icon: Glowing Cyan Chip - AutoPilot Hub)
+
+  4. Portfolio (Icon: Briefcase)
+
+  5. Profile (Icon: User)
+
+- Remove Learning/Academy as a standalone bottom tab.
+
+### 2. Move TradiQs Academy into ProfileScreen.tsx
+
+- In ProfileScreen.tsx, add a high-priority card section right near the top titled "TradiQs Academy & Masterclasses" with a "NEW" badge.
+
+- When clicked, open AcademyModal.tsx containing:
+
+  - Video Masterclasses (Horizontal scroll with Pro lock badges on advanced courses).
+
+  - Essential Reading Guides (Vertical list: Lot Size Calculation, Order Blocks, Risk Management).
+
+  - Trader's Toolkit (Lot Size Calculator & P&L Simulator).
+
+### 3. Institutional Home Screen Upgrade (HomeScreen.tsx)
+
+Overhaul the Home tab to look like an institutional prop-firm terminal:
+
+- Top Ticker Marquee: A horizontal auto-scrolling bar showing live simulated prices for BTC/USD ($96,210), XAU/USD ($2,410.50), EUR/USD (1.0850), and NAS100 (19,850).
+
+- Challenge Metric Card (Prop Firm Style):
+
+  - Display "Simulated Balance" ($100,000.00).
+
+  - "Distance to Payout Target" ($4,488.60 remaining to hit $105,000 target).
+
+  - Progress bar for "Daily Drawdown Limit" (e.g., 0% used of 5% max daily limit).
+
+- Interactive Chart Component:
+
+  - Header: Asset selector dropdown + Live price display.
+
+  - Controls: Timeframe selector chips 1m, 5m, 15m, 1H, 4H, 1D) and a Chart Type toggle (Line vs. Candlestick visual styling).
+
+  - Dynamic smooth chart SVG/Path rendering that updates when timeframes change.
+
+- Execution Bar:
+
+  - Configurable Lot Size input (- / + buttons or quick pills: 0.1, 0.5, 1.0, 5.0 lots).
+
+  - Large side-by-side BUY (#00E676) and SELL (#FF5252) buttons. Pressing either immediately opens a trade in Supabase and logs it in the Portfolio.
+
+### 4. Simulated Account Reset & Withdrawal Flow (Profile/Portfolio)
+
+- In the Profile/Portfolio screens:
+
+  - Reset Balance Button: Allows traders to reset their simulated equity back to $100,000 if they hit drawdown limits.
+
+  - Request Payout Button: Checks if simulated_balance >= 105000. If true, trigger a celebratory Modal with payout options; if false, show an alert with remaining profit needed.
+
+### 5. Universal Paywall Interceptor Wiring
+
+- Ensure that tapping ANY locked feature in the app automatically opens the PaywallModal:
+
+  - Locked Signals in SignalsScreen.tsx
+
+  - Quantum AI Bot in AIToolsScreen.tsx
+
+  - Volatility Alerts in NotificationSettingsScreen.tsx
+
+  - Locked Video Masterclasses in AcademyModal.tsx
+
+Ensure all components adhere to the dark #0A0B0E / #16181D theme, use clean React Native primitives, and handle safe area paddings properly on all device formats.].
