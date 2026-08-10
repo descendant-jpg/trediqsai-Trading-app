@@ -1,34 +1,22 @@
 import Link from 'next/link';
-import { ArrowRight, BarChart3, Bot, BrainCircuit, ChevronDown, Download } from 'lucide-react';
+import { BarChart3, Bot, BrainCircuit, ChevronDown, Download, Gauge, ShieldCheck } from 'lucide-react';
 
-const tickerItems: Array<[string, string, string, boolean]> = [
-  ['BTC/USDT', '$67,420.00', '+4.82%', true],
-  ['ETH/USDT', '$3,842.18', '+2.64%', true],
-  ['EUR/USD', '1.0842', '+0.42%', true],
-  ['GBP/USD', '1.2710', '-0.18%', false],
-  ['XAU/USD', '$2,348.60', '+0.31%', true],
-  ['SOL/USDT', '$184.22', '-1.06%', false],
+const ticker = [
+  ['BTC/USDT', '$67,420.00', '+4.82%', 'text-green-400'],
+  ['ETH/USDT', '$3,842.18', '+2.64%', 'text-green-400'],
+  ['EUR/USD', '1.0842', '+0.42%', 'text-green-400'],
+  ['GBP/USD', '1.2710', '-0.18%', 'text-red-400'],
+  ['XAU/USD', '$2,348.60', '+0.31%', 'text-green-400'],
+  ['SOL/USDT', '$184.22', '-1.06%', 'text-red-400'],
 ];
 
 const features = [
-  {
-    icon: BrainCircuit,
-    title: 'AI Signal Generator',
-    description: 'Turn market structure into clear BUY or SELL ideas with entry, targets, and invalidation.',
-  },
-  {
-    icon: Bot,
-    title: 'AutoPilot Bots',
-    description: 'Deploy disciplined GRID and DCA strategies that keep working while you focus on the bigger picture.',
-  },
-  {
-    icon: BarChart3,
-    title: 'Risk Management',
-    description: 'Size every position with precision and know your downside before the market moves.',
-  },
+  [BrainCircuit, 'AI Signal Generator', 'Turn market structure into clear BUY or SELL ideas with entry, targets, and invalidation.'],
+  [Bot, 'AutoPilot Bots', 'Deploy disciplined GRID and DCA strategies that keep working while you focus on the bigger picture.'],
+  [ShieldCheck, 'Risk Management', 'Size every position with precision and know your downside before the market moves.'],
 ];
 
-const faqs = [
+const questions = [
   'How accurate are the AI Signals?',
   'What brokers do you support?',
   'Is TradiQs AI suitable for beginners?',
@@ -37,113 +25,61 @@ const faqs = [
 
 export default function Home() {
   return (
-    <main className="bg-[#0A0B0E] text-white">
-      <section className="flex min-h-screen flex-col items-center justify-center px-4 text-center">
-        <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-[#00F0FF]/30 bg-[#00F0FF]/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#00F0FF]">
-          <span className="h-2 w-2 animate-pulse rounded-full bg-[#00F0FF]" />
-          Market intelligence, reimagined
-        </div>
-        <h1 className="max-w-5xl text-5xl font-bold leading-tight tracking-tight md:text-7xl">
-          The Institutional Edge in Your Pocket
-        </h1>
-        <p className="mt-6 max-w-2xl text-lg leading-8 text-gray-400">
-          Trade with the clarity of a desk, the discipline of a system, and the intelligence of an always-on analyst.
-        </p>
-        <div className="mt-10 flex flex-wrap justify-center gap-4">
-          <Link
-            href="/contact"
-            className="flex items-center gap-2 rounded-full bg-[#00F0FF] px-6 py-3 font-semibold text-black transition hover:bg-white"
-          >
-            <Download className="h-5 w-5" />
-            Download the app
-            <ArrowRight className="h-4 w-4" />
+    <div className="flex min-h-screen w-full bg-[#0A0B0E] text-white">
+      <aside className="fixed inset-y-0 left-0 z-30 flex h-screen w-20 flex-col justify-between border-r border-gray-800 bg-[#16181D] p-4 md:w-64 md:p-6">
+        <div>
+          <Link href="/" className="text-center text-lg font-extrabold text-[#00F0FF] md:text-left md:text-2xl">
+            <span className="md:hidden">TQ</span>
+            <span className="hidden md:inline">TradiQs AI</span>
           </Link>
-          <Link
-            href="/about"
-            className="rounded-full border border-[#00F0FF] px-6 py-3 font-semibold text-white transition hover:bg-[#00F0FF] hover:text-black"
-          >
-            See how it works
-          </Link>
+          <nav className="mt-12 hidden gap-3 md:grid">
+            <Link href="/about" className="rounded-lg px-3 py-2 text-sm text-gray-400 transition hover:bg-white/5 hover:text-[#00F0FF]">About</Link>
+            <Link href="/blog" className="rounded-lg px-3 py-2 text-sm text-gray-400 transition hover:bg-white/5 hover:text-[#00F0FF]">Market Insights</Link>
+            <Link href="/contact" className="rounded-lg px-3 py-2 text-sm text-gray-400 transition hover:bg-white/5 hover:text-[#00F0FF]">Contact</Link>
+          </nav>
         </div>
-      </section>
+        <div className="hidden md:block">
+          <p className="mb-4 text-xs font-bold tracking-widest text-gray-400">GET THE APP</p>
+          <div className="grid gap-3">
+            <Link href="/contact" className="rounded-xl border border-white bg-black px-4 py-3 text-xs font-semibold transition hover:border-[#00F0FF]"> App Store</Link>
+            <Link href="/contact" className="rounded-xl border border-white bg-black px-4 py-3 text-xs font-semibold transition hover:border-[#00F0FF]">▶ Google Play</Link>
+          </div>
+        </div>
+        <Download className="mx-auto h-5 w-5 text-[#00F0FF] md:hidden" />
+      </aside>
 
-      <div className="sticky top-0 z-20 overflow-hidden border-y border-gray-800 bg-[#16181D]">
-        <div className="flex min-w-max items-center gap-10 px-6 py-4">
-          {tickerItems.map(([pair, price, change, positive]) => (
-            <div className="flex items-center gap-3 text-sm" key={pair}>
-              <span className="font-semibold text-white">{pair}</span>
-              <span className="text-gray-400">{price}</span>
-              <span className={positive ? 'text-green-400' : 'text-red-400'}>{change}</span>
-            </div>
-          ))}
-        </div>
-      </div>
+      <main className="ml-20 flex min-h-screen flex-1 flex-col md:ml-64">
+        <section className="flex min-h-[80vh] flex-col items-center justify-center p-8 text-center md:p-12">
+          <p className="mb-4 text-sm tracking-widest text-[#00F0FF]">MARKET INTELLIGENCE, REIMAGINED</p>
+          <h1 className="mb-6 max-w-5xl text-5xl font-extrabold leading-tight md:text-7xl">The Institutional Edge in Your Pocket</h1>
+          <p className="max-w-2xl text-xl text-gray-400">Trade with the clarity of a desk and the discipline of a system.</p>
+          <div className="mt-10 flex flex-wrap justify-center gap-4">
+            <Link href="/contact" className="flex items-center gap-2 rounded-full bg-[#00F0FF] px-6 py-3 font-semibold text-black transition hover:bg-white"><Download className="h-5 w-5" /> Download the app</Link>
+            <Link href="/about" className="rounded-full border border-[#00F0FF] px-6 py-3 font-semibold transition hover:bg-[#00F0FF] hover:text-black">See how it works</Link>
+          </div>
+        </section>
 
-      <section className="px-4 py-24">
-        <div className="mx-auto max-w-6xl">
-          <div className="mb-12 text-center">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.25em] text-[#00F0FF]">The edge</p>
-            <h2 className="text-3xl font-bold md:text-5xl">Everything serious traders need, without the noise.</h2>
-          </div>
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-            {features.map(({ icon: Icon, title, description }) => (
-              <article
-                className="rounded-xl border border-gray-800 bg-[#16181D] p-8 transition-all duration-300 hover:border-[#00F0FF]"
-                key={title}
-              >
-                <Icon className="mb-12 h-9 w-9 text-[#00F0FF]" />
-                <h3 className="text-xl font-bold">{title}</h3>
-                <p className="mt-4 leading-7 text-gray-400">{description}</p>
-              </article>
-            ))}
-          </div>
+        <div className="flex w-full space-x-8 overflow-hidden border-y border-gray-800 bg-[#16181D] px-6 py-3 font-mono text-sm text-gray-300">
+          {ticker.map(([pair, price, change, color]) => <div className="flex min-w-max gap-3" key={pair}><span className="font-semibold text-white">{pair}</span><span>{price}</span><span className={color}>{change}</span></div>)}
         </div>
-      </section>
 
-      <section className="px-4 pb-24">
-        <div className="mx-auto flex max-w-3xl flex-col">
-          <div className="mb-8 text-center">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.25em] text-[#00F0FF]">FAQ</p>
-            <h2 className="text-3xl font-bold">Questions, answered.</h2>
-          </div>
-          {faqs.map((question) => (
-            <details className="group border-b border-gray-800" key={question}>
-              <summary className="flex cursor-pointer list-none items-center justify-between py-4 font-bold">
-                {question}
-                <ChevronDown className="h-5 w-5 text-[#00F0FF] transition group-open:rotate-180" />
-              </summary>
-              <p className="pb-4 text-sm leading-7 text-gray-400">
-                TradiQs AI combines market structure, momentum, liquidity, and risk context into a transparent trading workflow. Always validate ideas and manage your own risk.
-              </p>
-            </details>
-          ))}
-        </div>
-      </section>
+        <section className="mx-auto grid w-full max-w-7xl grid-cols-1 gap-8 p-8 md:grid-cols-3 md:p-12">
+          {features.map(([Icon, title, description]) => <article className="rounded-2xl border border-gray-800 bg-[#16181D] p-8 transition-all hover:border-[#00F0FF]" key={title as string}><Icon className="mb-12 h-9 w-9 text-[#00F0FF]" /><h2 className="text-xl font-bold">{title as string}</h2><p className="mt-4 leading-7 text-gray-400">{description as string}</p></article>)}
+        </section>
 
-      <footer className="bg-black px-4 py-12 text-gray-400">
-        <div className="mx-auto grid max-w-6xl grid-cols-1 gap-10 md:grid-cols-4">
-          <div className="md:col-span-2">
-            <div className="mb-4 text-xl font-bold text-white">TradiQs<span className="text-[#00F0FF]">AI</span></div>
-            <p className="max-w-sm text-sm leading-6">Institutional-grade market intelligence, built for traders who refuse to guess.</p>
+        <section className="mx-auto flex w-full max-w-4xl flex-col p-8 md:p-12">
+          <div className="mb-8 text-center"><Gauge className="mx-auto mb-4 h-8 w-8 text-[#00F0FF]" /><h2 className="text-3xl font-bold">Questions, answered.</h2></div>
+          {questions.map((question) => <details className="group border-b border-gray-800 py-6" key={question}><summary className="flex cursor-pointer list-none items-center justify-between font-bold text-white">{question}<ChevronDown className="h-5 w-5 text-[#00F0FF] transition group-open:rotate-180" /></summary><p className="pt-4 text-sm leading-7 text-gray-400">TradiQs AI combines market structure, momentum, liquidity, and risk context into a transparent trading workflow. Always validate ideas and manage your own risk.</p></details>)}
+        </section>
+
+        <footer className="mt-20 border-t border-gray-800 bg-[#0A0B0E] px-8 py-16 md:px-12">
+          <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-4">
+            <div className="lg:col-span-2"><p className="text-2xl font-bold text-white">TradiQs<span className="text-[#00F0FF]"> AI</span></p><p className="mt-4 max-w-sm text-sm leading-6 text-gray-400">Institutional-grade market intelligence, built for traders who refuse to guess.</p></div>
+            <div><h3 className="mb-4 text-xs font-bold uppercase tracking-widest text-white">Explore</h3><div className="grid gap-3 text-sm"><Link href="/about" className="text-gray-400 transition-colors hover:text-[#00F0FF]">About</Link><Link href="/contact" className="text-gray-400 transition-colors hover:text-[#00F0FF]">Contact</Link></div></div>
+            <div><h3 className="mb-4 text-xs font-bold uppercase tracking-widest text-white">Legal</h3><div className="grid gap-3 text-sm"><Link href="/privacy" className="text-gray-400 transition-colors hover:text-[#00F0FF]">Privacy Policy</Link><Link href="/terms" className="text-gray-400 transition-colors hover:text-[#00F0FF]">Terms &amp; Conditions</Link></div></div>
           </div>
-          <div>
-            <h3 className="mb-4 text-xs font-bold uppercase tracking-widest text-white">Explore</h3>
-            <div className="grid gap-3 text-sm">
-              <Link className="hover:text-[#00F0FF]" href="/about">About</Link>
-              <Link className="hover:text-[#00F0FF]" href="/blog">Market insights</Link>
-              <Link className="hover:text-[#00F0FF]" href="/contact">Contact</Link>
-            </div>
-          </div>
-          <div>
-            <h3 className="mb-4 text-xs font-bold uppercase tracking-widest text-white">Legal</h3>
-            <div className="grid gap-3 text-sm">
-              <Link className="hover:text-[#00F0FF]" href="/privacy">Privacy Policy</Link>
-              <Link className="hover:text-[#00F0FF]" href="/terms">Terms of Service</Link>
-              <a className="hover:text-[#00F0FF]" href="mailto:support@trediqsAI.com">Contact support</a>
-            </div>
-          </div>
-        </div>
-      </footer>
-    </main>
+        </footer>
+      </main>
+    </div>
   );
 }

@@ -2,14 +2,14 @@
   "/_not-found/page": "/_not-found",
   "/about/page": "/about",
   "/blog/[slug]/page": "/blog/[slug]",
-  "/privacy/page": "/privacy",
   "/page": "/",
-  "/contact/page": "/contact",
+  "/privacy/page": "/privacy",
   "/terms/page": "/terms",
-  "/blog/page": "/blog",
+  "/contact/page": "/contact",
   "/admin/blog/page": "/admin/blog",
+  "/blog/page": "/blog",
+  "/admin/signals/page": "/admin/signals",
   "/admin/users/page": "/admin/users",
-  "/admin/page": "/admin",
   "/admin/inbox/page": "/admin/inbox",
-  "/admin/signals/page": "/admin/signals"
+  "/admin/page": "/admin"
 }
