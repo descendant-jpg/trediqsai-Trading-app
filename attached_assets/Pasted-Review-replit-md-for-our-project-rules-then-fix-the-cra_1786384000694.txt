@@ -1,0 +1,34 @@
+Review replit.md for our project rules, then fix the crash on the TradiQsAI tab and upgrade it into a Binance-style professional execution terminal.
+
+### 1. Fix the React Native Crash
+- Identify and resolve the error boundary crash in `TradiQsAIScreen.tsx`. Ensure all necessary imports (charting libraries, state management, UI primitives) are properly migrated from the old Home screen and that the tab navigator routes correctly to this component.
+
+### 2. Top Ticker & Asset Header
+- Background: #0A0B0E.
+- Left: Asset Selector (e.g., `BTC / USD`) with a dropdown icon.
+- Right: A horizontal row of mini-metrics (24h Change, 24h High, 24h Vol) styled in small, crisp gray terminal fonts.
+
+### 3. Professional Charting Area
+- Replace the basic line chart with a Candlestick chart component (or a highly realistic mock candlestick UI if a library isn't available).
+- Add a toolbar directly above the chart with timeframe chips (`1m`, `15m`, `1H`, `4H`, `1D`) and an `Indicators` icon.
+
+### 4. Live Order Book (Simulated Market Depth)
+- Create a 2-column layout below the chart.
+- The Left Column should be the Order Book:
+  - Top half: 5 rows of Ask prices (Red text) and volumes.
+  - Middle: The current Mark Price (Large, glowing white text).
+  - Bottom half: 5 rows of Bid prices (Green text) and volumes.
+  - Ensure the layout is dense and uses monospace fonts to look like a real exchange.
+
+### 5. Advanced Order Entry Panel (Right Column / Bottom)
+- **Order Types:** A horizontal segmented control for `Limit`, `Market`, `Stop`.
+- **Amount Input:** A sleek input field for the trade size, accompanied by a row of percentage quick-fill pills (25%, 50%, 75%, 100%).
+- **Margin/Leverage:** Add a mock slider or stepper for Leverage (1x - 100x).
+- **TP/SL Toggles:** Expandable inputs for Take Profit and Stop Loss targets.
+- **Action Buttons:** Two massive buttons side-by-side: `Buy / Long` (Background #00E676) and `Sell / Short` (Background #FF5252).
+
+### 6. Live Positions Drawer
+- At the very bottom, add a section with tabs: `Positions`, `Pending`, `History`.
+- The active `Positions` tab should display a card showing: Asset Name, Leverage (e.g., 50x), Margin, Entry Price, Mark Price, and a prominent Unrealized PNL metric (e.g., `+$450.20 (+14.5%)` in green).
+
+Ensure the entire screen is wrapped in a ScrollView/SafeAreaView, uses #16181D for card backgrounds, #22252A for borders, and perfectly matches our premium dark-mode aesthetic.
