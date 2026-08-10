@@ -75,15 +75,6 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="learning"
-        options={{
-          title: 'Academy',
-          tabBarIcon: ({ color }) => (
-            <Feather name="book-open" size={22} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="portfolio"
         options={{
           title: 'Portfolio',
