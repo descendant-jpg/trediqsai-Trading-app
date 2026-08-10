@@ -364,23 +364,6 @@ export default function ProfileScreen() {
             <Text style={styles.upgradeText}>Upgrade to Pro</Text>
           </TouchableOpacity>
         )}
-        <TouchableOpacity
-          style={styles.academyCard}
-          onPress={() => setAcademyOpen(true)}
-          activeOpacity={0.86}
-          testID="profile-academy"
-        >
-          <View style={styles.academyIcon}><Feather name="book-open" size={20} color="#0A0B0E" /></View>
-          <View style={styles.academyCopy}>
-            <View style={styles.academyTitleRow}>
-              <Text style={styles.academyTitle}>TradiQs Academy & Masterclasses</Text>
-              <Text style={styles.newBadge}>NEW</Text>
-            </View>
-            <Text style={styles.academyDetail}>Build your edge with professional trading lessons</Text>
-          </View>
-          <Feather name="chevron-right" size={19} color="#00F0FF" />
-        </TouchableOpacity>
-
         {/* Section 2 — Wallet & Referrals */}
         <Section title="WALLET & REFERRALS">
           <ListItem
@@ -425,6 +408,17 @@ export default function ProfileScreen() {
               </TouchableOpacity>
             </View>
           </View>
+        </Section>
+
+        {/* Education */}
+        <Section title="EDUCATION">
+          <ListItem
+            icon="book-open"
+            label="TradiQs Academy"
+            detail="Masterclasses & tools"
+            onPress={() => setAcademyOpen(true)}
+            testID="profile-academy"
+          />
         </Section>
 
         {/* Section 3 — Account Settings */}
@@ -733,38 +727,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: 'Inter_700Bold',
   },
-  academyCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginTop: 14,
-    padding: 14,
-    backgroundColor: '#16181D',
-    borderWidth: 1,
-    borderColor: '#00F0FF',
-    borderRadius: colors.radius,
-  },
-  academyIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#00F0FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  academyCopy: { flex: 1, gap: 5 },
-  academyTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  academyTitle: { color: '#FFFFFF', fontSize: 14, fontFamily: 'Inter_700Bold', flexShrink: 1 },
-  newBadge: {
-    color: '#0A0B0E',
-    backgroundColor: '#00F0FF',
-    borderRadius: 4,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-    fontSize: 9,
-    fontFamily: 'Inter_700Bold',
-  },
-  academyDetail: { color: '#8A8D93', fontSize: 12, fontFamily: 'Inter_400Regular' },
   section: {
     marginTop: 24,
   },
