@@ -9,6 +9,7 @@ import {
   StyleSheet,
   Switch,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -104,6 +105,56 @@ function formatPnl(value: number): string {
 }
 
 const HISTORY_DAYS_SHOWN = 7;
+
+type ToolTier = 'STARTER' | 'PRO' | 'ELITE';
+type Tool = {
+  name: string;
+  description: string;
+  tier: ToolTier;
+  icon: React.ComponentProps<typeof Feather>['name'];
+  kind?: 'code' | 'correlation' | 'heatmap' | 'risk';
+  wide?: boolean;
+};
+const TIER_LEVEL: Record<ToolTier, number> = { STARTER: 1, PRO: 2, ELITE: 3 };
+const TOOLS: Tool[] = [
+  { name: 'AI Signal Generator', description: 'Upload chart, get instant BUY/SELL signal with TP & SL', tier: 'PRO', icon: 'trending-up' },
+  { name: 'AutoPilot Bots', description: 'Cloud-hosted GRID & DCA bots that trade for you 24/7', tier: 'ELITE', icon: 'cpu' },
+  { name: 'AI Chart Analysis', description: 'Upload trading charts for AI-powered analysis', tier: 'PRO', icon: 'bar-chart-2' },
+  { name: 'AI News Analyser', description: 'Analyse forex news & economic events with AI', tier: 'PRO', icon: 'globe' },
+  { name: 'Psychology Coach', description: 'Stop revenge trading and emotional losses forever', tier: 'ELITE', icon: 'heart' },
+  { name: 'Market Radar', description: 'Top forex, crypto, stock & commodity news — highest impact', tier: 'PRO', icon: 'radio' },
+  { name: 'Liquidity Scanner', description: 'Detect institutional stop-hunts & Fair Value Gaps', tier: 'ELITE', icon: 'crosshair' },
+  { name: 'Correlation Finder', description: 'Discover how currency pairs move together', tier: 'STARTER', icon: 'link-2', kind: 'correlation' },
+  { name: 'Currency Heatmap', description: 'Cross pair pressure map with directional bias', tier: 'PRO', icon: 'grid', kind: 'heatmap' },
+  { name: 'Broker Comparison', description: 'Find the best broker for your trading style', tier: 'STARTER', icon: 'briefcase' },
+  { name: 'Code Lab', description: 'AI-powered Indicator Builder + Robot Builder (EA)', tier: 'ELITE', icon: 'code', kind: 'code' },
+  { name: 'Account Tracker', description: 'Connect MT4/MT5 and get AI trading insights', tier: 'PRO', icon: 'activity', wide: true },
+  { name: 'Risk Calculator', description: 'Calculate exact lot size based on SL pips', tier: 'STARTER', icon: 'target', kind: 'risk', wide: true },
+];
+
+function TierBadge({ tier }: { tier: ToolTier }) {
+  const color = tier === 'STARTER' ? GREEN : tier === 'PRO' ? CYAN : GOLD;
+  return <View style={[styles.tierBadge, { borderColor: color }]}><Text style={[styles.tierText, { color }]}>{tier}</Text></View>;
+}
+
+function ToolModal({ tool, onClose }: { tool: Tool; onClose: () => void }) {
+  const [prompt, setPrompt] = useState('');
+  const [balance, setBalance] = useState('10000');
+  const [risk, setRisk] = useState('1');
+  const [stopLoss, setStopLoss] = useState('40');
+  const lotSize = ((Number(balance) || 0) * ((Number(risk) || 0) / 100) / ((Number(stopLoss) || 1) * 10)).toFixed(2);
+  return (
+    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+      <View style={styles.toolBackdrop}><View style={styles.toolSheet}>
+        <View style={styles.configHeader}><View><Text style={styles.configTitle}>{tool.name}</Text><TierBadge tier={tool.tier} /></View><TouchableOpacity onPress={onClose}><Feather name="x" size={20} color="#FFF" /></TouchableOpacity></View>
+        {tool.kind === 'code' && <><Text style={styles.modalHint}>Describe your indicator/bot...</Text><TextInput value={prompt} onChangeText={setPrompt} placeholder="Describe your indicator/bot..." placeholderTextColor={c.mutedForeground} style={styles.modalInput} multiline /><Text style={styles.modalLabel}>CODE OUTPUT</Text><View style={styles.codeOutput}><Text style={styles.codeText}>{prompt ? `// Generated MQL5 blueprint\n// ${prompt}\nint OnInit() { return(INIT_SUCCEEDED); }` : '// Your MQL5 code will appear here.'}</Text></View><TouchableOpacity style={styles.modalPrimary}><Text style={styles.modalPrimaryText}>Copy MQL5 Code</Text></TouchableOpacity></>}
+        {tool.kind === 'correlation' && <><Text style={styles.modalHint}>Live pair relationship matrix</Text>{[['EURUSD', 'USDCHF', '-0.92'], ['GBPUSD', 'EURUSD', '0.84'], ['AUDUSD', 'USDCAD', '-0.71'], ['USDJPY', 'XAUUSD', '-0.63']].map(([a, b, value]) => <View style={styles.tableRow} key={`${a}-${b}`}><Text style={styles.tableCell}>{a}</Text><Text style={styles.tableCell}>vs {b}</Text><Text style={[styles.tableValue, { color: value.startsWith('-') ? CRIMSON : GREEN }]}>{value}</Text></View>)}</>}
+        {tool.kind === 'heatmap' && <><Text style={styles.modalHint}>Currency strength · 24 hour change</Text><View style={styles.heatGrid}>{[['USD', '+2.4%', GREEN], ['EUR', '+0.8%', GREEN], ['GBP', '-0.4%', CRIMSON], ['JPY', '-1.8%', CRIMSON], ['AUD', '+1.1%', GREEN], ['CAD', '-0.7%', CRIMSON], ['CHF', '+0.2%', GREEN], ['NZD', '-1.2%', CRIMSON]].map(([name, value, color]) => <View style={[styles.heatCell, { borderColor: color as string }]} key={name as string}><Text style={styles.heatName}>{name}</Text><Text style={[styles.heatValue, { color: color as string }]}>{value}</Text></View>)}</View></>}
+        {tool.kind === 'risk' && <><Text style={styles.modalHint}>Position size calculator</Text><Text style={styles.modalLabel}>BALANCE ($)</Text><TextInput value={balance} onChangeText={setBalance} keyboardType="decimal-pad" style={styles.modalInput} /><Text style={styles.modalLabel}>RISK (%)</Text><TextInput value={risk} onChangeText={setRisk} keyboardType="decimal-pad" style={styles.modalInput} /><Text style={styles.modalLabel}>STOP LOSS (PIPS)</Text><TextInput value={stopLoss} onChangeText={setStopLoss} keyboardType="decimal-pad" style={styles.modalInput} /><View style={styles.lotResult}><Text style={styles.modalHint}>EXACT LOT SIZE</Text><Text style={styles.lotValue}>{lotSize} Lots</Text></View></>}
+      </View></View>
+    </Modal>
+  );
+}
 
 /** "2026-08-04" → "Mon, Aug 4" (parsed as local time). */
 function formatHistoryDay(isoDay: string): string {
@@ -208,6 +259,7 @@ export default function AiToolsScreen() {
 
   const [configBot, setConfigBot] = useState<Bot | null>(null);
   const [paywallOpen, setPaywallOpen] = useState(false);
+  const [activeTool, setActiveTool] = useState<Tool | null>(null);
   const logScrollRef = useRef<ScrollView>(null);
 
   const masterActive = autopilot?.masterActive ?? false;
@@ -242,7 +294,7 @@ export default function AiToolsScreen() {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* Screen header row */}
         <View style={styles.screenHeader}>
-          <Text style={styles.screenTitle}>AI Tools</Text>
+           <Text style={styles.screenTitle}>TradiQsAI Tools</Text>
           <TouchableOpacity
             style={styles.oracleButton}
             onPress={() => router.push('/oracle')}
@@ -335,6 +387,19 @@ export default function AiToolsScreen() {
 
         {/* Daily P&L history */}
         <PnlHistorySection days={history?.days ?? []} />
+
+        <Text style={styles.sectionTitle}>HERO TOOLS</Text>
+        <View style={styles.heroGrid}>
+          {TOOLS.slice(0, 2).map((tool) => <ToolCard key={tool.name} tool={tool} subscribed={isSubscribed} onOpen={setActiveTool} onPaywall={() => setPaywallOpen(true)} hero />)}
+        </View>
+        <Text style={styles.sectionTitle}>AI ANALYSIS</Text>
+        <View style={styles.toolGrid}>
+          {TOOLS.slice(2, 7).map((tool) => <ToolCard key={tool.name} tool={tool} subscribed={isSubscribed} onOpen={setActiveTool} onPaywall={() => setPaywallOpen(true)} />)}
+        </View>
+        <Text style={styles.sectionTitle}>TOOLS & UTILITIES</Text>
+        <View style={styles.toolGrid}>
+          {TOOLS.slice(7).map((tool) => <ToolCard key={tool.name} tool={tool} subscribed={isSubscribed} onOpen={setActiveTool} onPaywall={() => setPaywallOpen(true)} />)}
+        </View>
 
         {/* Bot roster */}
         <Text style={styles.sectionTitle}>Available AI Algorithms</Text>
@@ -463,11 +528,21 @@ export default function AiToolsScreen() {
         onClose={() => setConfigBot(null)}
         onSave={saveConfig}
       />
+      {activeTool && <ToolModal tool={activeTool} onClose={() => setActiveTool(null)} />}
 
       {/* Paywall */}
       <PaywallModal visible={paywallOpen} onClose={() => setPaywallOpen(false)} />
     </View>
   );
+}
+
+function ToolCard({ tool, subscribed, onOpen, onPaywall, hero = false }: { tool: Tool; subscribed: boolean; onOpen: (tool: Tool) => void; onPaywall: () => void; hero?: boolean }) {
+  const locked = tool.tier !== 'STARTER' && !subscribed;
+  return <TouchableOpacity style={[styles.toolCard, hero && styles.heroCard, tool.wide && styles.wideCard]} activeOpacity={0.78} onPress={() => locked ? onPaywall() : onOpen(tool)} accessibilityRole="button" accessibilityLabel={`${tool.name}${locked ? ', locked' : ''}`}>
+    <View style={styles.toolIcon}><Feather name={tool.icon} size={hero ? 21 : 17} color={tool.tier === 'ELITE' ? GOLD : CYAN} /></View>
+    <View style={styles.toolCopy}><View style={styles.toolTitleRow}><Text style={styles.toolName}>{tool.name}</Text>{locked && <Feather name="lock" size={12} color={GOLD} />}</View><Text style={styles.toolDescription}>{tool.description}</Text></View>
+    <TierBadge tier={tool.tier} />
+  </TouchableOpacity>;
 }
 
 function ConfigModal({
@@ -754,6 +829,36 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
     marginTop: 4,
   },
+  heroGrid: { gap: 10 },
+  toolGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  toolCard: { width: '47.8%', minHeight: 142, backgroundColor: '#16181D', borderWidth: 1, borderColor: '#22252A', borderRadius: colors.radius, padding: 13, gap: 10 },
+  heroCard: { width: '100%', minHeight: 112, flexDirection: 'row', alignItems: 'center' },
+  wideCard: { width: '100%', minHeight: 92, flexDirection: 'row', alignItems: 'center' },
+  toolIcon: { width: 34, height: 34, borderRadius: 10, backgroundColor: 'rgba(0,240,255,0.1)', alignItems: 'center', justifyContent: 'center' },
+  toolCopy: { flex: 1, gap: 5 },
+  toolTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  toolName: { color: '#FFF', fontSize: 13, fontFamily: 'Inter_700Bold', flexShrink: 1 },
+  toolDescription: { color: c.mutedForeground, fontSize: 10.5, lineHeight: 15, fontFamily: 'Inter_500Medium' },
+  tierBadge: { alignSelf: 'flex-start', borderWidth: 1, borderRadius: 5, paddingHorizontal: 5, paddingVertical: 2 },
+  tierText: { fontSize: 8, letterSpacing: 0.6, fontFamily: 'Inter_700Bold' },
+  toolBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.72)', justifyContent: 'flex-end' },
+  toolSheet: { backgroundColor: '#16181D', borderTopLeftRadius: 20, borderTopRightRadius: 20, borderWidth: 1, borderColor: '#22252A', padding: 20, paddingBottom: 34, gap: 11 },
+  modalHint: { color: c.mutedForeground, fontSize: 11, fontFamily: 'Inter_500Medium' },
+  modalLabel: { color: c.mutedForeground, fontSize: 9, letterSpacing: 0.8, fontFamily: 'Inter_700Bold', marginTop: 4 },
+  modalInput: { minHeight: 42, color: '#FFF', backgroundColor: '#0A0B0E', borderWidth: 1, borderColor: '#2A2D33', borderRadius: 9, paddingHorizontal: 11, paddingVertical: 9, fontSize: 13 },
+  codeOutput: { minHeight: 100, backgroundColor: '#050608', borderRadius: 9, padding: 11 },
+  codeText: { color: 'rgba(0,230,118,0.85)', fontFamily: 'monospace', fontSize: 10, lineHeight: 15 },
+  modalPrimary: { backgroundColor: CYAN, borderRadius: 10, alignItems: 'center', paddingVertical: 12, marginTop: 4 },
+  modalPrimaryText: { color: '#0A0B0E', fontFamily: 'Inter_700Bold', fontSize: 13 },
+  tableRow: { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#22252A', paddingVertical: 12 },
+  tableCell: { flex: 1, color: '#FFF', fontSize: 12, fontFamily: 'Inter_600SemiBold' },
+  tableValue: { fontSize: 14, fontFamily: 'Inter_700Bold' },
+  heatGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  heatCell: { width: '22%', minWidth: 64, backgroundColor: '#0A0B0E', borderWidth: 1, borderRadius: 8, paddingVertical: 10, alignItems: 'center', gap: 4 },
+  heatName: { color: '#FFF', fontSize: 11, fontFamily: 'Inter_700Bold' },
+  heatValue: { fontSize: 11, fontFamily: 'Inter_700Bold' },
+  lotResult: { alignItems: 'center', backgroundColor: 'rgba(0,240,255,0.08)', borderWidth: 1, borderColor: 'rgba(0,240,255,0.35)', borderRadius: 10, padding: 14, marginTop: 4 },
+  lotValue: { color: CYAN, fontSize: 25, fontFamily: 'Inter_700Bold' },
   botCard: {
     backgroundColor: '#16181D',
     borderWidth: 1,
