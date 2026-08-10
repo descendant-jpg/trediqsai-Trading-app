@@ -1,0 +1,54 @@
+Review replit.md for our project rules, then build a premium, multi-featured `PartnerProgramScreen.tsx` and integrate its access button into `ProfileScreen.tsx`.
+
+### 1. Profile Screen Button Integration
+- In `ProfileScreen.tsx`, locate the settings / preferences section and add a high-priority "Partner Program" button item with a glowing gold/cyan badge labeled "EARN PASSIVE INCOME".
+- Tapping this button must navigate directly to `PartnerProgramScreen.tsx`.
+
+### 2. Build `PartnerProgramScreen.tsx` (Institutional Growth Hub)
+Design the screen using our dark terminal aesthetic (#0A0B0E background, #16181D card containers, #00F0FF Electric Cyan & #FFD700 Gold accents).
+
+#### A. Header & Live Payout Ticker
+- Screen Header: "Partner Program" with a back navigation arrow.
+- Hero Header: "Build Your Trading Empire" (Bold White) with subtitle "Turn your network into scalable passive revenue."
+- Live Payout Ticker: A subtle auto-scrolling bar at the top displaying mock live withdrawals (e.g., "⚡ $150.00 withdrawn via USDT by @ak***7 • 3m ago").
+
+#### B. Interactive Revenue Calculator
+- Add a card titled "Calculate Your Income Potential".
+- Include a smooth interactive Slider component (0 to 500 active referrals).
+- Display dynamic calculation metrics below the slider:
+  - Broker CPA Revenue ($25/signup)
+  - Subscription Recurring Commission ($10-$50/mo)
+  - Sub-Affiliate Passive Override (5%)
+  - Large Glowing Total: e.g., "$2,450.00 / month" in Electric Cyan.
+
+#### C. Ways to Earn (Glassmorphic Grid)
+Render 3 feature cards detailing the commission structure:
+1. `Broker CPA Signups` — Earn $25+ per active trader account opened.
+2. `Premium Subscriptions` — Earn 10% - 20% recurring monthly commission on Pro & Whale upgrades.
+3. `Sub-Affiliate Network` — Earn 5% passive income override from the earnings of partners you recruit.
+
+#### D. Interactive Partnership Tiers
+Create stacked tier cards with progress indicators:
+- **Ambassador Tier (5% Commission):** Default entry level. Unlocks instant tracking dashboard and basic links.
+- **Elite Tier (10% Commission - "Popular" Badge):** Requires 25 referrals + 10 broker signups. Includes custom promo code & marketing toolkit.
+- **Master Tier (15% Commission - Gold Styling):** Requires 100 referrals + 50 broker signups. Includes priority payouts & dedicated account manager.
+- **Whale Director Tier (25% VIP Custom Tier):** High-volume affiliate partner status with custom CPA contracts.
+
+#### E. Partner Marketing Toolkit
+Add a card titled "Done-For-You Marketing Arsenal":
+- Include quick-copy inputs for:
+  - `Your Unique Referral Link` (with a 1-click Copy button)
+  - `Custom Promo Code` (e.g., TRADIQS-VIP)
+- Include shortcut buttons to launch pre-made promotional assets: "Download Banners", "Social Media Hooks", and "Video Scripts".
+
+#### F. Top Partners Leaderboard Podium
+- Section Header: "Top Earnings This Month".
+- Render a 3-position visual Podium (1st Place Gold, 2nd Place Silver, 3rd Place Bronze) showing anonymized usernames (e.g., `da***21`), referral counts, and total earnings.
+- Follow with a clean list for ranks #4 to #10.
+
+#### G. Sticky Action Footer
+- Absolute-positioned bottom bar fading smoothly into the background.
+- Primary CTA Button: Full-width Electric Cyan button with bold text: "Apply for Partner Status".
+- Subtext below button: "Free to join • Instant approval • Daily payouts".
+
+Ensure all components use React Native SafeAreaView, handle smooth scrolling, and include clean fallback state handlers.
