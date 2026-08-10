@@ -6,6 +6,7 @@
   "/admin/inbox/page": "/admin/inbox",
   "/admin/page": "/admin",
   "/admin/signals/page": "/admin/signals",
+  "/admin/users/page": "/admin/users",
   "/blog/[slug]/page": "/blog/[slug]",
   "/blog/page": "/blog",
   "/contact/page": "/contact",

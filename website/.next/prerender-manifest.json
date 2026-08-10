@@ -114,39 +114,11 @@
         "x-next-revalidate-tag-token"
       ]
     },
-    "/admin": {
-      "routeType": "page",
-      "response": "complete",
-      "compute": "static",
-      "htmlSize": 41155,
-      "experimentalBypassFor": [
-        {
-          "type": "header",
-          "key": "next-action"
-        },
-        {
-          "type": "header",
-          "key": "content-type",
-          "value": "multipart/form-data;.*"
-        }
-      ],
-      "initialRevalidateSeconds": false,
-      "srcRoute": "/admin",
-      "dataRoute": "/admin.rsc",
-      "allowHeader": [
-        "host",
-        "x-matched-path",
-        "x-prerender-revalidate",
-        "x-prerender-revalidate-if-generated",
-        "x-next-revalidated-tags",
-        "x-next-revalidate-tag-token"
-      ]
-    },
     "/admin/blog": {
       "routeType": "page",
       "response": "complete",
       "compute": "static",
-      "htmlSize": 31327,
+      "htmlSize": 31339,
       "experimentalBypassFor": [
         {
           "type": "header",
@@ -170,39 +142,11 @@
         "x-next-revalidate-tag-token"
       ]
     },
-    "/admin/inbox": {
-      "routeType": "page",
-      "response": "complete",
-      "compute": "static",
-      "htmlSize": 29827,
-      "experimentalBypassFor": [
-        {
-          "type": "header",
-          "key": "next-action"
-        },
-        {
-          "type": "header",
-          "key": "content-type",
-          "value": "multipart/form-data;.*"
-        }
-      ],
-      "initialRevalidateSeconds": false,
-      "srcRoute": "/admin/inbox",
-      "dataRoute": "/admin/inbox.rsc",
-      "allowHeader": [
-        "host",
-        "x-matched-path",
-        "x-prerender-revalidate",
-        "x-prerender-revalidate-if-generated",
-        "x-next-revalidated-tags",
-        "x-next-revalidate-tag-token"
-      ]
-    },
     "/admin/signals": {
       "routeType": "page",
       "response": "complete",
       "compute": "static",
-      "htmlSize": 32514,
+      "htmlSize": 28309,
       "experimentalBypassFor": [
         {
           "type": "header",
@@ -226,11 +170,11 @@
         "x-next-revalidate-tag-token"
       ]
     },
-    "/blog": {
+    "/admin/users": {
       "routeType": "page",
       "response": "complete",
       "compute": "static",
-      "htmlSize": 17904,
+      "htmlSize": 27640,
       "experimentalBypassFor": [
         {
           "type": "header",
@@ -243,8 +187,8 @@
         }
       ],
       "initialRevalidateSeconds": false,
-      "srcRoute": "/blog",
-      "dataRoute": "/blog.rsc",
+      "srcRoute": "/admin/users",
+      "dataRoute": "/admin/users.rsc",
       "allowHeader": [
         "host",
         "x-matched-path",
@@ -258,7 +202,7 @@
       "routeType": "page",
       "response": "complete",
       "compute": "static",
-      "htmlSize": 15893,
+      "htmlSize": 15053,
       "experimentalBypassFor": [
         {
           "type": "header",

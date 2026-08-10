@@ -55,39 +55,6 @@
       }
     }
   },
-  "/admin/inbox": {
-    "hints": 64,
-    "slots": {
-      "children": {
-        "hints": 96,
-        "slots": {
-          "children": {
-            "hints": 96,
-            "slots": {
-              "children": {
-                "hints": 160,
-                "slots": null
-              }
-            }
-          }
-        }
-      }
-    }
-  },
-  "/admin": {
-    "hints": 64,
-    "slots": {
-      "children": {
-        "hints": 96,
-        "slots": {
-          "children": {
-            "hints": 160,
-            "slots": null
-          }
-        }
-      }
-    }
-  },
   "/admin/signals": {
     "hints": 64,
     "slots": {
@@ -107,15 +74,20 @@
       }
     }
   },
-  "/blog": {
+  "/admin/users": {
     "hints": 64,
     "slots": {
       "children": {
         "hints": 96,
         "slots": {
           "children": {
-            "hints": 160,
-            "slots": null
+            "hints": 96,
+            "slots": {
+              "children": {
+                "hints": 160,
+                "slots": null
+              }
+            }
           }
         }
       }

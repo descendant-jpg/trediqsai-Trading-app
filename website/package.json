@@ -9,6 +9,7 @@
     "push:website": "git add . && git commit -m 'Web update' && git push origin main"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.57.0",
     "lucide-react": "^0.545.0",
     "next": "^15.5.0",
     "react": "^19.1.0",
