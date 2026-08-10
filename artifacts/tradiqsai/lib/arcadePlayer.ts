@@ -15,6 +15,7 @@ export type ArcadePlayer = {
   rank: number;
   xp: number;
   lastPlayedDay: string; // YYYY-MM-DD local date
+  bestScores: Record<string, number>;
 };
 
 export const DEFAULT_ARCADE_PLAYER: ArcadePlayer = {
@@ -24,6 +25,7 @@ export const DEFAULT_ARCADE_PLAYER: ArcadePlayer = {
   rank: 128,
   xp: 720,
   lastPlayedDay: '',
+  bestScores: {},
 };
 
 /** YYYY-MM-DD using the device's local calendar. */
@@ -57,6 +59,8 @@ export function computeNextPlayer(
   prev: ArcadePlayer,
   xpEarned: number,
   now: Date = new Date(),
+  gameId?: string,
+  score?: number,
 ): ArcadePlayer {
   const today = localDateKey(now);
   const yesterday = prevDayKey(now);
@@ -76,6 +80,10 @@ export function computeNextPlayer(
     today: newToday,
     xp: prev.xp + xpEarned,
     lastPlayedDay: today,
+    bestScores:
+      gameId && typeof score === 'number' && Number.isFinite(score)
+        ? { ...prev.bestScores, [gameId]: Math.max(prev.bestScores[gameId] ?? 0, score) }
+        : { ...prev.bestScores },
   };
 }
 
@@ -90,7 +98,18 @@ export function parseArcadePlayer(raw: string | null | undefined): ArcadePlayer 
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
       return { ...DEFAULT_ARCADE_PLAYER };
     }
-    return { ...DEFAULT_ARCADE_PLAYER, ...parsed };
+    const merged = { ...DEFAULT_ARCADE_PLAYER, ...parsed };
+    return {
+      ...merged,
+      bestScores:
+        typeof merged.bestScores === 'object' && merged.bestScores !== null && !Array.isArray(merged.bestScores)
+          ? Object.fromEntries(
+              Object.entries(merged.bestScores).filter(
+                ([key, value]) => typeof key === 'string' && typeof value === 'number' && Number.isFinite(value) && value >= 0,
+              ),
+            )
+          : {},
+    };
   } catch {
     return { ...DEFAULT_ARCADE_PLAYER };
   }

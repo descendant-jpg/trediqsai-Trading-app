@@ -76,13 +76,18 @@ async function loadPlayer(): Promise<Player> {
 }
 
 /** Load current state, apply the game result, persist, return the new state. */
-async function persistResult(xpEarned: number): Promise<Player> {
+async function persistResult(
+  xpEarned: number,
+  gameId: string,
+  score: number,
+): Promise<{ player: Player; isPersonalBest: boolean }> {
   const base = await loadPlayer();
-  const next = computeNextPlayer(base, xpEarned);
+  const previousBest = base.bestScores[gameId] ?? 0;
+  const next = computeNextPlayer(base, xpEarned, new Date(), gameId, score);
   try {
     await AsyncStorage.setItem(ARCADE_PLAYER_KEY, JSON.stringify(next));
   } catch {}
-  return next;
+  return { player: next, isPersonalBest: score > previousBest };
 }
 
 function scoreToResult(score: number, maxScore: number): GameResult {
@@ -102,11 +107,13 @@ function ResultScreen({
   result,
   onPlayAgain,
   onClose,
+  isPersonalBest,
 }: {
   game: GameEntry;
   result: GameResult;
   onPlayAgain: () => void;
   onClose: () => void;
+  isPersonalBest: boolean;
 }) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -115,6 +122,7 @@ function ResultScreen({
   return (
     <Animated.View style={[rs.container, { opacity: fadeAnim }]}>
       <Text style={rs.label}>{result.label}</Text>
+      {isPersonalBest && <Text style={rs.personalBest}>NEW PERSONAL BEST!</Text>}
       <View style={rs.xpBadge}>
         <Feather name="zap" size={14} color={c.primaryForeground} />
         <Text style={rs.xpText}>+{result.xpEarned} XP</Text>
@@ -143,6 +151,7 @@ const rs = StyleSheet.create({
   againText: { color: c.primary, fontFamily: 'Inter_700Bold' },
   done: { flex: 1, backgroundColor: c.primary, borderRadius: 11, padding: 13, alignItems: 'center' },
   doneText: { color: c.primaryForeground, fontFamily: 'Inter_700Bold' },
+  personalBest: { color: c.primary, fontSize: 12, fontFamily: 'Inter_700Bold', letterSpacing: 1 },
 });
 
 // ─── Game: Pattern Guesser / Chart Master ────────────────────────────────────
@@ -992,6 +1001,7 @@ function GameModal({
 }) {
   const [phase, setPhase] = useState<GamePhase>('launch');
   const [result, setResult] = useState<GameResult | null>(null);
+  const [isPersonalBest, setIsPersonalBest] = useState(false);
   const cancelledRef = useRef(false);
 
   useEffect(() => {
@@ -1008,7 +1018,9 @@ function GameModal({
       // React state updates that follow.
       let updatedPlayer: Player | null = null;
       try {
-        updatedPlayer = await persistResult(r.xpEarned);
+        const persisted = await persistResult(r.xpEarned, game.id, r.score);
+        updatedPlayer = persisted.player;
+        setIsPersonalBest(persisted.isPersonalBest);
       } catch {}
       // Notify the hub so stats refresh whether or not the modal is still open.
       if (updatedPlayer) onStatsUpdated(updatedPlayer);
@@ -1064,6 +1076,7 @@ function GameModal({
         <ResultScreen
           game={game}
           result={result}
+          isPersonalBest={isPersonalBest}
           onPlayAgain={handlePlayAgain}
           onClose={onClose}
         />
@@ -1194,6 +1207,7 @@ export default function TradingArcadeScreen() {
               </View>
               <Text style={s.gameName}>{game.name}</Text>
               <Text style={s.gameDesc}>{game.desc}</Text>
+              <Text style={s.best}>BEST {player.bestScores[game.id] ?? 0}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -1256,6 +1270,7 @@ const s = StyleSheet.create({
   gameIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#0A2529', alignItems: 'center', justifyContent: 'center' },
   gameName: { color: c.foreground, fontSize: 14, fontFamily: 'Inter_700Bold' },
   gameDesc: { color: c.mutedForeground, fontSize: 11, lineHeight: 16 },
+  best: { color: c.primary, fontSize: 10, fontFamily: 'Inter_700Bold', marginTop: 'auto' },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,.75)' },
   overlayContent: { flexGrow: 1, justifyContent: 'center', padding: 20 },
 });

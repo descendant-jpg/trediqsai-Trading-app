@@ -149,8 +149,30 @@ describe('parseArcadePlayer', () => {
   });
 
   it('round-trips through JSON serialization', () => {
-    const original = makePlayer({ played: 42, xp: 999, lastPlayedDay: TODAY_KEY });
+    const original = makePlayer({ played: 42, xp: 999, lastPlayedDay: TODAY_KEY, bestScores: { 'pip-sniper': 87 } });
     const p = parseArcadePlayer(JSON.stringify(original));
     expect(p).toEqual(original);
+  });
+
+  it('preserves valid best scores and drops invalid entries', () => {
+    const p = parseArcadePlayer(JSON.stringify({ bestScores: { 'candle-runner': 120, bad: -4, nope: 'x' } }));
+    expect(p.bestScores).toEqual({ 'candle-runner': 120 });
+  });
+});
+
+describe('personal best scores', () => {
+  it('records a new best score for a game', () => {
+    const next = computeNextPlayer(makePlayer(), 20, TODAY, 'pip-sniper', 88);
+    expect(next.bestScores['pip-sniper']).toBe(88);
+  });
+
+  it('keeps the existing best when a later score is lower', () => {
+    const next = computeNextPlayer(makePlayer({ bestScores: { 'pip-sniper': 100 } }), 20, TODAY, 'pip-sniper', 88);
+    expect(next.bestScores['pip-sniper']).toBe(100);
+  });
+
+  it('round-trips updated best scores through storage payloads', () => {
+    const next = computeNextPlayer(makePlayer(), 20, TODAY, 'chart-master', 150);
+    expect(parseArcadePlayer(JSON.stringify(next))).toEqual(next);
   });
 });
