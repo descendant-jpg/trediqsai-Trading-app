@@ -421,6 +421,17 @@ export default function ProfileScreen() {
           />
         </Section>
 
+        {/* Trading activity remains available from Profile, not the tab bar. */}
+        <Section title="TRADING ACTIVITY">
+          <ListItem
+            icon="briefcase"
+            label="Portfolio & Trade History"
+            detail="Positions, history & analytics"
+            onPress={() => router.push('/portfolio')}
+            testID="profile-portfolio"
+          />
+        </Section>
+
         {/* Section 3 — Account Settings */}
         <Section title="ACCOUNT SETTINGS">
           <ListItem

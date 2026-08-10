@@ -1,0 +1,1 @@
+export { TradingFloorScreen as default } from './index';

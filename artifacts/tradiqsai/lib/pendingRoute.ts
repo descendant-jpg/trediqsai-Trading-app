@@ -66,11 +66,21 @@ const KNOWN_PATHS = new Set([
   '/index',
   '/leaderboard',
   '/portfolio',
+  '/tradiqsai',
   '/signals',
   '/profile',
   '/ai-tools',
   '/oracle',
   '/notification-settings',
+  '/session-intelligence',
+  '/economic-calendar',
+  '/vip-signals',
+  '/shop',
+  '/community',
+  '/trading-arcade',
+  '/quotes',
+  '/notifications',
+  '/trade-journal',
 ]);
 
 /**

@@ -1,6 +1,7 @@
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
+import { Feather } from '@expo/vector-icons';
 import {
   BalanceCard,
   BlownAccountCard,
@@ -17,8 +18,9 @@ import { useLiveMarket } from '@/hooks/useLiveMarket';
 import * as TradeService from '@/services/TradeService';
 import { useTrading, type TradeResult } from '@/context/TradingContext';
 import colors from '@/constants/colors';
-import { useLocalSearchParams } from 'expo-router';
-import React, { useCallback, useRef, useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { PaywallModal } from '@/components/PaywallModal';
 
 const c = colors.light;
 
@@ -29,7 +31,7 @@ function formatMoney(n: number) {
   })}`;
 }
 
-export default function TradingFloorScreen() {
+export function TradingFloorScreen() {
   const insets = useSafeAreaInsets();
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
   const params = useLocalSearchParams<{ symbol?: string; direction?: string }>();
@@ -204,6 +206,146 @@ export default function TradingFloorScreen() {
   );
 }
 
+type Session = { city: string; zone: string; openHour: number; closeHour: number };
+const SESSIONS: Session[] = [
+  { city: 'Sydney', zone: 'Australia/Sydney', openHour: 7, closeHour: 16 },
+  { city: 'Tokyo', zone: 'Asia/Tokyo', openHour: 9, closeHour: 18 },
+  { city: 'London', zone: 'Europe/London', openHour: 8, closeHour: 17 },
+  { city: 'New York', zone: 'America/New_York', openHour: 8, closeHour: 17 },
+];
+const BIAS = [
+  ['EUR/USD', 'BULLISH', '↑'],
+  ['GBP/USD', 'NEUTRAL', '—'],
+  ['BTC/USD', 'BULLISH', '↑'],
+];
+const ACTIONS: Array<{ label: string; icon: React.ComponentProps<typeof Feather>['name']; route: string }> = [
+  { label: 'Competition', icon: 'award', route: '/leaderboard' },
+  { label: 'Calendar', icon: 'calendar', route: '/economic-calendar' },
+  { label: 'VIP Signals', icon: 'star', route: '/vip-signals' },
+  { label: 'Shop', icon: 'shopping-bag', route: '/shop' },
+  { label: 'Game', icon: 'target', route: '/trading-arcade' },
+  { label: 'AI Signals', icon: 'zap', route: '/signals' },
+  { label: 'Trade Journal', icon: 'book-open', route: '/trade-journal' },
+  { label: 'Community', icon: 'users', route: '/community' },
+];
+
+function sessionState(session: Session, now: Date) {
+  const hour = Number(
+    new Intl.DateTimeFormat('en-US', { timeZone: session.zone, hour: 'numeric', hourCycle: 'h23' })
+      .format(now),
+  );
+  return hour >= session.openHour && hour < session.closeHour;
+}
+
+function greetingForHour(hour: number) {
+  if (hour < 12) return 'Good morning';
+  if (hour < 18) return 'Good afternoon';
+  return 'Good evening';
+}
+
+/** Institutional market overview with local, deterministic dashboard data. */
+export default function HomeScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const [now, setNow] = useState(() => new Date());
+  const [paywallOpen, setPaywallOpen] = useState(false);
+  const { profile } = useProfile();
+  const topInset = Platform.OS === 'web' ? 38 : insets.top + 10;
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const localHour = now.getHours();
+  const sessionStates = useMemo(() => SESSIONS.map((session) => ({
+    ...session,
+    open: sessionState(session, now),
+  })), [now]);
+
+  return (
+    <View style={styles.homeContainer}>
+      <ScrollView
+        contentContainerStyle={[styles.homeContent, { paddingTop: topInset, paddingBottom: 115 + insets.bottom }]}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.homeHeader}>
+          <TouchableOpacity style={styles.headerButton} onPress={() => router.push('/quotes' as never)} accessibilityLabel="Market quotes">
+            <Feather name="sun" size={19} color={c.primary} />
+          </TouchableOpacity>
+          <Text style={styles.homeTitle}>TradiQs AI</Text>
+          <TouchableOpacity style={styles.headerButton} onPress={() => router.push('/notifications' as never)} accessibilityLabel="Notifications">
+            <Feather name="bell" size={19} color={c.foreground} />
+            <View style={styles.unreadBadge}><Text style={styles.unreadText}>3</Text></View>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.greetingRow}>
+          <View>
+            <Text style={styles.greeting}>{greetingForHour(localHour)}, Trader</Text>
+            <Text style={styles.greetingSub}>Your institutional edge starts here.</Text>
+          </View>
+          <View style={styles.online}><View style={styles.onlineDot} /><Text style={styles.onlineText}>Online</Text></View>
+        </View>
+
+        <Text style={styles.sectionLabel}>GLOBAL MARKET SESSIONS</Text>
+        <View style={styles.sessionTicker}>
+          {sessionStates.map((session) => (
+            <Pressable key={session.city} style={styles.session} onPress={() => router.push('/session-intelligence' as never)}>
+              <View style={[styles.sessionDot, { backgroundColor: session.open ? c.success : c.mutedForeground }]} />
+              <Text style={styles.sessionCity}>{session.city}</Text>
+              <Text style={[styles.sessionState, { color: session.open ? c.success : c.mutedForeground }]}>
+                {session.open ? 'OPEN' : 'CLOSED'}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
+        <View style={styles.widgets}>
+          <View style={[styles.widget, styles.fearWidget]}>
+            <Text style={styles.sectionLabel}>FEAR & GREED</Text>
+            <View style={styles.dial}>
+              <Text style={styles.dialValue}>68</Text><Text style={styles.dialCaption}>GREED</Text>
+            </View>
+            <Text style={styles.sampleLabel}>Local sample indicator</Text>
+          </View>
+          <View style={[styles.widget, styles.biasWidget]}>
+            <Text style={styles.sectionLabel}>MULTI-TF BIAS</Text>
+            {BIAS.map(([pair, bias, trend]) => (
+              <View key={pair} style={styles.biasRow}>
+                <Text style={styles.pair}>{pair}</Text>
+                <Text style={[styles.bias, { color: bias === 'BULLISH' ? c.success : c.mutedForeground }]}>{trend} {bias}</Text>
+              </View>
+            ))}
+            <Text style={styles.sampleLabel}>Deterministic sample</Text>
+          </View>
+        </View>
+
+        <Text style={styles.sectionLabel}>QUICK ACTIONS</Text>
+        <View style={styles.actionGrid}>
+          {ACTIONS.map((action) => (
+            <Pressable key={action.label} style={styles.actionTile} onPress={() => router.push(action.route as never)}>
+              <Feather name={action.icon} size={20} color={c.primary} />
+              <Text style={styles.actionText}>{action.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+
+        <TouchableOpacity style={styles.proBanner} onPress={() => setPaywallOpen(true)} activeOpacity={0.85}>
+          <View style={styles.proIcon}><Feather name="zap" size={22} color={c.secondary} /></View>
+          <View style={styles.proTextWrap}><Text style={styles.proTitle}>Go Pro. Trade with more edge.</Text><Text style={styles.proSub}>Premium signals, AI insights & more</Text></View>
+          <Feather name="chevron-right" size={20} color={c.secondary} />
+        </TouchableOpacity>
+
+        <Text style={styles.riskDisclaimer}>
+          RISK DISCLOSURE: TradiQs AI provides simulated trading tools and educational content only. Nothing in this app is financial advice, a recommendation, or an offer to buy or sell any asset. Trading involves risk and past performance does not guarantee future results.
+        </Text>
+      </ScrollView>
+      <PaywallModal visible={paywallOpen} onClose={() => setPaywallOpen(false)} />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -242,4 +384,40 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_500Medium',
     textAlign: 'center',
   },
+  homeContainer: { flex: 1, backgroundColor: c.background },
+  homeContent: { paddingHorizontal: 16, gap: 16 },
+  homeHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headerButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: c.card, borderWidth: 1, borderColor: c.border, alignItems: 'center', justifyContent: 'center' },
+  homeTitle: { color: c.foreground, fontSize: 18, fontFamily: 'Inter_700Bold', letterSpacing: .3 },
+  unreadBadge: { position: 'absolute', top: -3, right: -2, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: c.destructive, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: c.background },
+  unreadText: { color: c.destructiveForeground, fontSize: 9, fontFamily: 'Inter_700Bold' },
+  greetingRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 },
+  greeting: { color: c.foreground, fontSize: 21, fontFamily: 'Inter_700Bold' },
+  greetingSub: { color: c.mutedForeground, fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 3 },
+  online: { flexDirection: 'row', gap: 6, alignItems: 'center', paddingHorizontal: 9, paddingVertical: 6, borderRadius: 14, backgroundColor: 'rgba(46,202,139,0.10)' },
+  onlineDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: c.success },
+  onlineText: { color: c.success, fontSize: 11, fontFamily: 'Inter_600SemiBold' },
+  sectionLabel: { color: c.mutedForeground, fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 1.15 },
+  sessionTicker: { backgroundColor: c.card, borderWidth: 1, borderColor: c.border, borderRadius: colors.radius, flexDirection: 'row', flexWrap: 'wrap', padding: 6 },
+  session: { width: '50%', flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 6 },
+  sessionDot: { width: 7, height: 7, borderRadius: 4 },
+  sessionCity: { color: c.foreground, fontSize: 12, fontFamily: 'Inter_600SemiBold', flex: 1 },
+  sessionState: { fontSize: 9, fontFamily: 'Inter_700Bold' },
+  widgets: { flexDirection: 'row', gap: 10 },
+  widget: { backgroundColor: c.card, borderWidth: 1, borderColor: c.border, borderRadius: colors.radius, padding: 13, minHeight: 150 },
+  fearWidget: { flex: .85 }, biasWidget: { flex: 1.35 },
+  dial: { alignSelf: 'center', width: 92, height: 62, marginTop: 12, borderTopWidth: 8, borderLeftWidth: 8, borderRightWidth: 8, borderColor: c.success, borderTopLeftRadius: 52, borderTopRightRadius: 52, alignItems: 'center', justifyContent: 'flex-end' },
+  dialValue: { color: c.foreground, fontSize: 23, fontFamily: 'Inter_700Bold' },
+  dialCaption: { color: c.success, fontSize: 9, fontFamily: 'Inter_700Bold', letterSpacing: .7 },
+  sampleLabel: { color: c.mutedForeground, fontSize: 9, fontFamily: 'Inter_400Regular', marginTop: 'auto' },
+  biasRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: c.border },
+  pair: { color: c.foreground, fontSize: 11, fontFamily: 'Inter_600SemiBold' },
+  bias: { fontSize: 9, fontFamily: 'Inter_700Bold' },
+  actionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  actionTile: { width: '23.4%', minHeight: 78, backgroundColor: c.card, borderWidth: 1, borderColor: c.border, borderRadius: 12, padding: 9, justifyContent: 'space-between' },
+  actionText: { color: c.foreground, fontSize: 10, fontFamily: 'Inter_600SemiBold', lineHeight: 13 },
+  proBanner: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: 'rgba(176,38,255,0.10)', borderWidth: 1, borderColor: 'rgba(176,38,255,0.5)', borderRadius: colors.radius, padding: 14 },
+  proIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(176,38,255,0.18)', alignItems: 'center', justifyContent: 'center' },
+  proTextWrap: { flex: 1 }, proTitle: { color: c.foreground, fontSize: 14, fontFamily: 'Inter_700Bold' }, proSub: { color: c.mutedForeground, fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 3 },
+  riskDisclaimer: { color: c.mutedForeground, fontSize: 10, fontFamily: 'Inter_400Regular', lineHeight: 15, textAlign: 'center', marginTop: 4 },
 });

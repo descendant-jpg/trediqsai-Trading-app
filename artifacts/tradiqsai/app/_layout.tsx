@@ -107,6 +107,15 @@ function RootLayoutNav() {
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="oracle" options={{ headerShown: false }} />
       <Stack.Screen name="notification-settings" options={{ headerShown: false }} />
+      <Stack.Screen name="session-intelligence" options={{ headerShown: false }} />
+      <Stack.Screen name="economic-calendar" options={{ headerShown: false }} />
+      <Stack.Screen name="vip-signals" options={{ headerShown: false }} />
+      <Stack.Screen name="shop" options={{ headerShown: false }} />
+      <Stack.Screen name="community" options={{ headerShown: false }} />
+      <Stack.Screen name="trading-arcade" options={{ headerShown: false }} />
+      <Stack.Screen name="quotes" options={{ headerShown: false, presentation: 'modal' }} />
+      <Stack.Screen name="notifications" options={{ headerShown: false, presentation: 'modal' }} />
+      <Stack.Screen name="trade-journal" options={{ headerShown: false, presentation: 'modal' }} />
     </Stack>
   );
 }

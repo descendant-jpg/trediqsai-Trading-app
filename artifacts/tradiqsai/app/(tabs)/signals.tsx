@@ -287,7 +287,7 @@ export default function AISignalsScreen() {
 
   const handleTrade = (signal: Signal) => {
     router.push({
-      pathname: '/(tabs)',
+      pathname: '/tradiqsai' as never,
       params: { symbol: signal.asset, direction: signal.direction },
     });
   };

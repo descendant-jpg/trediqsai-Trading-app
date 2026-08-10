@@ -52,16 +52,16 @@ export default function TabLayout() {
         options={{
           title: 'Home',
           tabBarIcon: ({ color }) => (
-            <Feather name="activity" size={22} color={color} />
+            <Feather name="grid" size={22} color={color} />
           ),
         }}
       />
       <Tabs.Screen
-        name="signals"
+        name="tradiqsai"
         options={{
-          title: 'Signals',
+          title: 'TradiQsAI',
           tabBarIcon: ({ color }) => (
-            <Feather name="zap" size={22} color={color} />
+            <Feather name="trending-up" size={22} color={color} />
           ),
         }}
       />
@@ -75,11 +75,11 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="portfolio"
+        name="signals"
         options={{
-          title: 'Portfolio',
+          title: 'Signals',
           tabBarIcon: ({ color }) => (
-            <Feather name="briefcase" size={22} color={color} />
+            <Feather name="zap" size={22} color={color} />
           ),
         }}
       />
@@ -94,6 +94,8 @@ export default function TabLayout() {
       />
       {/* Leaderboard stays routable (linked from elsewhere) but off the bar. */}
       <Tabs.Screen name="leaderboard" options={{ href: null }} />
+      {/* Portfolio remains a full screen from Profile, but is no longer a tab. */}
+      <Tabs.Screen name="portfolio" options={{ href: null }} />
     </Tabs>
   );
 }
