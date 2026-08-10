@@ -80,14 +80,14 @@ async function persistResult(
   xpEarned: number,
   gameId: string,
   score: number,
-): Promise<{ player: Player; isPersonalBest: boolean }> {
+): Promise<{ player: Player; isPersonalBest: boolean; previousBest: number }> {
   const base = await loadPlayer();
   const previousBest = base.bestScores[gameId] ?? 0;
   const next = computeNextPlayer(base, xpEarned, new Date(), gameId, score);
   try {
     await AsyncStorage.setItem(ARCADE_PLAYER_KEY, JSON.stringify(next));
   } catch {}
-  return { player: next, isPersonalBest: score > previousBest };
+  return { player: next, isPersonalBest: score > previousBest, previousBest };
 }
 
 function scoreToResult(score: number, maxScore: number): GameResult {
@@ -108,12 +108,14 @@ function ResultScreen({
   onPlayAgain,
   onClose,
   isPersonalBest,
+  previousBest,
 }: {
   game: GameEntry;
   result: GameResult;
   onPlayAgain: () => void;
   onClose: () => void;
   isPersonalBest: boolean;
+  previousBest: number;
 }) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -123,6 +125,11 @@ function ResultScreen({
     <Animated.View style={[rs.container, { opacity: fadeAnim }]}>
       <Text style={rs.label}>{result.label}</Text>
       {isPersonalBest && <Text style={rs.personalBest}>NEW PERSONAL BEST!</Text>}
+      {!isPersonalBest && previousBest > 0 && (
+        <Text style={rs.comparison}>
+          SCORE {result.score} · PERSONAL BEST {previousBest}
+        </Text>
+      )}
       <View style={rs.xpBadge}>
         <Feather name="zap" size={14} color={c.primaryForeground} />
         <Text style={rs.xpText}>+{result.xpEarned} XP</Text>
@@ -152,6 +159,7 @@ const rs = StyleSheet.create({
   done: { flex: 1, backgroundColor: c.primary, borderRadius: 11, padding: 13, alignItems: 'center' },
   doneText: { color: c.primaryForeground, fontFamily: 'Inter_700Bold' },
   personalBest: { color: c.primary, fontSize: 12, fontFamily: 'Inter_700Bold', letterSpacing: 1 },
+  comparison: { color: c.mutedForeground, fontSize: 11, fontFamily: 'Inter_600SemiBold', letterSpacing: 0.5 },
 });
 
 // ─── Game: Pattern Guesser / Chart Master ────────────────────────────────────
@@ -1002,6 +1010,7 @@ function GameModal({
   const [phase, setPhase] = useState<GamePhase>('launch');
   const [result, setResult] = useState<GameResult | null>(null);
   const [isPersonalBest, setIsPersonalBest] = useState(false);
+  const [previousBest, setPreviousBest] = useState(0);
   const cancelledRef = useRef(false);
 
   useEffect(() => {
@@ -1021,6 +1030,7 @@ function GameModal({
         const persisted = await persistResult(r.xpEarned, game.id, r.score);
         updatedPlayer = persisted.player;
         setIsPersonalBest(persisted.isPersonalBest);
+        setPreviousBest(persisted.previousBest);
       } catch {}
       // Notify the hub so stats refresh whether or not the modal is still open.
       if (updatedPlayer) onStatsUpdated(updatedPlayer);
@@ -1077,6 +1087,7 @@ function GameModal({
           game={game}
           result={result}
           isPersonalBest={isPersonalBest}
+          previousBest={previousBest}
           onPlayAgain={handlePlayAgain}
           onClose={onClose}
         />
