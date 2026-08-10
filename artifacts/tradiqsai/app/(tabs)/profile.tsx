@@ -26,6 +26,8 @@ import { supabase } from '@/utils/supabase';
 import colors from '@/constants/colors';
 import { AcademyModal } from '@/components/AcademyModal';
 import { SocialMediaModal } from '@/components/SocialMediaModal';
+import { ChangePasswordModal } from '@/components/ChangePasswordModal';
+import { DeleteAccountModal } from '@/components/DeleteAccountModal';
 
 function showAlert(title: string, message: string) {
   if (Platform.OS === 'web') {
@@ -74,12 +76,14 @@ function ListItem({
   detail,
   onPress,
   testID,
+    danger = false,
 }: {
   icon: IconName;
   label: string;
   detail?: string;
   onPress?: () => void;
   testID?: string;
+    danger?: boolean;
 }) {
   return (
     <TouchableOpacity
@@ -88,8 +92,8 @@ function ListItem({
       activeOpacity={0.8}
       testID={testID}
     >
-      <Feather name={icon} size={18} color="#8A8D93" />
-      <Text style={styles.listItemLabel}>{label}</Text>
+      <Feather name={icon} size={18} color={danger ? '#FF5252' : '#8A8D93'} />
+      <Text style={[styles.listItemLabel, danger && styles.dangerLabel]}>{label}</Text>
       {!!detail && <Text style={styles.listItemDetail}>{detail}</Text>}
       <Feather name="chevron-right" size={18} color="#8A8D93" />
     </TouchableOpacity>
@@ -179,6 +183,7 @@ export default function ProfileScreen() {
 
   // Delete account
   const [deleting, setDeleting] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
   const email = session?.user?.email ?? '';
 
@@ -236,14 +241,14 @@ export default function ProfileScreen() {
     showAlert('Language', `Language set to ${lang}.`);
   };
 
-  const handleSavePassword = async () => {
-    if (newPassword.length < 8) {
+  const handleSavePassword = async (password = newPassword) => {
+    if (password.length < 8) {
       showAlert('Change Password', 'Password must be at least 8 characters.');
       return;
     }
     setSavingPassword(true);
     try {
-      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
       setNewPassword('');
       setActiveModal(null);
@@ -376,7 +381,7 @@ export default function ProfileScreen() {
         <Banner icon="briefcase" title="Portfolio & History" subtitle="View open positions and trade journal" onPress={() => router.push('/portfolio')} testID="profile-portfolio" />
         <Text style={styles.sectionTitle}>QUICK TOOLS</Text>
         <View style={styles.toolsGrid}><Tool icon="cpu" label="AutoPilot Bots" /><Tool icon="link" label="BrokerSync" /><Tool icon="gift" label="Refer & Earn" badge="+$0.50" onPress={() => router.push('/refer-and-earn' as never)} /><Tool icon="star" label="Manage Plan" gold onPress={() => router.push('/signals')} /></View>
-        <SettingsGroup title="SECURITY"><ListItem icon="lock" label="Biometrics / FaceID" detail="OFF" /><ListItem icon="shield" label="Two-Factor Auth (2FA)" /></SettingsGroup>
+        <SettingsGroup title="SECURITY"><ListItem icon="lock" label="Biometrics / FaceID" detail="OFF" /><ListItem icon="shield" label="Two-Factor Auth (2FA)" /><ListItem icon="key" label="Change Password" onPress={() => setActiveModal('password')} testID="profile-change-password" /><ListItem icon="trash-2" label="Delete Account" danger onPress={() => setDeleteModalOpen(true)} testID="profile-delete-account" /></SettingsGroup>
         <SettingsGroup title="PREFERENCES"><ListItem icon="bell" label="Notifications" onPress={() => router.push('/notification-settings')} testID="profile-notifications" /><ListItem icon="sliders" label="Chart Settings" /><ListItem icon="globe" label="Language" detail={language} onPress={() => setActiveModal('language')} /><ListItem icon="clock" label="Trading Day Timezone" detail={tradingDayTz.replace(/_/g, ' ')} onPress={() => setTzPickerOpen(true)} /></SettingsGroup>
         <SettingsGroup title="SUPPORT"><ListItem icon="help-circle" label="Help Center" onPress={() => showAlert('Help Center', 'Email support@tradiqsai.com for assistance.')} /><ListItem icon="share-2" label="Social Media" onPress={() => setSocialOpen(true)} testID="profile-social-media" /><ListItem icon="book-open" label="App Guide" onPress={() => showAlert('App Guide', 'Open the Trading Floor, follow Signals, and track your Portfolio.')} /><ListItem icon="file-text" label="Terms & Privacy" onPress={() => setActiveModal('terms')} /></SettingsGroup>
         <TouchableOpacity style={styles.community} onPress={() => openLink(TELEGRAM_GROUP_URL, 'Elite Community')}><Feather name="send" size={17} color={c.primaryForeground} /><Text style={styles.communityText}>Join the TradiQs Elite Community</Text></TouchableOpacity>
@@ -404,37 +409,8 @@ export default function ProfileScreen() {
         }}
       />
 
-      {/* Change Password */}
-      <SheetModal
-        visible={activeModal === 'password'}
-        title="Change Password"
-        onClose={() => setActiveModal(null)}
-      >
-        <Text style={styles.fieldLabel}>New Password</Text>
-        <TextInput
-          style={styles.input}
-          value={newPassword}
-          onChangeText={setNewPassword}
-          placeholder="At least 8 characters"
-          placeholderTextColor="#8A8D93"
-          secureTextEntry
-          autoCapitalize="none"
-          testID="password-input"
-        />
-        <TouchableOpacity
-          style={[styles.primaryButton, savingPassword && styles.disabled]}
-          onPress={handleSavePassword}
-          disabled={savingPassword}
-          activeOpacity={0.85}
-          testID="password-save"
-        >
-          {savingPassword ? (
-            <ActivityIndicator color="#0A0B0E" />
-          ) : (
-            <Text style={styles.primaryButtonText}>Save Password</Text>
-          )}
-        </TouchableOpacity>
-      </SheetModal>
+      <ChangePasswordModal visible={activeModal === 'password'} saving={savingPassword} onClose={() => setActiveModal(null)} onSubmit={(_, password) => { setNewPassword(password); void handleSavePassword(password); }} />
+      <DeleteAccountModal visible={deleteModalOpen} deleting={deleting} onClose={() => setDeleteModalOpen(false)} onConfirm={() => { setDeleteModalOpen(false); handleDeleteAccount(); }} />
       <AcademyModal visible={academyOpen} onClose={() => setAcademyOpen(false)} />
       <SocialMediaModal visible={socialOpen} onClose={() => setSocialOpen(false)} />
 
@@ -659,6 +635,9 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14.5,
     fontFamily: 'Inter_500Medium',
+  },
+  dangerLabel: {
+    color: '#FF5252',
   },
   listItemDetail: {
     color: '#8A8D93',
