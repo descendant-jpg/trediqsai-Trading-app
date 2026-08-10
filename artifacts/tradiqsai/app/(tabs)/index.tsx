@@ -21,6 +21,7 @@ import colors from '@/constants/colors';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PaywallModal } from '@/components/PaywallModal';
+import { LatestInsightsModal } from '@/components/LatestInsightsModal';
 
 const c = colors.light;
 
@@ -228,6 +229,12 @@ const ACTIONS: Array<{ label: string; icon: React.ComponentProps<typeof Feather>
   { label: 'Trade Journal', icon: 'book-open', route: '/trade-journal' },
   { label: 'Community', icon: 'users', route: '/community' },
 ];
+const FEATURED_MARKETS = [
+  ['USOIL', 'BUY', '78.50'],
+  ['BTC/USD', 'BUY', '96,210'],
+  ['EUR/USD', 'SELL', '1.0850'],
+  ['NVDA', 'BUY', '128.40'],
+] as const;
 
 function sessionState(session: Session, now: Date) {
   const hour = Number(
@@ -249,6 +256,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const [now, setNow] = useState(() => new Date());
   const [paywallOpen, setPaywallOpen] = useState(false);
+  const [insightsOpen, setInsightsOpen] = useState(false);
   const { profile } = useProfile();
   const topInset = Platform.OS === 'web' ? 38 : insets.top + 10;
 
@@ -363,6 +371,21 @@ export default function HomeScreen() {
           ))}
         </View>
 
+        <View style={styles.featuredMarkets}>
+          {FEATURED_MARKETS.map(([asset, direction, entry]) => (
+            <Pressable key={asset} style={styles.marketCard} onPress={() => router.push('/signals' as never)} accessibilityRole="button" accessibilityLabel={`${asset} ${direction} signal, entry ${entry}`} accessibilityHint="Open AI Signals">
+              <View style={styles.marketMain}><Text style={styles.marketAsset}>{asset}</Text><Text style={[styles.direction, direction === 'SELL' && styles.sellDirection]}>{direction}</Text><Text style={styles.entry}>ENTRY {entry}</Text></View>
+              <Text style={styles.live}>• LIVE  ›</Text>
+            </Pressable>
+          ))}
+        </View>
+
+        <TouchableOpacity style={styles.insightsBanner} onPress={() => setInsightsOpen(true)} accessibilityRole="button" accessibilityLabel="Latest Insights" accessibilityHint="Read free strategies and market analysis">
+          <View style={styles.insightsIcon}><Feather name="book-open" size={19} color={c.primary} /></View>
+          <View style={styles.insightsCopy}><Text style={styles.insightsTitle}>Latest Insights</Text><Text style={styles.insightsSub}>Free strategies, AI signal reviews & market analysis</Text></View>
+          <Feather name="chevron-right" size={19} color={c.primary} />
+        </TouchableOpacity>
+
         <TouchableOpacity
           style={styles.proBanner}
           onPress={() => setPaywallOpen(true)}
@@ -376,11 +399,15 @@ export default function HomeScreen() {
           <Feather name="chevron-right" size={20} color={c.secondary} />
         </TouchableOpacity>
 
-        <Text style={styles.riskDisclaimer}>
-          RISK DISCLOSURE: TradiQs AI provides simulated trading tools and educational content only. Nothing in this app is financial advice, a recommendation, or an offer to buy or sell any asset. Trading involves risk and past performance does not guarantee future results.
-        </Text>
+        <View style={styles.riskCard}>
+          <View style={styles.riskHeader}><Text style={styles.riskIcon}>⚠</Text><Text style={styles.riskTitle}>RISK DISCLAIMER</Text></View>
+          <Text style={styles.riskDisclaimer}>
+          Trading involves substantial risk of loss. Past performance does not guarantee future results. This content is for educational and informational purposes only and does not constitute financial advice. Always do your own research.
+          </Text>
+        </View>
       </ScrollView>
       <PaywallModal visible={paywallOpen} onClose={() => setPaywallOpen(false)} />
+      <LatestInsightsModal visible={insightsOpen} onClose={() => setInsightsOpen(false)} />
     </View>
   );
 }
@@ -455,8 +482,21 @@ const styles = StyleSheet.create({
   actionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   actionTile: { width: '23.4%', minHeight: 78, backgroundColor: c.card, borderWidth: 1, borderColor: c.border, borderRadius: 12, padding: 9, justifyContent: 'space-between' },
   actionText: { color: c.foreground, fontSize: 10, fontFamily: 'Inter_600SemiBold', lineHeight: 13 },
+  featuredMarkets: { gap: 9 },
+  marketCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: c.card, borderWidth: 1, borderColor: c.border, borderRadius: 12, padding: 13 },
+  marketMain: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  marketAsset: { color: c.foreground, fontSize: 14, fontFamily: 'Inter_700Bold', minWidth: 67 },
+  direction: { color: c.primary, fontSize: 10, fontFamily: 'Inter_700Bold', backgroundColor: 'rgba(0,240,255,.12)', paddingHorizontal: 7, paddingVertical: 4, borderRadius: 5 },
+  sellDirection: { color: c.destructive, backgroundColor: 'rgba(229,75,75,.12)' },
+  entry: { color: c.mutedForeground, fontSize: 10, fontFamily: 'Inter_600SemiBold' },
+  live: { color: c.success, fontSize: 10, fontFamily: 'Inter_700Bold' },
+  insightsBanner: { flexDirection: 'row', alignItems: 'center', gap: 11, backgroundColor: c.card, borderWidth: 1, borderColor: c.border, borderRadius: 12, padding: 13 },
+  insightsIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(0,240,255,.1)', alignItems: 'center', justifyContent: 'center' },
+  insightsCopy: { flex: 1 }, insightsTitle: { color: c.foreground, fontSize: 14, fontFamily: 'Inter_700Bold' }, insightsSub: { color: c.mutedForeground, fontSize: 10, marginTop: 3 },
   proBanner: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: 'rgba(176,38,255,0.10)', borderWidth: 1, borderColor: 'rgba(176,38,255,0.5)', borderRadius: colors.radius, padding: 14 },
   proIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(176,38,255,0.18)', alignItems: 'center', justifyContent: 'center' },
   proTextWrap: { flex: 1 }, proTitle: { color: c.foreground, fontSize: 14, fontFamily: 'Inter_700Bold' }, proSub: { color: c.mutedForeground, fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 3 },
-  riskDisclaimer: { color: c.mutedForeground, fontSize: 10, fontFamily: 'Inter_400Regular', lineHeight: 15, textAlign: 'center', marginTop: 4 },
+  riskCard: { backgroundColor: c.card, borderWidth: 1, borderColor: '#332200', borderRadius: 12, padding: 14, gap: 8 },
+  riskHeader: { flexDirection: 'row', alignItems: 'center', gap: 7 }, riskIcon: { color: '#FFB020', fontSize: 16 }, riskTitle: { color: '#FFB020', fontSize: 11, fontFamily: 'Inter_700Bold', letterSpacing: 1 },
+  riskDisclaimer: { color: c.mutedForeground, fontSize: 10, fontFamily: 'Inter_400Regular', lineHeight: 15 },
 });
