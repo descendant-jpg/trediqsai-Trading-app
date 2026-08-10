@@ -3,6 +3,8 @@ import { Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, Vi
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTrading } from '@/context/TradingContext';
+import { useAuth } from '@/context/AuthContext';
+import { executeSimulatedTrade } from '@/services/supabaseService';
 import { useLiveMarket } from '@/hooks/useLiveMarket';
 import colors from '@/constants/colors';
 
@@ -15,6 +17,7 @@ const CANDLE = [42, 58, 47, 71, 63, 84, 76, 91, 67, 79, 88, 73, 96, 82, 69, 87, 
 export default function TradingTerminalScreen() {
   const insets = useSafeAreaInsets();
   const { price, position, unrealizedPnl, buy, sell } = useTrading();
+  const { session } = useAuth();
   const { livePrice, connected } = useLiveMarket();
   const [timeframe, setTimeframe] = useState('15m');
   const [orderType, setOrderType] = useState('Limit');
@@ -23,7 +26,23 @@ export default function TradingTerminalScreen() {
   const [tpSlOpen, setTpSlOpen] = useState(false);
   const mark = livePrice || price;
   const candles = useMemo(() => CANDLE.map((height, i) => ({ height, up: i % 3 !== 0 })), []);
-  const execute = (side: 'buy' | 'sell') => { side === 'buy' ? buy() : sell(); };
+  const execute = async (side: 'buy' | 'sell') => {
+    const result = side === 'buy' ? buy() : sell();
+    if (result.kind === 'opened' && session?.user.id) {
+      try {
+        await executeSimulatedTrade({
+          user_id: session.user.id,
+          asset: 'BTC/USD',
+          order_type: 'Market',
+          side: side === 'buy' ? 'LONG' : 'SHORT',
+          leverage,
+          entry_price: result.position.entryPrice,
+        });
+      } catch (error) {
+        console.warn('Unable to sync simulated trade:', error);
+      }
+    }
+  };
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={[styles.content, { paddingTop: Platform.OS === 'web' ? 18 : insets.top + 8, paddingBottom: insets.bottom + 24 }]} showsVerticalScrollIndicator={false}>

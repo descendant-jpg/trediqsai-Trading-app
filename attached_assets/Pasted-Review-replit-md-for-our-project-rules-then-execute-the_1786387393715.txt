@@ -1,0 +1,28 @@
+Review replit.md for our project rules, then execute the Supabase database integration, TypeScript API service layer, and app state wiring.
+
+### 1. Supabase Client Setup (`lib/supabase.ts`)
+- Ensure `@supabase/supabase-js` is installed and properly configured in `lib/supabase.ts`.
+- Use environment variables (`EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`) for secure initialization.
+- Provide fallbacks or clear mock handlers if environment variables are not yet populated so the app never crashes on boot.
+
+### 2. Database Schema & Migration SQL (`supabase/schema.sql`)
+Create a SQL file at `supabase/schema.sql` containing the full database definition:
+- `profiles`: User identity, `simulated_balance` (default 100,000.00), `tier_level` (Free, Pro, Elite, Whale), and verification status.
+- `ai_signals`: Signal entries for assets (BTC/USD, USOIL, EUR/USD, NVDA), entry prices, TP/SL, and `is_vip_only` boolean flags.
+- `simulated_trades`: Live trade ledger storing `user_id`, `asset`, `order_type`, `leverage`, `entry_price`, `unrealized_pnl`, and `status`.
+- `affiliates`: Partner program tracking with `referral_code`, `total_earnings`, and `tier_level` (Ambassador, Elite, Master).
+- Include full Row Level Security (RLS) policies enforcing per-user isolation for `profiles`, `simulated_trades`, and `affiliates`.
+
+### 3. API Service Layer (`services/supabaseService.ts`)
+Create service helper functions to manage all database interactions:
+- `getUserProfile(userId)` / `updateSimulatedBalance(userId, newBalance)`
+- `executeSimulatedTrade(tradeData)` / `getActiveTrades(userId)` / `closeTrade(tradeId)`
+- `fetchAiSignals(isVip)`
+- `getAffiliateStats(partnerId)`
+
+### 4. Connect UI Screens to Supabase Services
+- **TradiQsAI Screen (`TradiQsAIScreen.tsx`):** Wire the Buy/Sell execution buttons to trigger `executeSimulatedTrade()` and update the live position list from Supabase in real time.
+- **Signals Tab (`SignalsScreen.tsx`):** Replace static mock feeds with `fetchAiSignals()`, automatically filtering VIP signals behind the paywall interceptor for non-pro users.
+- **Profile & Partner Program (`ProfileScreen.tsx`, `PartnerProgramScreen.tsx`):** Connect simulated equity, referral earnings, and tier badges to fetch directly from `getUserProfile()` and `getAffiliateStats()`.
+
+Ensure all async calls handle loading states, wrap database calls in try/catch blocks, and fail gracefully with user-friendly error alerts.

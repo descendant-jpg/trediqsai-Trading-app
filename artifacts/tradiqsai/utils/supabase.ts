@@ -5,9 +5,11 @@ import { AppState } from 'react-native';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
 const supabasePublishableKey =
-  process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? '';
+  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ??
+  process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+  '';
 
-/** True once EXPO_PUBLIC_SUPABASE_URL / _PUBLISHABLE_KEY are configured. */
+/** True once EXPO_PUBLIC_SUPABASE_URL and either supported public key are configured. */
 export const isSupabaseConfigured = !!supabaseUrl && !!supabasePublishableKey;
 
 let client: SupabaseClient | null = null;
@@ -22,7 +24,7 @@ let client: SupabaseClient | null = null;
 function getSupabase(): SupabaseClient {
   if (!isSupabaseConfigured) {
     throw new Error(
-      'Supabase is not configured. Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY.',
+      'Supabase is not configured. Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY.',
     );
   }
   if (!client) {
