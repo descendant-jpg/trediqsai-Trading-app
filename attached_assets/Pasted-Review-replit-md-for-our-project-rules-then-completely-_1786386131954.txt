@@ -1,0 +1,41 @@
+Review replit.md for our project rules, then completely redesign `ProfileScreen.tsx` to serve as a premium institutional command center, surpassing standard settings pages.
+
+### 1. Trader Identity Header
+- Background: Terminal dark (#0A0B0E).
+- Layout: Left-aligned large Avatar wrapped in a subtle Electric Cyan (#00F0FF) glowing border.
+- Text: User's Name with a small green "✓ Verified" badge next to it. Below the name, the email address (gray) and a styled plan badge (e.g., "PRO TRADER" in gold or cyan).
+
+### 2. Dual-Wallet Financial Hub (Card)
+- Create a prominent card (Background #16181D).
+- Top Half (Prop Equity): Label "Simulated Equity", large balance (e.g., "$104,250.00"), and a sleek "Request Payout" pill button.
+- Bottom Half (Affiliate Wallet): Separated by a thin horizontal line. Label "Cashback & Referrals", balance (e.g., "$125.50"), and a "Withdraw" text button.
+
+### 3. Performance Snapshot Row
+- Below the wallet, create a 3-column metrics row (No card background, just floating text/values).
+- Columns: `Win Rate` (e.g., 68% in Green), `Profit Factor` (e.g., 1.8), `Total Trades` (e.g., 142).
+
+### 4. Hero Banners (Academy & Portfolio)
+Since we removed these from the bottom tab, they need massive visibility here.
+- **Academy Banner:** A full-width card with a subtle gradient or icon background. Title: "TradiQs Academy". Subtitle: "Masterclasses, Guides & Risk Tools". Icon: Mortarboard/Book.
+- **Portfolio Banner:** A similar card below it. Title: "Portfolio & History". Subtitle: "View open positions and trade journal". Icon: Briefcase/Chart.
+
+### 5. Quick Tools Grid (2x2)
+- Create a 2x2 grid of square cards for quick actions.
+- Items: 
+  1. `AutoPilot Bots` (Robot icon)
+  2. `BrokerSync` (Link icon)
+  3. `Refer & Earn` (Gift icon, add a small "+$5" badge)
+  4. `Manage Plan` (Crown/Star icon, gold accent)
+
+### 6. Grouped Settings Lists (Cards)
+Group list items inside rounded containers (Background #16181D) with dividers between items. Each item needs a left icon and a right chevron (`>`).
+- **Security Group:** `Biometrics / FaceID` (Toggle switch instead of chevron), `Two-Factor Auth (2FA)`.
+- **Preferences Group:** `Notifications`, `Chart Settings`, `Language`.
+- **Support Group:** `Help Center`, `App Guide`, `Terms & Privacy`.
+
+### 7. Footer Area
+- **Community Banner:** A solid Electric Cyan (#00F0FF) rounded button/banner: "Join the TradiQs Elite Community" with a Telegram/Send icon.
+- **Sign Out:** A centered, crimson red (#FF5252) text button: "Sign Out".
+- **Version:** "TradiQs AI v1.0.0" in very small, dark gray text at the absolute bottom.
+
+Ensure the entire screen is scrollable, adheres to safe area insets, and perfectly matches our dark terminal aesthetic with glowing accents.

@@ -335,16 +335,15 @@ export default function ProfileScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
-        {/* Section 1 — User Info */}
-        <View style={styles.userCard}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.identityHeader}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>
               {(username ?? email ?? 'T').charAt(0).toUpperCase()}
             </Text>
           </View>
           <View style={styles.userInfo}>
-            <Text style={styles.username}>{username ?? 'Trader'}</Text>
+            <View style={styles.nameRow}><Text style={styles.username}>{username ?? 'Trader'}</Text><Text style={styles.verified}>✓ Verified</Text></View>
             {!!email && <Text style={styles.email}>{email}</Text>}
             <View style={styles.planBadge}>
               <Text style={styles.planText}>
@@ -364,186 +363,16 @@ export default function ProfileScreen() {
             <Text style={styles.upgradeText}>Upgrade to Pro</Text>
           </TouchableOpacity>
         )}
-        {/* Section 2 — Wallet & Referrals */}
-        <Section title="WALLET & REFERRALS">
-          <ListItem
-            icon="dollar-sign"
-            label="Withdraw Funds"
-            onPress={() =>
-              showAlert(
-                'Withdraw Funds',
-                isSubscribed
-                  ? 'Payout requests open at the end of each evaluation cycle.'
-                  : 'Withdrawals are available on paid plans. Upgrade to Pro to unlock payouts.',
-              )
-            }
-            testID="profile-withdraw"
-          />
-          <View style={styles.referralBlock}>
-            <Text style={styles.referralLabel}>Your referral link</Text>
-            <Text style={styles.referralLink} numberOfLines={1}>
-              {referralLink ?? 'Loading…'}
-            </Text>
-            <View style={styles.referralRow}>
-              <View>
-                <Text style={styles.referralCount}>
-                  Users Joined: {referralCount ?? '—'}
-                </Text>
-                <Text style={styles.referralEarned} testID="profile-referral-earned">
-                  Earned: {referralEarned == null
-                    ? '—'
-                    : `$${referralEarned.toLocaleString('en-US')}`}{' '}
-                  bonus balance
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={[styles.shareButton, !referralLink && styles.disabled]}
-                onPress={handleShareReferral}
-                disabled={!referralLink}
-                activeOpacity={0.85}
-                testID="profile-share-referral"
-              >
-                <Feather name="share-2" size={14} color="#0A0B0E" />
-                <Text style={styles.shareButtonText}>Share</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Section>
-
-        {/* Education */}
-        <Section title="EDUCATION">
-          <ListItem
-            icon="book-open"
-            label="TradiQs Academy"
-            detail="Masterclasses & tools"
-            onPress={() => setAcademyOpen(true)}
-            testID="profile-academy"
-          />
-        </Section>
-
-        {/* Trading activity remains available from Profile, not the tab bar. */}
-        <Section title="TRADING ACTIVITY">
-          <ListItem
-            icon="briefcase"
-            label="Portfolio & Trade History"
-            detail="Positions, history & analytics"
-            onPress={() => router.push('/portfolio')}
-            testID="profile-portfolio"
-          />
-        </Section>
-
-        {/* Section 3 — Account Settings */}
-        <Section title="ACCOUNT SETTINGS">
-          <ListItem
-            icon="lock"
-            label="Change Password"
-            onPress={() => setActiveModal('password')}
-            testID="profile-change-password"
-          />
-          <ListItem
-            icon="trash-2"
-            label={deleting ? 'Deleting…' : 'Delete Account'}
-            onPress={deleting ? undefined : handleDeleteAccount}
-            testID="profile-delete-account"
-          />
-          <ListItem
-            icon="globe"
-            label="Language"
-            detail={language}
-            onPress={() => setActiveModal('language')}
-            testID="profile-language"
-          />
-          <ListItem
-            icon="clock"
-            label="Trading Day Timezone"
-            detail={tradingDayTz.replace(/_/g, ' ')}
-            onPress={() => setTzPickerOpen(true)}
-            testID="profile-timezone"
-          />
-          <ListItem
-            icon="bell"
-            label="Notifications"
-            onPress={() => router.push('/notification-settings')}
-            testID="profile-notifications"
-          />
-        </Section>
-
-        {/* Section 4 — Partner Program */}
-        <Section title="PARTNER PROGRAM">
-          <ListItem icon="link" label="Crypto Brokers" onPress={() => openPartner('Crypto Brokers')} />
-          <ListItem icon="bar-chart-2" label="Forex Partners" onPress={() => openPartner('Forex Partners')} />
-          <ListItem icon="trending-up" label="Stock Partners" onPress={() => openPartner('Stock Partners')} />
-        </Section>
-
-        {/* Section 5 — Support & Socials */}
-        <Section title="SUPPORT & SOCIALS">
-          <ListItem
-            icon="mail"
-            label="Contact Us"
-            onPress={() => openLink('mailto:support@tradiqsai.com', 'Contact Us')}
-            testID="profile-contact"
-          />
-          <ListItem
-            icon="help-circle"
-            label="Help & FAQs"
-            onPress={() =>
-              showAlert(
-                'Help & FAQs',
-                'Need help? Email support@tradiqsai.com and we normally reply within 24 hours. A full FAQ hub is coming soon.',
-              )
-            }
-          />
-          <ListItem
-            icon="book-open"
-            label="App Guide"
-            onPress={() =>
-              showAlert(
-                'App Guide',
-                '1. Open trades on the Trading Floor.\n2. Track positions in Portfolio.\n3. Follow AI Signals for entries.\n4. Keep your equity above the daily loss limit to stay funded.',
-              )
-            }
-          />
-          <ListItem
-            icon="send"
-            label="Telegram Channel"
-            onPress={() => openLink(TELEGRAM_CHANNEL_URL, 'Telegram Channel')}
-            testID="profile-telegram-channel"
-          />
-          <ListItem
-            icon="message-circle"
-            label="Telegram Group"
-            onPress={() => openLink(TELEGRAM_GROUP_URL, 'Telegram Group')}
-            testID="profile-telegram-group"
-          />
-          <ListItem
-            icon="twitter"
-            label="X / Twitter"
-            onPress={() => openLink('https://x.com/tradiqsai', 'X / Twitter')}
-          />
-          <ListItem
-            icon="instagram"
-            label="Instagram"
-            onPress={() => openLink('https://instagram.com/tradiqsai', 'Instagram')}
-          />
-        </Section>
-
-        {/* Section 6 — Legal */}
-        <Section title="LEGAL">
-          <ListItem
-            icon="file-text"
-            label="Terms and Conditions"
-            onPress={() => setActiveModal('terms')}
-            testID="profile-terms"
-          />
-          <ListItem
-            icon="shield"
-            label="Privacy Policy"
-            onPress={() => setActiveModal('privacy')}
-            testID="profile-privacy"
-          />
-        </Section>
-
-        {/* Section 7 — Sign Out */}
+        <View style={styles.walletCard}><View style={styles.walletTop}><View><Text style={styles.walletLabel}>SIMULATED EQUITY</Text><Text style={styles.walletBalance}>$104,250.00</Text></View><TouchableOpacity style={styles.payout} onPress={() => showAlert('Request Payout', 'Payout requests open at the end of each evaluation cycle.')}><Text style={styles.payoutText}>Request Payout</Text></TouchableOpacity></View><View style={styles.walletDivider} /><View style={styles.walletBottom}><View><Text style={styles.walletLabel}>CASHBACK & REFERRALS</Text><Text style={styles.cashBalance}>${(referralEarned ?? 125.5).toFixed(2)}</Text></View><TouchableOpacity onPress={() => showAlert('Withdraw', 'Referral withdrawals will be available soon.')}><Text style={styles.withdrawText}>Withdraw →</Text></TouchableOpacity></View></View>
+        <View style={styles.metrics}><Metric label="WIN RATE" value="68%" color={c.success} /><Metric label="PROFIT FACTOR" value="1.8" /><Metric label="TOTAL TRADES" value="142" /></View>
+        <Banner icon="book-open" title="TradiQs Academy" subtitle="Masterclasses, Guides & Risk Tools" onPress={() => setAcademyOpen(true)} testID="profile-academy" />
+        <Banner icon="briefcase" title="Portfolio & History" subtitle="View open positions and trade journal" onPress={() => router.push('/portfolio')} testID="profile-portfolio" />
+        <Text style={styles.sectionTitle}>QUICK TOOLS</Text>
+        <View style={styles.toolsGrid}><Tool icon="cpu" label="AutoPilot Bots" /><Tool icon="link" label="BrokerSync" /><Tool icon="gift" label="Refer & Earn" badge="+$5" onPress={handleShareReferral} /><Tool icon="star" label="Manage Plan" gold onPress={() => router.push('/signals')} /></View>
+        <SettingsGroup title="SECURITY"><ListItem icon="lock" label="Biometrics / FaceID" detail="OFF" /><ListItem icon="shield" label="Two-Factor Auth (2FA)" /></SettingsGroup>
+        <SettingsGroup title="PREFERENCES"><ListItem icon="bell" label="Notifications" onPress={() => router.push('/notification-settings')} testID="profile-notifications" /><ListItem icon="sliders" label="Chart Settings" /><ListItem icon="globe" label="Language" detail={language} onPress={() => setActiveModal('language')} /><ListItem icon="clock" label="Trading Day Timezone" detail={tradingDayTz.replace(/_/g, ' ')} onPress={() => setTzPickerOpen(true)} /></SettingsGroup>
+        <SettingsGroup title="SUPPORT"><ListItem icon="help-circle" label="Help Center" onPress={() => showAlert('Help Center', 'Email support@tradiqsai.com for assistance.')} /><ListItem icon="book-open" label="App Guide" onPress={() => showAlert('App Guide', 'Open the Trading Floor, follow Signals, and track your Portfolio.')} /><ListItem icon="file-text" label="Terms & Privacy" onPress={() => setActiveModal('terms')} /></SettingsGroup>
+        <TouchableOpacity style={styles.community} onPress={() => openLink(TELEGRAM_GROUP_URL, 'Elite Community')}><Feather name="send" size={17} color={c.primaryForeground} /><Text style={styles.communityText}>Join the TradiQs Elite Community</Text></TouchableOpacity>
         <TouchableOpacity
           style={styles.signOutButton}
           onPress={handleSignOut}
@@ -552,6 +381,7 @@ export default function ProfileScreen() {
         >
           <Text style={styles.signOutText}>Sign Out</Text>
         </TouchableOpacity>
+        <Text style={styles.version}>TradiQs AI v1.0.0</Text>
       </ScrollView>
 
       {/* Trading-day timezone picker (restored from settings task) */}
@@ -658,6 +488,24 @@ export default function ProfileScreen() {
   );
 }
 
+const c = colors.light;
+
+function Metric({ label, value, color = c.foreground }: { label: string; value: string; color?: string }) {
+  return <View style={styles.metric}><Text style={styles.metricLabel}>{label}</Text><Text style={[styles.metricValue, { color }]}>{value}</Text></View>;
+}
+
+function Banner({ icon, title, subtitle, onPress, testID }: { icon: IconName; title: string; subtitle: string; onPress: () => void; testID?: string }) {
+  return <TouchableOpacity style={styles.banner} onPress={onPress} testID={testID}><View style={styles.bannerIcon}><Feather name={icon} size={22} color={c.primary} /></View><View style={styles.bannerCopy}><Text style={styles.bannerTitle}>{title}</Text><Text style={styles.bannerSubtitle}>{subtitle}</Text></View><Feather name="arrow-up-right" size={18} color={c.primary} /></TouchableOpacity>;
+}
+
+function Tool({ icon, label, badge, gold, onPress }: { icon: IconName; label: string; badge?: string; gold?: boolean; onPress?: () => void }) {
+  return <TouchableOpacity style={styles.tool} onPress={onPress}><View style={[styles.toolIcon, gold && styles.goldIcon]}><Feather name={icon} size={19} color={gold ? '#E6C65C' : c.primary} /></View><Text style={styles.toolLabel}>{label}</Text>{badge && <Text style={styles.toolBadge}>{badge}</Text>}</TouchableOpacity>;
+}
+
+function SettingsGroup({ title, children }: { title: string; children: React.ReactNode }) {
+  return <View style={styles.settingsGroup}><Text style={styles.sectionTitle}>{title}</Text><View style={styles.sectionCard}>{children}</View></View>;
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -668,6 +516,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 40,
   },
+  identityHeader: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingBottom: 18 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  verified: { color: c.success, fontSize: 10, fontFamily: 'Inter_700Bold' },
+  walletCard: { backgroundColor: c.card, borderColor: c.border, borderWidth: 1, borderRadius: 14, padding: 16, marginBottom: 16 },
+  walletTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  walletBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 14 },
+  walletLabel: { color: c.mutedForeground, fontSize: 9, letterSpacing: 1, fontFamily: 'Inter_700Bold' },
+  walletBalance: { color: c.foreground, fontSize: 26, fontFamily: 'Inter_700Bold', marginTop: 5 },
+  cashBalance: { color: c.success, fontSize: 20, fontFamily: 'Inter_700Bold', marginTop: 5 },
+  payout: { borderColor: c.primary, borderWidth: 1, borderRadius: 16, paddingHorizontal: 11, paddingVertical: 7 },
+  payoutText: { color: c.primary, fontSize: 10, fontFamily: 'Inter_700Bold' },
+  withdrawText: { color: c.primary, fontSize: 11, fontFamily: 'Inter_700Bold' },
+  walletDivider: { height: 1, backgroundColor: c.border, marginTop: 16 },
+  metrics: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 18 },
+  metric: { alignItems: 'center', gap: 4 }, metricLabel: { color: c.mutedForeground, fontSize: 8, letterSpacing: .8, fontFamily: 'Inter_700Bold' }, metricValue: { fontSize: 18, fontFamily: 'Inter_700Bold' },
+  banner: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: c.card, borderColor: c.border, borderWidth: 1, borderRadius: 12, padding: 14, marginBottom: 10 },
+  bannerIcon: { width: 42, height: 42, borderRadius: 10, backgroundColor: c.background, alignItems: 'center', justifyContent: 'center' },
+  bannerCopy: { flex: 1 }, bannerTitle: { color: c.foreground, fontSize: 14, fontFamily: 'Inter_700Bold' }, bannerSubtitle: { color: c.mutedForeground, fontSize: 11, marginTop: 4 },
+  toolsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 },
+  tool: { width: '48%', minHeight: 96, backgroundColor: c.card, borderColor: c.border, borderWidth: 1, borderRadius: 11, padding: 12, justifyContent: 'space-between' },
+  toolIcon: { width: 32, height: 32, borderRadius: 8, backgroundColor: c.background, alignItems: 'center', justifyContent: 'center' }, goldIcon: { borderColor: '#80691F', borderWidth: 1 },
+  toolLabel: { color: c.foreground, fontSize: 11, fontFamily: 'Inter_600SemiBold' }, toolBadge: { position: 'absolute', right: 8, top: 8, color: c.success, fontSize: 9, fontFamily: 'Inter_700Bold' },
+  settingsGroup: { marginBottom: 18 },
+  community: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9, backgroundColor: c.primary, borderRadius: 10, paddingVertical: 15, marginTop: 2 },
+  communityText: { color: c.primaryForeground, fontSize: 12, fontFamily: 'Inter_700Bold' },
+  version: { color: '#3E4249', fontSize: 9, textAlign: 'center', marginTop: 22 },
   userCard: {
     flexDirection: 'row',
     alignItems: 'center',
