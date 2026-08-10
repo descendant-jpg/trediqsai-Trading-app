@@ -25,6 +25,7 @@ import { PRIVACY_POLICY, TERMS_AND_CONDITIONS } from '@/lib/legalContent';
 import { supabase } from '@/utils/supabase';
 import colors from '@/constants/colors';
 import { AcademyModal } from '@/components/AcademyModal';
+import { SocialMediaModal } from '@/components/SocialMediaModal';
 
 function showAlert(title: string, message: string) {
   if (Platform.OS === 'web') {
@@ -164,6 +165,7 @@ export default function ProfileScreen() {
   const [referralEarned, setReferralEarned] = useState<number | null>(null);
   const [activeModal, setActiveModal] = useState<ActiveModal>(null);
   const [academyOpen, setAcademyOpen] = useState(false);
+  const [socialOpen, setSocialOpen] = useState(false);
 
   // Change password
   const [newPassword, setNewPassword] = useState('');
@@ -371,7 +373,7 @@ export default function ProfileScreen() {
         <View style={styles.toolsGrid}><Tool icon="cpu" label="AutoPilot Bots" /><Tool icon="link" label="BrokerSync" /><Tool icon="gift" label="Refer & Earn" badge="+$5" onPress={() => router.push('/partner-program')} /><Tool icon="star" label="Manage Plan" gold onPress={() => router.push('/signals')} /></View>
         <SettingsGroup title="SECURITY"><ListItem icon="lock" label="Biometrics / FaceID" detail="OFF" /><ListItem icon="shield" label="Two-Factor Auth (2FA)" /></SettingsGroup>
         <SettingsGroup title="PREFERENCES"><ListItem icon="bell" label="Notifications" onPress={() => router.push('/notification-settings')} testID="profile-notifications" /><ListItem icon="sliders" label="Chart Settings" /><ListItem icon="globe" label="Language" detail={language} onPress={() => setActiveModal('language')} /><ListItem icon="clock" label="Trading Day Timezone" detail={tradingDayTz.replace(/_/g, ' ')} onPress={() => setTzPickerOpen(true)} /></SettingsGroup>
-        <SettingsGroup title="SUPPORT"><ListItem icon="help-circle" label="Help Center" onPress={() => showAlert('Help Center', 'Email support@tradiqsai.com for assistance.')} /><ListItem icon="book-open" label="App Guide" onPress={() => showAlert('App Guide', 'Open the Trading Floor, follow Signals, and track your Portfolio.')} /><ListItem icon="file-text" label="Terms & Privacy" onPress={() => setActiveModal('terms')} /></SettingsGroup>
+        <SettingsGroup title="SUPPORT"><ListItem icon="help-circle" label="Help Center" onPress={() => showAlert('Help Center', 'Email support@tradiqsai.com for assistance.')} /><ListItem icon="share-2" label="Social Media" onPress={() => setSocialOpen(true)} testID="profile-social-media" /><ListItem icon="book-open" label="App Guide" onPress={() => showAlert('App Guide', 'Open the Trading Floor, follow Signals, and track your Portfolio.')} /><ListItem icon="file-text" label="Terms & Privacy" onPress={() => setActiveModal('terms')} /></SettingsGroup>
         <TouchableOpacity style={styles.community} onPress={() => openLink(TELEGRAM_GROUP_URL, 'Elite Community')}><Feather name="send" size={17} color={c.primaryForeground} /><Text style={styles.communityText}>Join the TradiQs Elite Community</Text></TouchableOpacity>
         <TouchableOpacity
           style={styles.signOutButton}
@@ -429,6 +431,7 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </SheetModal>
       <AcademyModal visible={academyOpen} onClose={() => setAcademyOpen(false)} />
+      <SocialMediaModal visible={socialOpen} onClose={() => setSocialOpen(false)} />
 
       {/* Language */}
       <SheetModal
