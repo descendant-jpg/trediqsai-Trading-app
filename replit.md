@@ -9,6 +9,9 @@ A high-end, gamified trading terminal mobile app with a simulated trading floor,
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
+- `pnpm run push:website` — stage, commit, and push the website repository
+- `pnpm run push:app` — stage, commit, and push the application repository
+- `pnpm run push:all` — push both repositories sequentially
 - Required env: `DATABASE_URL` — Postgres connection string
 
 ## Stack
@@ -22,7 +25,10 @@ A high-end, gamified trading terminal mobile app with a simulated trading floor,
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `/website` — independent Git repository for the trediqsai.com landing page.
+- `/app` — independent Git repository containing the core application monorepo.
+- `/app/artifacts` — application artifacts, including the Expo client and API server.
+- `/app/lib` — shared API, database, and generated client libraries.
 
 ## Architecture decisions
 
@@ -41,6 +47,7 @@ _Describe the high-level user-facing capabilities of this app once they exist._
 - **Cost-Saving & Execution:** Do NOT explain the code step-by-step unless explicitly asked. Output only the necessary code blocks. Before implementing complex features or generating large amounts of code, outline a brief 3-point plan and wait for my approval.
 - **Database Rules:** Always use Drizzle ORM for PostgreSQL. Do NOT use Prisma, TypeORM, Supabase SDKs, or raw SQL strings unless specifically requested. 
 - **Conflict Resolution:** If a requested feature conflicts with this established tech stack, pause immediately, point out the discrepancy, and ask for clarification before writing any code.
+- **Repository Separation:** Whenever modifying files inside `/website`, always stage and push changes strictly to `https://github.com/descendant-jpg/trediqsai-Trading-website.git`. Whenever modifying files inside `/app`, always stage and push changes strictly to `https://github.com/descendant-jpg/trediqsai-Trading-app.git`. Never mix commits between the two repositories.
 
 ## Gotchas
 
