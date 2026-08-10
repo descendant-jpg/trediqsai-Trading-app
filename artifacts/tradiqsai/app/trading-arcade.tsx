@@ -31,6 +31,8 @@ import {
   parseArcadePlayer,
   type ArcadePlayer,
 } from '@/lib/arcadePlayer';
+import { useAuth } from '@/context/AuthContext';
+import { customFetch } from '@workspace/api-client-react';
 
 const c = colors.light;
 
@@ -1105,17 +1107,39 @@ const gm = StyleSheet.create({
   ctaText: { color: c.primaryForeground, fontFamily: 'Inter_700Bold', fontSize: 15 },
 });
 
-// ─── Main screen ──────────────────────────────────────────────────────────────
-
+type LeaderboardEntry = { rank: number; username: string; xp: number };
 export default function TradingArcadeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { session } = useAuth();
   const [player, setPlayer] = useState<Player>(DEFAULT_ARCADE_PLAYER);
   const [selected, setSelected] = useState<GameEntry | null>(null);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+
+  // Stable display name for the leaderboard — prefer claimed username from
+  // session metadata, fall back to a short unique handle.
+  const displayName: string =
+    (session?.user?.user_metadata?.['username'] as string | undefined) ??
+    (session?.user?.user_metadata?.['name'] as string | undefined) ??
+    (session?.user?.id ? `Trader_${session.user.id.slice(-4)}` : 'Trader');
 
   useEffect(() => {
     loadPlayer().then(setPlayer).catch(() => {});
+    fetchArcadeLeaderboard().then(setLeaderboard).catch(() => {});
   }, []);
+
+  /** Called by GameModal after persistence; posts XP and refreshes rank + leaderboard. */
+  const handleStatsUpdated = useCallback(
+    async (updatedPlayer: Player) => {
+      setPlayer(updatedPlayer);
+      const result = await postArcadeScore(updatedPlayer.xp, displayName);
+      if (result) {
+        setLeaderboard(result.leaderboard);
+        setPlayer((prev) => ({ ...prev, rank: result.rank }));
+      }
+    },
+    [displayName],
+  );
 
   const xpInLevel = player.xp % XP_PER_LEVEL;
   const level = Math.floor(player.xp / XP_PER_LEVEL) + 1;
@@ -1222,6 +1246,38 @@ export default function TradingArcadeScreen() {
             </TouchableOpacity>
           ))}
         </View>
+
+        {/* Global leaderboard */}
+        <Text style={s.section}>GLOBAL LEADERBOARD</Text>
+        <View style={s.lbCard}>
+          {leaderboard.length === 0 ? (
+            <Text style={s.lbEmpty}>
+              Play a game to appear on the leaderboard!
+            </Text>
+          ) : (
+            leaderboard.map((entry) => {
+              const isMe = entry.username === displayName;
+              return (
+                <View
+                  key={entry.username}
+                  style={[s.lbRow, isMe && s.lbRowMe]}
+                  accessibilityLabel={`Rank ${entry.rank}: ${entry.username}, ${entry.xp} XP`}
+                >
+                  <Text style={[s.lbRank, isMe && s.lbRankMe]}>
+                    #{entry.rank}
+                  </Text>
+                  <Text style={[s.lbName, isMe && s.lbNameMe]} numberOfLines={1}>
+                    {entry.username}
+                    {isMe ? ' (you)' : ''}
+                  </Text>
+                  <Text style={[s.lbXp, isMe && s.lbXpMe]}>
+                    {entry.xp.toLocaleString()} XP
+                  </Text>
+                </View>
+              );
+            })
+          )}
+        </View>
       </ScrollView>
 
       {/* Game modal */}
@@ -1240,7 +1296,7 @@ export default function TradingArcadeScreen() {
               <GameModal
                 game={selected}
                 onClose={() => setSelected(null)}
-                onStatsUpdated={setPlayer}
+                onStatsUpdated={handleStatsUpdated}
               />
             )}
           </ScrollView>
@@ -1284,4 +1340,44 @@ const s = StyleSheet.create({
   best: { color: c.primary, fontSize: 10, fontFamily: 'Inter_700Bold', marginTop: 'auto' },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,.75)' },
   overlayContent: { flexGrow: 1, justifyContent: 'center', padding: 20 },
+  // leaderboard
+  lbCard: { backgroundColor: c.card, borderColor: c.border, borderWidth: 1, borderRadius: 16, overflow: 'hidden' },
+  lbEmpty: { color: c.mutedForeground, fontSize: 13, textAlign: 'center', padding: 20, fontFamily: 'Inter_400Regular' },
+  lbRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: c.border },
+  lbRowMe: { backgroundColor: '#0A2529' },
+  lbRank: { color: c.mutedForeground, fontSize: 12, fontFamily: 'Inter_700Bold', width: 32 },
+  lbRankMe: { color: c.primary },
+  lbName: { flex: 1, color: c.foreground, fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+  lbNameMe: { color: c.primary },
+  lbXp: { color: c.mutedForeground, fontSize: 12, fontFamily: 'Inter_600SemiBold' },
+  lbXpMe: { color: c.foreground },
 });
+
+async function fetchArcadeLeaderboard(): Promise<LeaderboardEntry[]> {
+  try {
+    const body = await customFetch<{ leaderboard: LeaderboardEntry[] }>(
+      '/api/arcade/leaderboard',
+    );
+    return body.leaderboard ?? [];
+  } catch {
+    return [];
+  }
+}
+
+async function postArcadeScore(
+  xp: number,
+  username: string,
+): Promise<{ rank: number; leaderboard: LeaderboardEntry[] } | null> {
+  try {
+    return await customFetch<{ rank: number; leaderboard: LeaderboardEntry[] }>(
+      '/api/arcade/score',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ xp, username }),
+      },
+    );
+  } catch {
+    return null;
+  }
+}

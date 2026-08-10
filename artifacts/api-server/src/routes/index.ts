@@ -4,6 +4,7 @@ import signalsRouter from "./signals";
 import leaderboardRouter from "./leaderboard";
 import oracleRouter from "./oracle";
 import autopilotRouter from "./autopilot";
+import { createArcadeRouter } from "./arcade";
 
 const router: IRouter = Router();
 
@@ -12,5 +13,6 @@ router.use(signalsRouter);
 router.use(leaderboardRouter);
 router.use(oracleRouter);
 router.use(autopilotRouter);
+router.use(createArcadeRouter());
 
 export default router;
