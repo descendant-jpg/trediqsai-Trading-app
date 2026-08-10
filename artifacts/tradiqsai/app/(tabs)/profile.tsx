@@ -366,11 +366,16 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         )}
         <View style={styles.walletCard}><View style={styles.walletTop}><View><Text style={styles.walletLabel}>SIMULATED EQUITY</Text><Text style={styles.walletBalance}>$104,250.00</Text></View><TouchableOpacity style={styles.payout} onPress={() => showAlert('Request Payout', 'Payout requests open at the end of each evaluation cycle.')}><Text style={styles.payoutText}>Request Payout</Text></TouchableOpacity></View><View style={styles.walletDivider} /><View style={styles.walletBottom}><View><Text style={styles.walletLabel}>CASHBACK & REFERRALS</Text><Text style={styles.cashBalance}>${(referralEarned ?? 125.5).toFixed(2)}</Text></View><TouchableOpacity onPress={() => showAlert('Withdraw', 'Referral withdrawals will be available soon.')}><Text style={styles.withdrawText}>Withdraw →</Text></TouchableOpacity></View></View>
+        <TouchableOpacity style={styles.partnerCard} onPress={() => router.push('/partner-program')} activeOpacity={0.86} testID="profile-partner-program">
+          <View style={styles.partnerIcon}><Feather name="dollar-sign" size={21} color="#FFD700" /></View>
+          <View style={styles.partnerCopy}><View style={styles.partnerTitleRow}><Text style={styles.partnerTitle}>Partner Program</Text><Text style={styles.partnerBadge}>EARN PASSIVE INCOME</Text></View><Text style={styles.partnerSubtitle}>Build your network. Scale your revenue.</Text></View>
+          <Feather name="chevron-right" size={21} color={c.primary} />
+        </TouchableOpacity>
         <View style={styles.metrics}><Metric label="WIN RATE" value="68%" color={c.success} /><Metric label="PROFIT FACTOR" value="1.8" /><Metric label="TOTAL TRADES" value="142" /></View>
         <Banner icon="book-open" title="TradiQs Academy" subtitle="Masterclasses, Guides & Risk Tools" onPress={() => setAcademyOpen(true)} testID="profile-academy" />
         <Banner icon="briefcase" title="Portfolio & History" subtitle="View open positions and trade journal" onPress={() => router.push('/portfolio')} testID="profile-portfolio" />
         <Text style={styles.sectionTitle}>QUICK TOOLS</Text>
-        <View style={styles.toolsGrid}><Tool icon="cpu" label="AutoPilot Bots" /><Tool icon="link" label="BrokerSync" /><Tool icon="gift" label="Refer & Earn" badge="+$5" onPress={() => router.push('/partner-program')} /><Tool icon="star" label="Manage Plan" gold onPress={() => router.push('/signals')} /></View>
+        <View style={styles.toolsGrid}><Tool icon="cpu" label="AutoPilot Bots" /><Tool icon="link" label="BrokerSync" /><Tool icon="star" label="Manage Plan" gold onPress={() => router.push('/signals')} /></View>
         <SettingsGroup title="SECURITY"><ListItem icon="lock" label="Biometrics / FaceID" detail="OFF" /><ListItem icon="shield" label="Two-Factor Auth (2FA)" /></SettingsGroup>
         <SettingsGroup title="PREFERENCES"><ListItem icon="bell" label="Notifications" onPress={() => router.push('/notification-settings')} testID="profile-notifications" /><ListItem icon="sliders" label="Chart Settings" /><ListItem icon="globe" label="Language" detail={language} onPress={() => setActiveModal('language')} /><ListItem icon="clock" label="Trading Day Timezone" detail={tradingDayTz.replace(/_/g, ' ')} onPress={() => setTzPickerOpen(true)} /></SettingsGroup>
         <SettingsGroup title="SUPPORT"><ListItem icon="help-circle" label="Help Center" onPress={() => showAlert('Help Center', 'Email support@tradiqsai.com for assistance.')} /><ListItem icon="share-2" label="Social Media" onPress={() => setSocialOpen(true)} testID="profile-social-media" /><ListItem icon="book-open" label="App Guide" onPress={() => showAlert('App Guide', 'Open the Trading Floor, follow Signals, and track your Portfolio.')} /><ListItem icon="file-text" label="Terms & Privacy" onPress={() => setActiveModal('terms')} /></SettingsGroup>
@@ -532,6 +537,13 @@ const styles = StyleSheet.create({
   payoutText: { color: c.primary, fontSize: 10, fontFamily: 'Inter_700Bold' },
   withdrawText: { color: c.primary, fontSize: 11, fontFamily: 'Inter_700Bold' },
   walletDivider: { height: 1, backgroundColor: c.border, marginTop: 16 },
+  partnerCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: c.card, borderColor: '#8B7125', borderWidth: 1, borderRadius: 13, padding: 14, marginBottom: 18 },
+  partnerIcon: { width: 42, height: 42, borderRadius: 11, backgroundColor: '#2A2410', borderColor: '#FFD700', borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  partnerCopy: { flex: 1 },
+  partnerTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7, flexWrap: 'wrap' },
+  partnerTitle: { color: c.foreground, fontSize: 14, fontFamily: 'Inter_700Bold' },
+  partnerBadge: { color: '#FFD700', backgroundColor: '#2A2410', borderColor: '#8B7125', borderWidth: 1, borderRadius: 10, paddingHorizontal: 6, paddingVertical: 3, fontSize: 8, letterSpacing: .5, fontFamily: 'Inter_700Bold' },
+  partnerSubtitle: { color: c.mutedForeground, fontSize: 10, marginTop: 5 },
   metrics: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 18 },
   metric: { alignItems: 'center', gap: 4 }, metricLabel: { color: c.mutedForeground, fontSize: 8, letterSpacing: .8, fontFamily: 'Inter_700Bold' }, metricValue: { fontSize: 18, fontFamily: 'Inter_700Bold' },
   banner: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: c.card, borderColor: c.border, borderWidth: 1, borderRadius: 12, padding: 14, marginBottom: 10 },
