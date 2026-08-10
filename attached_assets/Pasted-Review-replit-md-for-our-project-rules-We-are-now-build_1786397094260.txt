@@ -1,0 +1,35 @@
+Review replit.md for our project rules. We are now building the official web frontend and custom CMS for TradiQs AI. 
+
+### 1. Git Repository Configuration for `/website`
+- Navigate into the `/website` directory.
+- Initialize a new Next.js project (App Router, Tailwind CSS, TypeScript).
+- Initialize git and set the remote strictly to: `https://github.com/descendant-jpg/trediqsai-Trading-website.git`
+- Ensure package.json has a script `"push:website": "git add . && git commit -m 'Web update' && git push origin main"`.
+
+### 2. Frontend Architecture (Public Pages)
+The website MUST be a multi-page application with real routing (using `<Link href="...">` so users can right-click and open in new tabs). Use our dark institutional theme (Background: #0A0B0E, Cards: #16181D, Accents: Electric Cyan #00F0FF).
+- **Home (`/`):** 
+  - Hero section: "The Institutional Edge in Your Pocket." Feature massive Apple App Store and Google Play Store download buttons.
+  - Live Ticker: A scrolling marquee showing Forex, Crypto, and Stock pairs.
+  - Features: Highlight AI Signal Generator, AutoPilot Bots, and Risk Management.
+  - FAQs: Accordion style (e.g., "How accurate are the AI Signals?", "What brokers do you support?").
+- **About (`/about`):** Details our mission, our AI technology, and institutional trading edge.
+- **Contact (`/contact`):** Premium glassmorphic contact form. Display email: `support@trediqsAI.com`.
+- **Blog (`/blog`):** Grid of articles with category chips. Fully dynamic, fetching from our CMS.
+- **Legal (`/privacy` & `/terms`):** Standard compliant text formatted beautifully for App Store/Play Store review.
+- **Global Components:** A sticky premium Navbar and a massive Footer with all page links.
+
+### 3. Custom Admin CMS (`/admin`)
+Replicate a premium, dark-mode dashboard layout (Left Sidebar + Right Content Area).
+- **Sidebar Navigation:** Logo "TradiQs CMS" at top. Menu items: Dashboard, AI Signals, Blog Posts, Categories, Site Pages, Users, Affiliates, Help Desk (Inbox), Settings. Active state should be highlighted in Electric Cyan.
+- **Dashboard Overview (`/admin`):** 
+  - Top row of 4 rounded metric cards: Total Users, Premium Subscribers, Active Signals, Total Affiliates.
+  - Bottom section: "Recent Signups" list and "Quick Actions" (Write new post, Broadcast signal).
+- **Blog Manager (`/admin/blog`):** A WordPress-style table listing posts. Include a "New Post" button that opens a WYSIWYG/Markdown editor for writing articles, setting SEO metadata, and uploading thumbnails.
+- **Signals Manager (`/admin/signals`):** Interface to manually push Forex, Crypto, and Stock signals to the mobile app.
+- **Help Desk (`/admin/inbox`):** Table view to read and reply to submissions from the public `/contact` form.
+
+### 4. Technical Requirements
+- Build the UI components using Tailwind CSS and Lucide React icons.
+- Ensure all pages are fully responsive (Mobile, Tablet, Desktop).
+- Set up mock data arrays for the CMS and Blog for now, preparing them to be wired into Supabase later.
