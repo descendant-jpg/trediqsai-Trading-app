@@ -270,11 +270,23 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.homeHeader}>
-          <TouchableOpacity style={styles.headerButton} onPress={() => router.push('/quotes' as never)} accessibilityLabel="Market quotes">
+          <TouchableOpacity
+            style={styles.headerButton}
+            onPress={() => router.push('/quotes' as never)}
+            accessibilityRole="button"
+            accessibilityLabel="Market quotes"
+            accessibilityHint="Open market quotes"
+          >
             <Feather name="sun" size={19} color={c.primary} />
           </TouchableOpacity>
           <Text style={styles.homeTitle}>TradiQs AI</Text>
-          <TouchableOpacity style={styles.headerButton} onPress={() => router.push('/notifications' as never)} accessibilityLabel="Notifications">
+          <TouchableOpacity
+            style={styles.headerButton}
+            onPress={() => router.push('/notifications' as never)}
+            accessibilityRole="button"
+            accessibilityLabel="Notifications"
+            accessibilityHint="Open notifications"
+          >
             <Feather name="bell" size={19} color={c.foreground} />
             <View style={styles.unreadBadge}><Text style={styles.unreadText}>3</Text></View>
           </TouchableOpacity>
@@ -291,7 +303,15 @@ export default function HomeScreen() {
         <Text style={styles.sectionLabel}>GLOBAL MARKET SESSIONS</Text>
         <View style={styles.sessionTicker}>
           {sessionStates.map((session) => (
-            <Pressable key={session.city} style={styles.session} onPress={() => router.push('/session-intelligence' as never)}>
+            <Pressable
+              key={session.city}
+              style={styles.session}
+              onPress={() => router.push('/session-intelligence' as never)}
+              accessibilityRole="button"
+              accessibilityLabel={`${session.city} market session`}
+              accessibilityHint="Opens session intelligence"
+              accessibilityState={{ disabled: false }}
+            >
               <View style={[styles.sessionDot, { backgroundColor: session.open ? c.success : c.mutedForeground }]} />
               <Text style={styles.sessionCity}>{session.city}</Text>
               <Text style={[styles.sessionState, { color: session.open ? c.success : c.mutedForeground }]}>
@@ -304,7 +324,12 @@ export default function HomeScreen() {
         <View style={styles.widgets}>
           <View style={[styles.widget, styles.fearWidget]}>
             <Text style={styles.sectionLabel}>FEAR & GREED</Text>
-            <View style={styles.dial}>
+            <View
+              style={styles.dial}
+              accessible
+              accessibilityRole="text"
+              accessibilityLabel="Fear and Greed index: 68, Greed. Local sample indicator."
+            >
               <Text style={styles.dialValue}>68</Text><Text style={styles.dialCaption}>GREED</Text>
             </View>
             <Text style={styles.sampleLabel}>Local sample indicator</Text>
@@ -324,14 +349,28 @@ export default function HomeScreen() {
         <Text style={styles.sectionLabel}>QUICK ACTIONS</Text>
         <View style={styles.actionGrid}>
           {ACTIONS.map((action) => (
-            <Pressable key={action.label} style={styles.actionTile} onPress={() => router.push(action.route as never)}>
+              <Pressable
+                key={action.label}
+                style={styles.actionTile}
+                onPress={() => router.push(action.route as never)}
+                accessibilityRole="button"
+                accessibilityLabel={action.label}
+                accessibilityHint={`Open ${action.label}`}
+              >
               <Feather name={action.icon} size={20} color={c.primary} />
               <Text style={styles.actionText}>{action.label}</Text>
             </Pressable>
           ))}
         </View>
 
-        <TouchableOpacity style={styles.proBanner} onPress={() => setPaywallOpen(true)} activeOpacity={0.85}>
+        <TouchableOpacity
+          style={styles.proBanner}
+          onPress={() => setPaywallOpen(true)}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Go Pro. Trade with more edge."
+          accessibilityHint="Opens premium subscription options"
+        >
           <View style={styles.proIcon}><Feather name="zap" size={22} color={c.secondary} /></View>
           <View style={styles.proTextWrap}><Text style={styles.proTitle}>Go Pro. Trade with more edge.</Text><Text style={styles.proSub}>Premium signals, AI insights & more</Text></View>
           <Feather name="chevron-right" size={20} color={c.secondary} />
