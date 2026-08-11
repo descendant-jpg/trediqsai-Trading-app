@@ -3,3 +3,4 @@
 - [Native-only modules in Expo](expo-native-only-modules.md) — native-only SDKs need `.web.tsx` stub wrappers; a direct import in the root layout white-screens the whole web bundle.
 - [Which directory Expo serves](expo-live-route-directory.md) — prove the live route dir with a marker-in-bundle test; never infer it from folder names, and never trust typecheck as evidence.
 - [pnpm workspace root is app/](pnpm-workspace-root.md) — the workspace root is `app/`, not the repo root; installing from the repo root writes a stray package-lock.json.
+- [Entitlement is server-owned](entitlement-is-server-owned.md) — tier/subscription columns must never be client-writable; RLS alone can't scope columns, so pair it with GRANT UPDATE (col).

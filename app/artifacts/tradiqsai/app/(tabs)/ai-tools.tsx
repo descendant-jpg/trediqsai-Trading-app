@@ -36,6 +36,23 @@ import { useSubscription } from '@/lib/revenuecat';
 
 const c = colors.light;
 
+/**
+ * True when the API rejected a request because the feature needs a paid
+ * subscription. Matches the server's 403 + `pro_subscription_required`
+ * contract without depending on the generated error class.
+ */
+function isProRequiredError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const { status, data } = error as { status?: number; data?: unknown };
+  if (status !== 403) return false;
+  const code =
+    data && typeof data === 'object'
+      ? (data as { code?: unknown }).code
+      : undefined;
+  // Fall back to the status alone if the body was not parsed as expected.
+  return code === undefined || code === 'pro_subscription_required';
+}
+
 const GREEN = '#00E676';
 const CYAN = '#00F0FF';
 const CRIMSON = '#E54B4B';
@@ -250,8 +267,21 @@ export default function AiToolsScreen() {
   const { mutate: setMaster } = useSetAutopilotMaster({
     mutation: { onSuccess: applyState },
   });
+  // The server is the authority on Pro access: it rejects Pro-only bot
+  // changes from non-subscribers with 403. Surface that as the paywall so a
+  // blocked deploy explains itself instead of silently doing nothing.
   const { mutate: updateBot } = useUpdateAutopilotBot({
-    mutation: { onSuccess: applyState },
+    mutation: {
+      onSuccess: applyState,
+      onError: (error: unknown) => {
+        if (isProRequiredError(error)) {
+          setConfigBot(null);
+          setPaywallOpen(true);
+        }
+        // Re-sync so an optimistic-looking UI never keeps a rejected change.
+        void refetch();
+      },
+    },
   });
   const { mutate: clearLogs } = useClearAutopilotLogs({
     mutation: { onSuccess: applyState },

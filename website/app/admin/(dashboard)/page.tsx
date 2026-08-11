@@ -7,7 +7,7 @@ export default async function AdminDashboard() {
   try {
     const supabase = getSupabaseServer();
     if (supabase) {
-      const [u, a, p, s, w] = await Promise.all([supabase.from('profiles').select('*', { count: 'exact', head: true }), supabase.from('affiliates').select('*', { count: 'exact', head: true }), supabase.from('profiles').select('*', { count: 'exact', head: true }).in('tier_level', ['pro', 'elite', 'whale']), supabase.from('ai_signals').select('*', { count: 'exact', head: true }), supabase.from('waitlist').select('*', { count: 'exact', head: true })]);
+      const [u, a, p, s, w] = await Promise.all([supabase.from('profiles').select('*', { count: 'exact', head: true }), supabase.from('affiliates').select('*', { count: 'exact', head: true }), supabase.from('profiles').select('*', { count: 'exact', head: true }).in('tier', ['pro', 'elite', 'whale', 'vip']), supabase.from('ai_signals').select('*', { count: 'exact', head: true }), supabase.from('waitlist').select('*', { count: 'exact', head: true })]);
       users = u.count ?? 0; affiliates = a.count ?? 0; subscribers = p.count ?? 0; signals = s.count ?? 0; waitlist = w.count ?? 0;
     }
   } catch {}

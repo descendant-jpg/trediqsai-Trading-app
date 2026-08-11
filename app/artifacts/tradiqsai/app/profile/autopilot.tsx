@@ -28,19 +28,35 @@ export default function AutoPilotScreen() {
     if (!session?.user.id) return;
     void (async () => {
       try {
-        const { data } = await supabase.from('profiles').select('active_bot, allocated_capital, subscription_tier').eq('id', session.user.id).maybeSingle();
+        // `tier` is server-owned: clients can read it but cannot write it
+        // (enforced by RLS + column privileges), so it is safe to trust for
+        // display. The lock below is only a UI affordance -- the server is
+        // what actually refuses a Pro bot to a free account.
+        const { data } = await supabase.from('profiles').select('active_bot, allocated_capital, tier').eq('id', session.user.id).maybeSingle();
         setActiveBot(data?.active_bot ?? null);
         setAllocation(data?.allocated_capital == null ? null : Number(data.allocated_capital));
-        setSubscriptionTier(data?.subscription_tier ?? 'free');
+        setSubscriptionTier(data?.tier ?? 'free');
       } catch { /* keep defaults until the profile loads */ }
     })();
   }, [session?.user.id]);
   const updateBot = async (bot: string | null, percent: number | null) => {
     if (!session?.user.id) return notify('Sign in required', 'Sign in to manage an AutoPilot bot.');
     setSaving(true);
-    const { error } = await supabase.from('profiles').update({ active_bot: bot, allocated_capital: percent }).eq('id', session.user.id);
+    // Deploying goes through set_active_bot() rather than a direct column
+    // write: the strategy name decides whether a paid plan is required, so
+    // the database re-checks the tier itself. The lock in the UI below is
+    // only an affordance -- this call is what actually enforces it.
+    const { error } = await supabase.rpc('set_active_bot', { bot_name: bot, capital_percent: percent });
     setSaving(false);
-    if (error) return notify('AutoPilot unavailable', error.message);
+    if (error) {
+      const denied = error.code === '42501' || /Elite subscription/i.test(error.message ?? '');
+      if (denied) {
+        notify('Elite required', 'This strategy is part of TradiQs Elite. Upgrade to deploy it.');
+        router.push('/profile/upgrade');
+        return;
+      }
+      return notify('AutoPilot unavailable', error.message);
+    }
     setActiveBot(bot); setAllocation(percent); setSelected(null);
   };
   const active = bots.find((bot) => bot.name === activeBot);

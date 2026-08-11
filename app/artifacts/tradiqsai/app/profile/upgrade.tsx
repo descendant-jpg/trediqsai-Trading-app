@@ -30,13 +30,17 @@ export default function UpgradeScreen() {
     if (!session?.user.id) return notify('Sign in required', 'Sign in to upgrade to TradiQs Elite.');
     setPaying(true);
     try {
-      // Replace this mock client secret with one returned by a server-created
-      // Stripe PaymentIntent before enabling real payments.
+      // Entitlement is server-owned. This screen must never write the tier
+      // itself: the app runs on the user's device, so any client-side grant
+      // can be replayed to unlock Elite without paying. The upgrade becomes
+      // real once a server-created Stripe PaymentIntent is confirmed here
+      // and the server promotes the tier after Stripe verifies the charge.
       void confirmPlatformPayPayment;
       await new Promise<void>((resolve) => setTimeout(resolve, 900));
-      const { error } = await supabase.from('profiles').update({ subscription_tier: 'pro' }).eq('id', session.user.id);
-      if (error) throw error;
-      notify('Welcome to TradiQs Elite.', 'Your Pro tier is now active.');
+      notify(
+        'Payments are not live yet.',
+        'Elite cannot be activated until checkout is connected. Your account is unchanged.',
+      );
     } catch (error) {
       notify('Upgrade unavailable', error instanceof Error ? error.message : 'Please try again.');
     } finally {

@@ -1,11 +1,15 @@
 create extension if not exists "pgcrypto";
 
+-- `tier` is the single source of truth for paid access. It is server-owned:
+-- migration 009 withholds UPDATE on it from clients, so only the service role
+-- (billing webhooks, admin tooling) can change it. Do not add a second tier
+-- column -- a parallel entitlement field is how the paywall gets bypassed.
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   username text,
   email text,
   simulated_balance numeric(14,2) not null default 100000.00,
-  tier_level text not null default 'Free' check (tier_level in ('Free','Pro','Elite','Whale')),
+  tier text not null default 'free' check (tier in ('free','pro','elite','whale','vip')),
   is_verified boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -56,8 +60,10 @@ alter table public.profiles enable row level security;
 alter table public.simulated_trades enable row level security;
 alter table public.affiliates enable row level security;
 
-drop policy if exists "profiles own row" on public.profiles;
-create policy "profiles own row" on public.profiles for all using (auth.uid() = id) with check (auth.uid() = id);
+-- Profiles deliberately have NO "for all" policy: that would let a client
+-- write every column, including `tier`, and self-grant paid access. The
+-- select/update policies and the column-level GRANTs in migration 009 are
+-- the authoritative rules; rows are created by the signup trigger in 012.
 drop policy if exists "trades own rows" on public.simulated_trades;
 create policy "trades own rows" on public.simulated_trades for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 drop policy if exists "affiliates own row" on public.affiliates;

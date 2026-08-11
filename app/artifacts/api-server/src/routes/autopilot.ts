@@ -14,6 +14,7 @@ import {
 import { eq } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { identity, requestUserId, type TokenVerifier } from "../middlewares/identity";
+import { hasProAccess, type TierLookup } from "../lib/entitlement";
 
 type BotState = {
   id: string;
@@ -393,20 +394,74 @@ function snapshot(userId: string, state: UserAutopilot) {
   });
 }
 
+/**
+ * Stop any running Pro-only bot the caller is no longer entitled to.
+ *
+ * Checking entitlement only when a bot is started leaves a hole: a user who
+ * subscribes, starts the Pro bot, then lapses would keep it running (and
+ * accruing P&L) indefinitely, because nothing re-examines it afterwards.
+ * This runs on every read and state change, so losing entitlement stops the
+ * bot at the next interaction rather than never.
+ *
+ * Returns true when something was stopped, so callers can persist.
+ */
+async function enforceProEntitlement(
+  userId: string,
+  state: UserAutopilot,
+  tierLookup?: TierLookup,
+): Promise<boolean> {
+  const runningPro = state.bots.filter((b) => b.proOnly && b.running);
+  if (runningPro.length === 0) return false;
+  if (await hasProAccess(userId, tierLookup)) return false;
+
+  // Settle P&L earned while still entitled before switching the bot off.
+  advanceSimulation(userId, state);
+  for (const bot of runningPro) {
+    bot.running = false;
+    pushLog(
+      state,
+      `[SYS] ${bot.name} stopped — Elite subscription required to keep it running`,
+    );
+    logger.warn(
+      { userId, botId: bot.id },
+      "Stopped Pro-only bot after entitlement loss",
+    );
+  }
+  return true;
+}
+
+/** Persist the bots stopped by an entitlement revocation. */
+async function persistStoppedPro(
+  userId: string,
+  state: UserAutopilot,
+): Promise<void> {
+  await Promise.all(
+    state.bots.filter((b) => b.proOnly).map((bot) => persistBot(userId, bot)),
+  );
+  await persistState(userId, state);
+}
+
 // ---- Routes ----------------------------------------------------------------
 
 /**
  * Build the AutoPilot router. The token verifier is injectable for tests;
  * production uses the default Supabase-backed verifier.
  */
-export function createAutopilotRouter(verifier?: TokenVerifier): IRouter {
+export function createAutopilotRouter(
+  verifier?: TokenVerifier,
+  tierLookup?: TierLookup,
+): IRouter {
   const router: IRouter = Router();
   router.use("/autopilot", identity(verifier));
 
   router.get("/autopilot", async (_req, res, next) => {
     try {
       const userId = requestUserId(res);
-      res.json(snapshot(userId, await stateFor(userId)));
+      const state = await stateFor(userId);
+      if (await enforceProEntitlement(userId, state, tierLookup)) {
+        await persistStoppedPro(userId, state);
+      }
+      res.json(snapshot(userId, state));
     } catch (err) {
       next(err);
     }
@@ -416,6 +471,11 @@ export function createAutopilotRouter(verifier?: TokenVerifier): IRouter {
     try {
       const userId = requestUserId(res);
       const state = await stateFor(userId);
+      // This endpoint advances the simulation, so a lapsed user could keep
+      // accruing Pro P&L here alone. Revoke before any time passes.
+      if (await enforceProEntitlement(userId, state, tierLookup)) {
+        await persistStoppedPro(userId, state);
+      }
       advanceSimulation(userId, state);
       persistStateThrottled(userId, state);
       // Ensure a rollover triggered by this request has been persisted
@@ -436,6 +496,8 @@ export function createAutopilotRouter(verifier?: TokenVerifier): IRouter {
     try {
       const userId = requestUserId(res);
       const state = await stateFor(userId);
+      // Re-arming must not resurrect a Pro bot the user no longer pays for.
+      await enforceProEntitlement(userId, state, tierLookup);
       advanceSimulation(userId, state);
       state.masterActive = parsed.data.active;
       state.lastTickAt = Date.now();
@@ -464,6 +526,31 @@ export function createAutopilotRouter(verifier?: TokenVerifier): IRouter {
       }
       if (!parsed.success) {
         res.status(400).json({ error: "Invalid request body" });
+        return;
+      }
+
+      // Revoke first, for EVERY bot update. Gating only on `bot.proOnly`
+      // would let a lapsed user tick a still-running Pro bot forward simply
+      // by touching a free bot, and would 403 out of a request to stop the
+      // Pro bot before revocation ever ran.
+      const revoked = await enforceProEntitlement(userId, state, tierLookup);
+
+      // Pro-only bots are gated on the server, not just hidden in the UI:
+      // the client's tier is never trusted, and the check runs before any
+      // state is mutated so a rejected request changes nothing. Stopping a
+      // bot is always allowed — a user must be able to switch off something
+      // they can no longer afford.
+      const wantsToStart = parsed.data.running !== false;
+      if (bot.proOnly && wantsToStart && !(await hasProAccess(userId, tierLookup))) {
+        if (revoked) await persistStoppedPro(userId, state);
+        logger.warn(
+          { userId, botId: bot.id },
+          "Blocked Pro-only bot update for a non-Pro user",
+        );
+        res.status(403).json({
+          error: "This bot requires an Elite subscription",
+          code: "pro_subscription_required",
+        });
         return;
       }
       advanceSimulation(userId, state);
@@ -497,6 +584,9 @@ export function createAutopilotRouter(verifier?: TokenVerifier): IRouter {
     try {
       const userId = requestUserId(res);
       const state = await stateFor(userId);
+      // Also advances the simulation; revoke first so clearing logs cannot be
+      // used as a way to keep a lapsed Pro bot ticking.
+      await enforceProEntitlement(userId, state, tierLookup);
       advanceSimulation(userId, state);
       state.logs = [];
       await persistState(userId, state);

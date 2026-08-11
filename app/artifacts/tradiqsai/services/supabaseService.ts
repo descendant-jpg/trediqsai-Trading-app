@@ -1,6 +1,10 @@
 import { supabase } from '@/utils/supabase';
 
-export type TierLevel = 'Free' | 'Pro' | 'Elite' | 'Whale';
+/**
+ * Paid tier, as stored in `profiles.tier`. Server-owned: readable by the
+ * client but never writable by it, so it is safe to trust for display only.
+ */
+export type TierLevel = 'free' | 'pro' | 'elite' | 'whale' | 'vip';
 export type PartnerTier = 'Ambassador' | 'Elite' | 'Master';
 export type TradeStatus = 'OPEN' | 'CLOSED';
 
@@ -9,7 +13,7 @@ export type UserProfile = {
   username: string | null;
   email?: string | null;
   simulated_balance: number;
-  tier_level: TierLevel;
+  tier: TierLevel;
   is_verified: boolean;
 };
 
