@@ -7,8 +7,13 @@
  *  - the ceiling is measured from the original sign-in and survives refreshes
  *  - once the ceiling is reached, refreshing is refused rather than silently
  *    returning an unchanged session
+ *
+ * A separate revocation block covers the "sign out all devices" path:
+ *  - tokens issued at or before the revocation epoch are rejected
+ *  - tokens issued after the epoch are still accepted
+ *  - a Storage read failure fails closed (denies access)
  */
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   createSessionToken,
@@ -18,17 +23,67 @@ import {
   refreshSessionToken,
 } from '../admin-auth';
 
+// ---------------------------------------------------------------------------
+// Supabase Storage mock
+//
+// `vi.hoisted` runs before module mocks are applied; the returned references
+// are stable so tests can reconfigure the mock per-case via mockResolvedValue.
+// ---------------------------------------------------------------------------
+const { mockStorageDownload, mockStorageUpload, mockCreateBucket } = vi.hoisted(() => ({
+  mockStorageDownload: vi.fn<() => Promise<{ data: Blob | null; error: { message: string } | null }>>(),
+  mockStorageUpload: vi.fn<() => Promise<{ error: null }>>(),
+  mockCreateBucket: vi.fn<() => Promise<{ error: null }>>(),
+}));
+
+vi.mock('@supabase/supabase-js', () => ({
+  createClient: () => ({
+    storage: {
+      from: () => ({ download: mockStorageDownload, upload: mockStorageUpload }),
+      createBucket: mockCreateBucket,
+    },
+  }),
+}));
+
+// ---------------------------------------------------------------------------
+// Helpers & constants
+// ---------------------------------------------------------------------------
+
 const HOUR = 60 * 60 * 1000;
 const T0 = 1_700_000_000_000;
+
+/** Simulates "no revocation issued yet" — Storage returns object-not-found. */
+function noRevocation() {
+  mockStorageDownload.mockResolvedValue({
+    data: null,
+    error: { message: 'Object not found' },
+  });
+}
+
+/** Simulates a revocation epoch written to Storage. */
+function withRevocation(epoch: number) {
+  mockStorageDownload.mockResolvedValue({
+    data: new Blob([String(epoch)]),
+    error: null,
+  });
+}
 
 beforeEach(() => {
   process.env.SESSION_SECRET = 'test-secret';
   process.env.ADMIN_PASSWORD = 'test-password';
+  // Provide Supabase credentials so getAdminDb() returns a client, but all
+  // network calls are intercepted by the vi.mock above.
+  process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://test.supabase.co';
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-role-key';
   delete process.env.ADMIN_SESSION_MAX_HOURS;
+  // Default: no revocation issued.
+  noRevocation();
+  mockStorageUpload.mockResolvedValue({ error: null });
+  mockCreateBucket.mockResolvedValue({ error: null });
 });
 
 afterEach(() => {
   delete process.env.ADMIN_SESSION_MAX_HOURS;
+  vi.clearAllMocks();
 });
 
 /** Create a token and assert it was issued (keeps the tests readable). */
@@ -37,6 +92,10 @@ async function freshToken(now = T0): Promise<string> {
   expect(token).not.toBeNull();
   return token as string;
 }
+
+// ---------------------------------------------------------------------------
+// Session lifetime & ceiling
+// ---------------------------------------------------------------------------
 
 describe('admin session tokens', () => {
   it('issues a session with a ceiling measured from sign-in', async () => {
@@ -150,5 +209,64 @@ describe('admin session tokens', () => {
 
     process.env.ADMIN_SESSION_MAX_HOURS = 'nonsense';
     expect(getMaxSessionLifetimeMs()).toBe(24 * HOUR);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// "Sign out all devices" — revocation epoch
+// ---------------------------------------------------------------------------
+
+describe('session revocation', () => {
+  it('rejects a token issued strictly before the revocation epoch', async () => {
+    const epoch = T0 + HOUR;
+    withRevocation(epoch);
+
+    const token = await freshToken(T0); // issuedAt = T0 < epoch
+    expect(await readSessionToken(token, T0 + 2 * HOUR)).toBeNull();
+    expect(await isValidSessionToken(token, T0 + 2 * HOUR)).toBe(false);
+  });
+
+  it('rejects a token issued at exactly the revocation epoch (inclusive cutoff)', async () => {
+    const epoch = T0 + HOUR;
+    withRevocation(epoch);
+
+    const atEpoch = await createSessionToken(epoch); // issuedAt === epoch
+    expect(atEpoch).not.toBeNull();
+    // Evaluated one hour later so the token has not otherwise expired.
+    expect(await readSessionToken(atEpoch!, epoch + HOUR)).toBeNull();
+  });
+
+  it('accepts a token issued one millisecond after the revocation epoch', async () => {
+    const epoch = T0 + HOUR;
+    withRevocation(epoch);
+
+    const after = await createSessionToken(epoch + 1); // issuedAt > epoch
+    expect(after).not.toBeNull();
+    expect(await readSessionToken(after!, epoch + HOUR)).not.toBeNull();
+  });
+
+  it('accepts all tokens when no revocation has been issued', async () => {
+    noRevocation(); // already the beforeEach default, but explicit for clarity
+    const token = await freshToken(T0);
+    expect(await readSessionToken(token, T0 + HOUR)).not.toBeNull();
+  });
+
+  it('fails closed when Storage returns an unexpected error', async () => {
+    mockStorageDownload.mockRejectedValue(new Error('Supabase unreachable'));
+
+    const token = await freshToken(T0);
+    // A transient Storage outage must not allow a session through.
+    expect(await readSessionToken(token, T0 + HOUR)).toBeNull();
+    expect(await isValidSessionToken(token, T0 + HOUR)).toBe(false);
+  });
+
+  it('fails closed when Storage returns an unrecognised error message', async () => {
+    mockStorageDownload.mockResolvedValue({
+      data: null,
+      error: { message: 'Internal server error' },
+    });
+
+    const token = await freshToken(T0);
+    expect(await readSessionToken(token, T0 + HOUR)).toBeNull();
   });
 });

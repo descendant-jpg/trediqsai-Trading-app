@@ -17,11 +17,125 @@
  * Rotating `SESSION_SECRET` invalidates every existing token immediately,
  * because the HMAC signature no longer verifies.
  *
- * Everything here uses Web Crypto so the same code runs in middleware (Edge)
+ * Calling `revokeAllSessions()` writes a revocation epoch to Supabase Storage.
+ * Because Storage is external and shared, every serving instance reads the same
+ * value on the next request without any per-process cache. Tokens whose
+ * `issuedAt` is at or below the epoch are denied; fresh sign-ins after that
+ * point produce tokens with a later `issuedAt` and are accepted normally.
+ *
+ * If the Supabase Storage read fails for any reason other than "object not yet
+ * created", `readSessionToken` returns null (fail closed) — a transient outage
+ * cannot be leveraged to bypass the revocation check.
+ *
+ * Everything here uses Web Crypto so the same code runs in Node.js middleware
  * and in route handlers / server components.
  */
 
+import { createClient } from '@supabase/supabase-js';
+
 export const ADMIN_COOKIE = 'tq_admin_session';
+
+// ---------------------------------------------------------------------------
+// Session revocation — backed by Supabase Storage for cross-instance consistency
+// ---------------------------------------------------------------------------
+
+/**
+ * Private Storage bucket and object that hold the revocation epoch.
+ * The bucket is created automatically on first revocation.
+ */
+const REVOCATION_BUCKET = 'admin-internal';
+const REVOCATION_OBJECT = 'session-revocation-epoch';
+
+/**
+ * Return a service-role Supabase client, or null when credentials are not
+ * configured. Created on demand so environment variables are always read at
+ * request time rather than at module load.
+ *
+ * `cache: 'no-store'` is set on every outgoing fetch so that neither
+ * Next.js's extended fetch cache nor any HTTP cache can serve a stale
+ * revocation epoch after a "sign out all devices" call.
+ */
+function getAdminDb() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  return createClient(url, key, {
+    auth: { persistSession: false },
+    global: {
+      fetch: (input, init) =>
+        fetch(input as RequestInfo, { ...init, cache: 'no-store' }),
+    },
+  });
+}
+
+/**
+ * Return the revocation epoch (ms since epoch) from Supabase Storage.
+ * Any session token whose `issuedAt` is at or below this value is invalid.
+ *
+ * - Returns 0 when no revocation has been issued yet (object absent) or when
+ *   Supabase is not configured (in which case `revokeAllSessions` is also
+ *   unavailable).
+ * - Throws on any unexpected Storage error so the caller (`readSessionToken`)
+ *   can fail closed — denying access rather than silently skipping the check.
+ *
+ * No in-process cache is used: every call reads from Supabase Storage so all
+ * serving instances observe revocations on their very next request.
+ */
+export async function getRevocationTimestamp(): Promise<number> {
+  const db = getAdminDb();
+  if (!db) return 0;
+
+  const { data, error } = await db.storage
+    .from(REVOCATION_BUCKET)
+    .download(REVOCATION_OBJECT);
+
+  if (error) {
+    const msg = (error.message ?? '').toLowerCase();
+    // Object or bucket not found → no revocation has been issued yet.
+    if (msg.includes('not found') || msg.includes('does not exist') || msg.includes('404')) {
+      return 0;
+    }
+    // Any other failure: propagate so readSessionToken can fail closed.
+    throw new Error(`Admin revocation check failed: ${error.message}`);
+  }
+
+  const text = await (data as Blob).text();
+  return Number(text.trim()) || 0;
+}
+
+/**
+ * Invalidate every existing admin session immediately across all serving
+ * instances. The epoch is written to Supabase Storage; every instance reads it
+ * on the next request with no per-process cache to clear.
+ *
+ * The private bucket is created automatically if it does not yet exist.
+ * Throws when Supabase is not configured or the write fails.
+ */
+export async function revokeAllSessions(now = Date.now()): Promise<void> {
+  const db = getAdminDb();
+  if (!db) throw new Error('Supabase is not configured; cannot revoke sessions.');
+
+  // Ensure the private bucket exists. createBucket is idempotent: the error
+  // returned when the bucket already exists is intentionally ignored.
+  await db.storage.createBucket(REVOCATION_BUCKET, { public: false });
+
+  const blob = new Blob([String(now)], { type: 'text/plain' });
+  const { error } = await db.storage
+    .from(REVOCATION_BUCKET)
+    .upload(REVOCATION_OBJECT, blob, {
+      upsert: true,
+      contentType: 'text/plain',
+      // max-age=0 ensures HTTP caches always revalidate; no-store prevents
+      // any intermediate cache from serving a stale epoch after a revoke.
+      cacheControl: '0',
+    });
+
+  if (error) throw new Error(`Failed to revoke admin sessions: ${error.message}`);
+}
+
+// ---------------------------------------------------------------------------
+// Session lifetime constants
+// ---------------------------------------------------------------------------
 
 /** Sliding session lifetime: how far ahead each issued token expires. */
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
@@ -41,6 +155,10 @@ export function getMaxSessionLifetimeMs(): number {
     Number.isFinite(hours) && hours > 0 ? hours * 60 * 60 * 1000 : DEFAULT_MAX_LIFETIME_MS;
   return Math.max(configured, SESSION_TTL_MS);
 }
+
+// ---------------------------------------------------------------------------
+// Crypto helpers
+// ---------------------------------------------------------------------------
 
 const encoder = new TextEncoder();
 
@@ -70,6 +188,10 @@ function safeEqual(a: string, b: string): boolean {
   }
   return diff === 0;
 }
+
+// ---------------------------------------------------------------------------
+// Public auth helpers
+// ---------------------------------------------------------------------------
 
 /** True when the shared admin password and session secret are both configured. */
 export function isAdminAuthConfigured(): boolean {
@@ -121,7 +243,11 @@ export function cookieMaxAgeSeconds(expiresAt: number, now = Date.now()): number
  * Parse and verify a session token.
  *
  * Returns `null` when the token is missing, malformed, has an invalid
- * signature, has expired, or has passed its absolute ceiling.
+ * signature, has expired, has passed its absolute ceiling, or was issued at or
+ * before the current revocation epoch (set by `revokeAllSessions`).
+ *
+ * Also returns `null` when the revocation check itself fails — failing closed
+ * ensures a transient Supabase outage cannot be used to bypass revocation.
  */
 export async function readSessionToken(
   token: string | undefined | null,
@@ -150,10 +276,22 @@ export async function readSessionToken(
   const absoluteExpiresAt = issuedAt + getMaxSessionLifetimeMs();
   if (absoluteExpiresAt <= now) return null;
 
+  // Reject tokens issued at or before the last "sign out all devices" call.
+  // Using <= ensures same-millisecond tokens are also caught.
+  // On any unexpected read failure, fail closed: return null rather than
+  // silently skipping the revocation check.
+  let revokedBefore: number;
+  try {
+    revokedBefore = await getRevocationTimestamp();
+  } catch {
+    return null;
+  }
+  if (issuedAt <= revokedBefore) return null;
+
   return { issuedAt, expiresAt, absoluteExpiresAt };
 }
 
-/** Validate a session token's signature, expiry, and absolute ceiling. */
+/** Validate a session token's signature, expiry, ceiling, and revocation status. */
 export async function isValidSessionToken(
   token: string | undefined | null,
   now = Date.now(),
@@ -164,7 +302,7 @@ export async function isValidSessionToken(
 /**
  * Return the expiry timestamp (ms since epoch) from a valid session token,
  * or `null` if the token is missing, malformed, expired, past its ceiling,
- * or has an invalid signature.
+ * has an invalid signature, or has been revoked.
  */
 export async function getSessionExpiry(
   token: string | undefined | null,
