@@ -1,0 +1,42 @@
+Review replit.md for our project rules, then fix the Tailwind compilation failure and completely rewrite the UI. The current deployment is rendering raw HTML with serif fonts and broken layouts. We need a premium, modern SaaS design.
+
+### 1. Fix the CSS Compiler Engine (CRITICAL)
+- Create or overwrite `website/postcss.config.js` (or `.mjs`) with standard Next.js Tailwind/Autoprefixer configuration.
+- Overwrite `website/tailwind.config.ts`. Ensure `content` includes `["./app/**/*.{js,ts,jsx,tsx}", "./components/**/*.{js,ts,jsx,tsx}"]`.
+
+### 2. Global Layout & Typography (`website/app/layout.tsx`)
+- Import `Inter` from `next/font/google` and apply it globally to the `<body>`.
+- Ensure `import './globals.css';` is at the top.
+- The `<body>` must have: `bg-[#0A0B0E] text-white antialiased flex`.
+
+### 3. The Sidebar (`website/app/page.tsx`)
+- Build a fixed sidebar: `fixed left-0 top-0 h-screen w-64 bg-[#12141A] border-r border-white/10 flex flex-col justify-between p-8 z-50`.
+- Top: "TradiQs AI" logo (text-2xl, font-bold, tracking-tight, text-[#00F0FF]).
+- Bottom: "Get the App" section with two buttons (Apple Store & Google Play). Style them as premium dark badges: `bg-black border border-white/20 rounded-xl py-3 px-4 flex items-center gap-3 hover:border-[#00F0FF] transition-colors w-full mb-3`.
+
+### 4. Main Content Area (`website/app/page.tsx`)
+- Wrap the main content to offset the sidebar: `main className="ml-64 flex-1 flex flex-col min-h-screen bg-[#0A0B0E]"`.
+
+### 5. Hero Section (Inside Main)
+- `min-h-[80vh] flex flex-col items-center justify-center text-center px-8 relative`.
+- Eyebrow: "MARKET INTELLIGENCE, REIMAGINED" (`text-[#00F0FF] text-xs font-bold tracking-[0.2em] uppercase mb-6`).
+- Headline: "The Institutional Edge in Your Pocket." (`text-5xl lg:text-7xl font-extrabold tracking-tight mb-8 text-transparent bg-clip-text bg-gradient-to-b from-white to-white/60`).
+- Subtitle: "Trade with the clarity of a desk and the discipline of a system." (`text-xl text-white/50 max-w-2xl mb-12`).
+- CTA Row: Two buttons. 
+  - Primary: `bg-[#00F0FF] text-black px-8 py-4 rounded-full font-semibold hover:bg-cyan-400 transition-all`.
+  - Secondary: `bg-white/5 border border-white/10 text-white px-8 py-4 rounded-full font-semibold hover:bg-white/10 transition-all`.
+
+### 6. Live Ticker (Inside Main)
+- `w-full bg-[#12141A] border-y border-white/10 py-4 px-8 flex gap-8 text-sm font-mono overflow-hidden text-white/60`.
+
+### 7. Features Grid (Inside Main)
+- `max-w-6xl mx-auto w-full py-24 px-8`. Section title: "Everything serious traders need." (`text-3xl font-bold mb-12 text-center`).
+- `grid grid-cols-1 lg:grid-cols-3 gap-6`.
+- Cards: `bg-gradient-to-b from-[#16181D] to-[#12141A] p-8 rounded-3xl border border-white/10 hover:border-[#00F0FF]/50 transition-all`.
+
+### 8. Premium Footer (Inside Main)
+- `w-full bg-[#0A0B0E] border-t border-white/10 py-16 px-12 mt-auto`.
+- `grid grid-cols-2 md:grid-cols-4 gap-8`.
+- Links must be: `text-white/40 hover:text-[#00F0FF] text-sm transition-colors`. Do not use default blue link styling.
+
+Do not explain. Just generate the correct code for `postcss.config.js`, `tailwind.config.ts`, `layout.tsx`, and `page.tsx`.
