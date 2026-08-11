@@ -1,5 +1,5 @@
 import { Mail, UserPlus } from 'lucide-react';
-import { getSupabaseServer } from '../../../lib/supabase-server';
+import { getSupabaseServer } from '../../../../lib/supabase-server';
 
 export const dynamic = 'force-dynamic';
 

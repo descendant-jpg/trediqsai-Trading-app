@@ -1,5 +1,5 @@
 import { Mail } from 'lucide-react';
-import { getSupabase } from '../../../lib/supabase';
+import { getSupabase } from '../../../../lib/supabase';
 
 export const dynamic = 'force-dynamic';
 export default async function Inbox() {

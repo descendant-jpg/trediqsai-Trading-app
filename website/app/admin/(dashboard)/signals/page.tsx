@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { getSupabase } from '../../../lib/supabase';
+import { getSupabase } from '../../../../lib/supabase';
 export default function SignalsManager() {
   const [form, setForm] = useState({ asset: '', direction: 'BUY', entry_price: '', take_profit: '', stop_loss: '', is_vip_only: false });
   const [status, setStatus] = useState('');

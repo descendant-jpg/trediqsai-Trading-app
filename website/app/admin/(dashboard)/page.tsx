@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { ArrowUpRight, Bot, FilePlus2, Radio, UserPlus, Users, WalletCards } from 'lucide-react';
-import { getSupabaseServer } from '../../lib/supabase-server';
+import { getSupabaseServer } from '../../../lib/supabase-server';
 export const dynamic = 'force-dynamic';
 export default async function AdminDashboard() {
   let users = 0, affiliates = 0, subscribers = 0, signals = 0, waitlist = 0;
