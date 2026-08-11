@@ -92,3 +92,59 @@ set search_path = public
 as $$
   delete from admin_login_attempts where ip = p_ip;
 $$;
+
+-- ---------------------------------------------------------------------------
+-- Lock the functions down.
+--
+-- These run as `security definer`, so they deliberately bypass the row level
+-- security above. Postgres grants EXECUTE on a new function to PUBLIC by
+-- default, and Supabase exposes `anon` and `authenticated` over PostgREST —
+-- so without these revokes anyone on the internet could call them directly and
+-- clear their own lockout with `admin_login_clear`, defeating the whole point
+-- of throttling password guesses. Only the server-side service role may call
+-- them.
+--
+-- Revoking from PUBLIC alone is not enough: a role that was granted EXECUTE
+-- directly keeps it, so `anon` and `authenticated` are revoked explicitly.
+-- ---------------------------------------------------------------------------
+revoke all on function admin_login_record_failure(text, bigint) from public;
+revoke all on function admin_login_attempt_count(text, bigint)  from public;
+revoke all on function admin_login_clear(text)                  from public;
+
+do $$
+begin
+  -- Supabase always has these roles; guarded so the migration also applies
+  -- cleanly to a plain Postgres database (e.g. a local test instance).
+  if exists (select 1 from pg_roles where rolname = 'anon') then
+    revoke all on function admin_login_record_failure(text, bigint) from anon;
+    revoke all on function admin_login_attempt_count(text, bigint)  from anon;
+    revoke all on function admin_login_clear(text)                  from anon;
+  end if;
+
+  if exists (select 1 from pg_roles where rolname = 'authenticated') then
+    revoke all on function admin_login_record_failure(text, bigint) from authenticated;
+    revoke all on function admin_login_attempt_count(text, bigint)  from authenticated;
+    revoke all on function admin_login_clear(text)                  from authenticated;
+  end if;
+
+  if exists (select 1 from pg_roles where rolname = 'service_role') then
+    grant execute on function admin_login_record_failure(text, bigint) to service_role;
+    grant execute on function admin_login_attempt_count(text, bigint)  to service_role;
+    grant execute on function admin_login_clear(text)                  to service_role;
+  end if;
+end
+$$;
+
+-- The table itself is service-role only too.
+revoke all on table admin_login_attempts from public;
+
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'anon') then
+    revoke all on table admin_login_attempts from anon;
+  end if;
+  if exists (select 1 from pg_roles where rolname = 'authenticated') then
+    revoke all on table admin_login_attempts from authenticated;
+  end if;
+end
+$$;
