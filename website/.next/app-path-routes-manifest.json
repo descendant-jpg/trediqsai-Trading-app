@@ -3,13 +3,13 @@
   "/about/page": "/about",
   "/blog/[slug]/page": "/blog/[slug]",
   "/contact/page": "/contact",
-  "/privacy/page": "/privacy",
-  "/terms/page": "/terms",
   "/page": "/",
+  "/terms/page": "/terms",
+  "/privacy/page": "/privacy",
+  "/blog/page": "/blog",
   "/admin/blog/page": "/admin/blog",
   "/admin/signals/page": "/admin/signals",
   "/admin/users/page": "/admin/users",
-  "/blog/page": "/blog",
-  "/admin/inbox/page": "/admin/inbox",
-  "/admin/page": "/admin"
+  "/admin/page": "/admin",
+  "/admin/inbox/page": "/admin/inbox"
 }
