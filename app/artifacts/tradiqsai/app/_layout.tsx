@@ -26,6 +26,7 @@ import {
 } from '@workspace/api-client-react';
 import { isSupabaseConfigured, supabase } from '@/utils/supabase';
 import { initializeRevenueCat, SubscriptionProvider } from '@/lib/revenuecat';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
 
 // Attach the Supabase access token to every API call so server-side state
 // (e.g. AutoPilot bot settings) is scoped to the signed-in trader.
@@ -81,6 +82,7 @@ function RootLayoutNav() {
   // Server-side state is per-user: drop cached API data whenever the
   // signed-in user changes so one trader never sees another's data.
   const userId = session?.user?.id ?? null;
+  usePushNotifications(userId);
   const prevUserId = React.useRef(userId);
   useEffect(() => {
     if (prevUserId.current !== userId) {

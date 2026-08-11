@@ -55,7 +55,7 @@ export default function SignalsManager() {
 
       const supabase = getSupabase();
       if (!supabase) throw new Error('Supabase is not configured.');
-      const { error } = await supabase.from('ai_signals').insert({
+      const { data: newSignal, error } = await supabase.from('ai_signals').insert({
         asset: form.asset.trim(),
         direction: form.direction,
         entry_price: Number(form.entry_price),
@@ -65,8 +65,24 @@ export default function SignalsManager() {
         rationale: form.rationale.trim(),
         confluence_factors: confluenceFactors,
         is_vip_only: form.is_vip_only,
-      });
+      }).select('id').single();
       if (error) throw error;
+      if (!newSignal) throw new Error('Signal was inserted without an identifier.');
+
+      const broadcast = await fetch('/api/admin/signals/broadcast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          signalId: newSignal.id,
+          asset: form.asset.trim(),
+          direction: form.direction,
+          confidenceScore: confidence,
+        }),
+      });
+      if (!broadcast.ok) {
+        const result = (await broadcast.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(result?.error ?? 'Signal published, but push broadcast failed.');
+      }
 
       setStatus('Signal published successfully.');
       setForm(EMPTY_FORM);
