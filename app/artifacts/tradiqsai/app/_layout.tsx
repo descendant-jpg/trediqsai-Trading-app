@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
@@ -54,26 +54,6 @@ setAuthFailureHandler(async () => {
   await supabase.auth.signOut();
 });
 
-// Prevent the splash screen from auto-hiding before asset loading is complete.
-SplashScreen.preventAutoHideAsync();
-
-try {
-  initializeRevenueCat();
-} catch (err: any) {
-  Alert.alert('RevenueCat Unavailable', err?.message ?? 'Unknown error');
-}
-
-// Show local notifications (e.g. the settings screen's test notification)
-// while the app is in the foreground — without this they are suppressed.
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
-
 const queryClient = new QueryClient();
 
 function RootLayoutNav() {
@@ -86,6 +66,24 @@ function RootLayoutNav() {
   usePushNotifications(userId);
 
   useEffect(() => {
+    if (Platform.OS === 'web') return;
+    try {
+      initializeRevenueCat();
+    } catch (err: unknown) {
+      Alert.alert('RevenueCat Unavailable', err instanceof Error ? err.message : 'Unknown error');
+    }
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowBanner: true,
+        shouldShowList: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+      }),
+    });
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
     const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
       const signalId = response.notification.request.content.data?.signal_id;
       if (typeof signalId !== 'string' && typeof signalId !== 'number') return;
@@ -148,8 +146,13 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
+    if (Platform.OS === 'web') return;
+    void SplashScreen.preventAutoHideAsync();
+  }, []);
+
+  useEffect(() => {
     if (fontsLoaded || fontError) {
-      SplashScreen.hideAsync();
+      if (Platform.OS !== 'web') void SplashScreen.hideAsync();
     }
   }, [fontsLoaded, fontError]);
 
