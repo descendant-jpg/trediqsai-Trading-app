@@ -34,6 +34,7 @@ export function SessionWarningBanner() {
   const [dismissed, setDismissed] = useState(false);
   const [extending, setExtending] = useState(false);
   const [extended, setExtended] = useState(false);
+  const [extendError, setExtendError] = useState('');
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const channelRef = useRef<BroadcastChannel | null>(null);
 
@@ -85,8 +86,17 @@ export function SessionWarningBanner() {
 
   async function handleExtend() {
     setExtending(true);
+    setExtendError('');
     try {
       const res = await fetch('/api/admin/refresh', { method: 'POST' });
+      if (!res.ok) {
+        // The session has hit its maximum length (or ended) — signing in again
+        // is the only way forward, so say so instead of failing silently.
+        const body = await res.json().catch(() => ({}));
+        setExtendError(
+          body?.error ?? 'Could not extend the session. Please sign in again.',
+        );
+      }
       if (res.ok) {
         setExtended(true);
         setDismissed(false);
@@ -142,15 +152,27 @@ export function SessionWarningBanner() {
           <span className="font-bold">{formatMinutes(msRemaining)}</span>. Stay
           signed in to avoid losing unsaved work.
         </p>
-        <button
-          onClick={handleExtend}
-          disabled={extending}
-          className="mt-3 flex items-center gap-1.5 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-amber-950 transition hover:bg-amber-400 disabled:opacity-60"
-          type="button"
-        >
-          <RefreshCw className={`h-3.5 w-3.5 ${extending ? 'animate-spin' : ''}`} aria-hidden />
-          {extending ? 'Extending…' : 'Stay signed in'}
-        </button>
+        {extendError ? (
+          <p className="mt-2 text-amber-100">{extendError}</p>
+        ) : null}
+        {extendError ? (
+          <a
+            className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-amber-950 transition hover:bg-amber-400"
+            href="/admin/login"
+          >
+            Sign in again
+          </a>
+        ) : (
+          <button
+            onClick={handleExtend}
+            disabled={extending}
+            className="mt-3 flex items-center gap-1.5 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-amber-950 transition hover:bg-amber-400 disabled:opacity-60"
+            type="button"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${extending ? 'animate-spin' : ''}`} aria-hidden />
+            {extending ? 'Extending…' : 'Stay signed in'}
+          </button>
+        )}
       </div>
       <button
         onClick={handleDismiss}

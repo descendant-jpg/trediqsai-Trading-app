@@ -13,7 +13,7 @@ A high-end, gamified trading terminal mobile app with a simulated trading floor,
 - `pnpm run push:app` — stage, commit, and push the application repository
 - `pnpm run push:all` — push both repositories sequentially
 - Required env: `DATABASE_URL` — Postgres connection string
-- Website admin area env: `ADMIN_PASSWORD` (shared admin sign-in password) and `SESSION_SECRET` (signs the admin session cookie). Without both, `/admin` stays locked.
+- Website admin area env: `ADMIN_PASSWORD` (shared admin sign-in password) and `SESSION_SECRET` (signs the admin session cookie). Without both, `/admin` stays locked. Optional `ADMIN_SESSION_MAX_HOURS` caps how long one sign-in can be extended for (default 24h); rotating `SESSION_SECRET` signs everyone out immediately.
 
 ## Stack
 
