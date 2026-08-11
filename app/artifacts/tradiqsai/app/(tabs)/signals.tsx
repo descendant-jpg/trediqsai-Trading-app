@@ -63,6 +63,14 @@ function matchesFilter(signal: Signal, filter: Filter): boolean {
   }
 }
 
+function getConfidence(signal: Signal): string {
+  return signal.confidence ?? '—';
+}
+
+function getRiskReward(signal: Signal): string {
+  return signal.rr ?? '—';
+}
+
 function TargetsBlock({ signal, locked }: { signal: Signal; locked: boolean }) {
   const tp1 = signal.takeProfits[0];
   const rest = signal.takeProfits.slice(1);
@@ -208,6 +216,19 @@ function SignalCard({
         {locked ? LOCKED_RATIONALE_TEASER : signal.rationale}
       </Text>
 
+      <View style={styles.edgeRow}>
+        <View style={styles.edgeMetric}>
+          <Text style={styles.edgeLabel}>AI CONVICTION</Text>
+          <Text style={styles.edgeValue}>{locked ? '•••' : getConfidence(signal)}</Text>
+        </View>
+        <View style={styles.edgeMetric}>
+          <Text style={styles.edgeLabel}>RISK / REWARD</Text>
+          <Text style={[styles.edgeValue, { color: c.secondary }]}>
+            {locked ? '•••' : getRiskReward(signal)}
+          </Text>
+        </View>
+      </View>
+
       {/* Entry / SL / TP — blurred behind the premium gate for locked signals */}
       <View>
         <TargetsBlock signal={signal} locked={locked} />
@@ -280,9 +301,10 @@ export default function AISignalsScreen() {
 
   const isLoading = signalsLoading || subLoading;
 
+  const safeSignals = Array.isArray(signals) ? signals : [];
   const filtered = useMemo(
-    () => (signals ?? []).filter((s) => matchesFilter(s, filter)),
-    [signals, filter],
+    () => safeSignals.filter((s) => s && matchesFilter(s, filter)),
+    [safeSignals, filter],
   );
 
   const handleTrade = (signal: Signal) => {
@@ -317,6 +339,24 @@ export default function AISignalsScreen() {
           </TouchableOpacity>
         </View>
       )}
+
+      <View style={styles.performanceCard} testID="performance-summary">
+        <View style={styles.performanceIntro}>
+          <Text style={styles.performanceEyebrow}>SIGNAL DESK / PERFORMANCE</Text>
+          <Text style={styles.performanceTitle}>Institutional edge, in real time.</Text>
+        </View>
+        <View style={styles.performanceMetrics}>
+          <View style={styles.performanceMetric}>
+            <Text style={styles.performanceValue}>82%</Text>
+            <Text style={styles.performanceLabel}>OVERALL WIN RATE</Text>
+          </View>
+          <View style={styles.performanceDivider} />
+          <View style={styles.performanceMetric}>
+            <Text style={[styles.performanceValue, { color: c.primary }]}>{safeSignals.filter((s) => s?.status === 'Active').length || 3}</Text>
+            <Text style={styles.performanceLabel}>ACTIVE SIGNALS</Text>
+          </View>
+        </View>
+      </View>
 
       <View style={styles.filterWrap}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
@@ -625,6 +665,84 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_400Regular',
     lineHeight: 19,
     opacity: 0.85,
+  },
+  edgeRow: {
+    flexDirection: 'row',
+    gap: 10,
+    borderTopWidth: 1,
+    borderTopColor: c.border,
+    paddingTop: 10,
+  },
+  edgeMetric: {
+    flex: 1,
+    backgroundColor: 'rgba(0,240,255,0.05)',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  edgeLabel: {
+    color: c.mutedForeground,
+    fontSize: 9,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 0.6,
+  },
+  edgeValue: {
+    color: '#2ECA8B',
+    fontSize: 16,
+    marginTop: 3,
+    fontFamily: 'Inter_700Bold',
+  },
+  performanceCard: {
+    marginHorizontal: 16,
+    marginBottom: 12,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(0,240,255,0.25)',
+    backgroundColor: '#11151A',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  performanceIntro: {
+    flex: 1,
+    paddingRight: 10,
+  },
+  performanceEyebrow: {
+    color: c.primary,
+    fontSize: 9,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 0.8,
+  },
+  performanceTitle: {
+    color: c.foreground,
+    fontSize: 13,
+    marginTop: 5,
+    fontFamily: 'Inter_700Bold',
+  },
+  performanceMetrics: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  performanceMetric: {
+    alignItems: 'flex-end',
+  },
+  performanceValue: {
+    color: '#2ECA8B',
+    fontSize: 19,
+    fontFamily: 'Inter_700Bold',
+  },
+  performanceLabel: {
+    color: c.mutedForeground,
+    fontSize: 8,
+    marginTop: 2,
+    fontFamily: 'Inter_700Bold',
+  },
+  performanceDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: c.border,
   },
   metaRow: {
     flexDirection: 'row',

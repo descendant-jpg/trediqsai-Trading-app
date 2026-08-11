@@ -34,8 +34,15 @@ export type AiSignal = {
   asset: string;
   entry_price: number;
   take_profit: number;
+  tp1?: number | null;
+  tp2?: number | null;
+  tp3?: number | null;
   stop_loss: number;
   is_vip_only: boolean;
+  status?: 'active' | 'tp1_hit' | 'tp2_hit' | 'tp3_hit' | 'stopped_out' | 'closed' | null;
+  confidence_score?: number | null;
+  rationale?: string | null;
+  risk_reward?: string | null;
   direction?: string;
   created_at?: string;
 };

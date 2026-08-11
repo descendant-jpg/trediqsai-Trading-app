@@ -16,9 +16,15 @@ create table if not exists public.ai_signals (
   asset text not null check (asset in ('BTC/USD','USOIL','EUR/USD','NVDA')),
   entry_price numeric(18,6) not null,
   take_profit numeric(18,6) not null,
+  tp1 numeric(18,6),
+  tp2 numeric(18,6),
+  tp3 numeric(18,6),
   stop_loss numeric(18,6) not null,
   direction text not null default 'BUY' check (direction in ('BUY','SELL')),
+  status text not null default 'active' check (status in ('active','tp1_hit','tp2_hit','tp3_hit','stopped_out','closed')),
+  confidence_score integer check (confidence_score between 0 and 100),
   rationale text,
+  risk_reward text,
   is_vip_only boolean not null default false,
   created_at timestamptz not null default now()
 );
