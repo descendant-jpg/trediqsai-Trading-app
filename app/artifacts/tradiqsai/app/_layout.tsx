@@ -16,7 +16,7 @@ import {
   useFonts,
 } from '@expo-google-fonts/inter';
 import * as Notifications from 'expo-notifications';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { usePendingRouteRedirect } from '@/lib/usePendingRouteRedirect';
 import * as SplashScreen from 'expo-splash-screen';
 import {
@@ -78,11 +78,26 @@ const queryClient = new QueryClient();
 
 function RootLayoutNav() {
   const { session, loading } = useAuth();
+  const router = useRouter();
 
   // Server-side state is per-user: drop cached API data whenever the
   // signed-in user changes so one trader never sees another's data.
   const userId = session?.user?.id ?? null;
   usePushNotifications(userId);
+
+  useEffect(() => {
+    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      const signalId = response.notification.request.content.data?.signal_id;
+      if (typeof signalId !== 'string' && typeof signalId !== 'number') return;
+
+      router.push({
+        pathname: '/(tabs)/signals',
+        params: { highlight_id: String(signalId) },
+      });
+    });
+
+    return () => subscription.remove();
+  }, [router]);
   const prevUserId = React.useRef(userId);
   useEffect(() => {
     if (prevUserId.current !== userId) {

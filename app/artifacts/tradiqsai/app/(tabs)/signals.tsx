@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -14,7 +14,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { Feather } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ManageSubscriptionCard, ProWindDownBanner } from '@/components/paywall';
 import { PaywallModal } from '@/components/PaywallModal';
 import SignalDetailModal from '@/components/SignalDetailModal';
@@ -162,18 +162,21 @@ function TargetsBlock({ signal, locked }: { signal: Signal; locked: boolean }) {
 
 function SignalCard({
   signal,
+  highlighted,
   locked,
   onOpen,
   onTrade,
   onUpgrade,
 }: {
   signal: Signal;
+  highlighted: boolean;
   locked: boolean;
   onOpen: (signal: Signal) => void;
   onTrade: (signal: Signal) => void;
   onUpgrade: () => void;
 }) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(highlighted);
+  const [highlightActive, setHighlightActive] = useState(highlighted);
   const [riskPercentage, setRiskPercentage] = useState<1 | 2 | 5>(2);
   const [executing, setExecuting] = useState(false);
   const { session } = useAuth();
@@ -181,10 +184,17 @@ function SignalCard({
   const dirColor = isBuy ? '#00F0FF' : '#E54B4B';
   const accent = signal.isPremium ? c.secondary : c.primary;
   const status = STATUS_STYLES[signal.status] ?? STATUS_STYLES.Active;
+  useEffect(() => {
+    if (!highlighted) return;
+    setIsExpanded(true);
+    setHighlightActive(true);
+    const timeout = setTimeout(() => setHighlightActive(false), 3000);
+    return () => clearTimeout(timeout);
+  }, [highlighted]);
 
   return (
     <Pressable
-      style={[styles.card, { borderLeftColor: accent }]}
+      style={[styles.card, { borderLeftColor: accent }, highlightActive && styles.highlightedCard]}
       onPress={() => (locked ? onUpgrade() : onOpen(signal))}
       testID={`signal-card-${signal.id}`}
     >
@@ -382,6 +392,8 @@ function SignalCard({
 }
 
 export default function AISignalsScreen() {
+  const { highlight_id } = useLocalSearchParams<{ highlight_id?: string | string[] }>();
+  const highlightId = Array.isArray(highlight_id) ? highlight_id[0] : highlight_id;
   const insets = useSafeAreaInsets();
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
   const { data: signals, isLoading: signalsLoading, isError, refetch } = useGetSignals();
@@ -497,6 +509,7 @@ export default function AISignalsScreen() {
           renderItem={({ item }) => (
             <SignalCard
               signal={item}
+              highlighted={item.id === highlightId}
               locked={item.isPremium && !isSubscribed}
               onOpen={setDetailSignal}
               onTrade={handleTrade}
@@ -534,6 +547,14 @@ export default function AISignalsScreen() {
 }
 
 const styles = StyleSheet.create({
+  highlightedCard: {
+    borderWidth: 1,
+    borderColor: '#00F0FF',
+    shadowColor: '#00F0FF',
+    shadowOpacity: 0.65,
+    shadowRadius: 10,
+    elevation: 5,
+  },
   container: {
     flex: 1,
     backgroundColor: '#0A0B0E',
