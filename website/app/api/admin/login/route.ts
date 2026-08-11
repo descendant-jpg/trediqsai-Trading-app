@@ -6,40 +6,25 @@ import {
   isAdminAuthConfigured,
   verifyAdminPassword,
 } from '../../../../lib/admin-auth';
+import {
+  clearLoginAttempts,
+  getClientIp,
+  isLoginBlocked,
+  recordFailedLogin,
+} from '../../../../lib/admin-rate-limit';
 
-// ---------------------------------------------------------------------------
-// In-memory rate limiter — 10 sign-in attempts per IP per 15 minutes
-// ---------------------------------------------------------------------------
-const WINDOW_MS = 15 * 60 * 1000;
-const MAX_ATTEMPTS = 10;
-const attempts = new Map<string, { count: number; windowStart: number }>();
+/** This route touches the database, so it must not be statically optimised. */
+export const dynamic = 'force-dynamic';
 
-function withinRateLimit(ip: string): boolean {
-  const now = Date.now();
-  const entry = attempts.get(ip);
-  if (!entry || now - entry.windowStart >= WINDOW_MS) {
-    attempts.set(ip, { count: 1, windowStart: now });
-    return true;
-  }
-  if (entry.count >= MAX_ATTEMPTS) return false;
-  entry.count += 1;
-  return true;
-}
-
-function getClientIp(req: NextRequest): string {
-  return (
-    req.headers.get('x-forwarded-for')?.split(',')[0].trim() ??
-    req.headers.get('x-real-ip') ??
-    'unknown'
-  );
-}
+const TOO_MANY_ATTEMPTS = 'Too many attempts. Please try again later.';
 
 export async function POST(req: NextRequest) {
-  if (!withinRateLimit(getClientIp(req))) {
-    return NextResponse.json(
-      { error: 'Too many attempts. Please try again later.' },
-      { status: 429 },
-    );
+  const ip = getClientIp(req);
+
+  // Attempts are counted in Postgres, so a lockout survives a restart or
+  // redeploy and applies across every running instance.
+  if (await isLoginBlocked(ip)) {
+    return NextResponse.json({ error: TOO_MANY_ATTEMPTS }, { status: 429 });
   }
 
   if (!isAdminAuthConfigured()) {
@@ -59,7 +44,11 @@ export async function POST(req: NextRequest) {
   }
 
   if (!verifyAdminPassword(password)) {
-    return NextResponse.json({ error: 'Incorrect password.' }, { status: 401 });
+    // Only wrong passwords count against the limit.
+    const nowBlocked = await recordFailedLogin(ip);
+    return nowBlocked
+      ? NextResponse.json({ error: TOO_MANY_ATTEMPTS }, { status: 429 })
+      : NextResponse.json({ error: 'Incorrect password.' }, { status: 401 });
   }
 
   const token = await createSessionToken();
@@ -69,6 +58,10 @@ export async function POST(req: NextRequest) {
       { status: 503 },
     );
   }
+
+  // A correct password wipes the slate, so an admin who mistyped a few times
+  // is not left one attempt away from a lockout.
+  await clearLoginAttempts(ip);
 
   const res = NextResponse.json({ ok: true });
   res.cookies.set(ADMIN_COOKIE, token, {
