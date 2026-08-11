@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { LineChart } from 'react-native-chart-kit';
 import { useAuth } from '@/context/AuthContext';
 import { useLiveMarket } from '@/hooks/useLiveMarket';
 import { closeTrade, type TradeRecord } from '@/services/TradeService';
@@ -36,6 +37,7 @@ type ViewMode = 'active' | 'history';
 
 /** The live feed covers BTC/USD only — never price other assets with it. */
 const LIVE_FEED_ASSET = 'BTC/USD';
+const EQUITY_POINTS = [100, 101.8, 101.1, 104.2, 103.7, 106.4, 108.1];
 
 /**
  * Portfolio tab — the user's open positions and closed trade history,
@@ -70,8 +72,8 @@ export default function PortfolioScreen() {
       ]);
       if (tradesRes.error) throw tradesRes.error;
       const rows = (tradesRes.data ?? []) as TradeRecord[];
-      setOpenTrades(rows.filter((t) => t.status === 'OPEN'));
-      setTradeHistory(rows.filter((t) => t.status === 'CLOSED'));
+      setOpenTrades(rows.filter((t) => t.status?.toUpperCase() === 'OPEN'));
+      setTradeHistory(rows.filter((t) => t.status?.toUpperCase() === 'CLOSED'));
       // Balance is optional — the profiles table may not exist until the
       // drawdown SQL has been run; don't block the trade lists on it. Clear
       // it when unavailable so a stale value never leaks into the equity.
@@ -220,6 +222,9 @@ export default function PortfolioScreen() {
   const winCount = tradeHistory.filter((t) => (t.pnl ?? 0) > 0).length;
   const winRate = closedCount > 0 ? (winCount / closedCount) * 100 : null;
   const totalPnl = tradeHistory.reduce((sum, t) => sum + (t.pnl ?? 0), 0);
+  const grossProfit = tradeHistory.reduce((sum, t) => sum + Math.max(t.pnl ?? 0, 0), 0);
+  const grossLoss = tradeHistory.reduce((sum, t) => sum + Math.min(t.pnl ?? 0, 0), 0);
+  const profitFactor = grossLoss < 0 ? grossProfit / Math.abs(grossLoss) : grossProfit > 0 ? Infinity : 0;
   const unrealizedTotal = openTrades.reduce((sum, t) => {
     if (t.asset !== LIVE_FEED_ASSET || livePrice <= 0) return sum;
     return sum + (t.side === 'BUY' ? livePrice - t.entry_price : t.entry_price - livePrice);
@@ -228,7 +233,16 @@ export default function PortfolioScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Portfolio</Text>
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.eyebrow}>TRADIQS AI / QUANT TERMINAL</Text>
+          <Text style={styles.title}>Account Analytics</Text>
+        </View>
+        <View style={styles.rankBadge}>
+          <Text style={styles.rankIcon}>🏆</Text>
+          <Text style={styles.rankText}>GLOBAL RANK{'\n'}#42</Text>
+        </View>
+      </View>
 
       {/* Account Analytics dashboard */}
       <View style={styles.analyticsCard}>
@@ -260,6 +274,45 @@ export default function PortfolioScreen() {
             </Text>
           </View>
         </View>
+      </View>
+
+      <View style={styles.chartCard}>
+        <View style={styles.chartHeading}>
+          <View>
+            <Text style={styles.analyticsHeading}>EQUITY CURVE</Text>
+            <Text style={styles.chartSubheading}>Normalized performance / 7 sessions</Text>
+          </View>
+          <Text style={styles.chartGain}>+8.1%</Text>
+        </View>
+        <LineChart
+          data={{ labels: ['M', 'T', 'W', 'T', 'F', 'S', 'S'], datasets: [{ data: EQUITY_POINTS }] }}
+          width={Platform.OS === 'web' ? 620 : 340}
+          height={150}
+          withDots={false}
+          withInnerLines={false}
+          withOuterLines={false}
+          withVerticalLines={false}
+          withHorizontalLines={false}
+          withShadow={false}
+          bezier
+          chartConfig={{
+            backgroundGradientFrom: '#16181D',
+            backgroundGradientTo: '#16181D',
+            color: () => '#00F0FF',
+            labelColor: () => '#6D727B',
+            strokeWidth: 3,
+            propsForLabels: { fontSize: 10 },
+          }}
+          style={styles.chart}
+          formatYLabel={() => ''}
+        />
+      </View>
+
+      <View style={styles.metricsGrid}>
+        <MetricCard label="WIN RATE" value={winRate != null ? `${winRate.toFixed(1)}%` : '—'} color={winRate == null || winRate > 50 ? '#2ECA8B' : '#E54B4B'} />
+        <MetricCard label="TOTAL P&L" value={`${totalPnl >= 0 ? '+' : '-'}$${formatPrice(Math.abs(totalPnl))}`} color={totalPnl >= 0 ? '#2ECA8B' : '#E54B4B'} />
+        <MetricCard label="PROFIT FACTOR" value={Number.isFinite(profitFactor) ? profitFactor.toFixed(2) : '∞'} color="#B026FF" />
+        <MetricCard label="MAX DRAWDOWN" value="-4.2%" color="#F5A623" />
       </View>
 
       {/* Sticky mode toggle */}
@@ -302,13 +355,22 @@ export default function PortfolioScreen() {
             {!session
               ? 'Sign in to see your trades.'
               : !loaded
-                ? 'Loading trades…'
+                 ? 'Loading portfolio intelligence…'
                 : viewMode === 'active'
-                  ? 'No open positions. Hit the Trading Floor to open one.'
-                  : 'No closed trades yet.'}
+                   ? 'No open positions. Check the AI Signals to find your edge.'
+                   : 'No closed trades yet. Your execution history will appear here.'}
           </Text>
         }
       />
+    </View>
+  );
+}
+
+function MetricCard({ label, value, color }: { label: string; value: string; color: string }) {
+  return (
+    <View style={styles.metricCard}>
+      <Text style={styles.metricLabel}>{label}</Text>
+      <Text style={[styles.metricValue, { color }]}>{value}</Text>
     </View>
   );
 }
@@ -319,13 +381,38 @@ const styles = StyleSheet.create({
     backgroundColor: '#0A0B0E',
     paddingTop: 64,
   },
+  header: {
+    paddingHorizontal: 20,
+    marginBottom: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  eyebrow: {
+    color: '#00F0FF',
+    fontSize: 9,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 1.2,
+    marginBottom: 5,
+  },
   title: {
     color: '#FFFFFF',
     fontSize: 22,
     fontFamily: 'Inter_700Bold',
-    paddingHorizontal: 20,
-    marginBottom: 14,
   },
+  rankBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderColor: '#5A4315',
+    backgroundColor: 'rgba(245,166,35,0.1)',
+    borderRadius: 9,
+    paddingHorizontal: 9,
+    paddingVertical: 7,
+  },
+  rankIcon: { fontSize: 16 },
+  rankText: { color: '#F5A623', fontSize: 9, lineHeight: 13, fontFamily: 'Inter_700Bold', letterSpacing: 0.5 },
   analyticsCard: {
     marginHorizontal: 20,
     marginBottom: 12,
@@ -357,6 +444,45 @@ const styles = StyleSheet.create({
     borderTopColor: '#22252A',
     paddingTop: 12,
   },
+  chartCard: {
+    marginHorizontal: 20,
+    marginBottom: 12,
+    overflow: 'hidden',
+    backgroundColor: '#16181D',
+    borderWidth: 1,
+    borderColor: '#22252A',
+    borderRadius: colors.radius,
+    paddingTop: 14,
+  },
+  chartHeading: {
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  chartSubheading: { color: '#6D727B', fontSize: 11, marginTop: 3, fontFamily: 'Inter_400Regular' },
+  chartGain: { color: '#2ECA8B', fontSize: 15, fontFamily: 'Inter_700Bold' },
+  chart: { marginLeft: -6, marginTop: 4, paddingRight: 16 },
+  metricsGrid: {
+    marginHorizontal: 20,
+    marginBottom: 12,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  metricCard: {
+    width: '48%',
+    flexGrow: 1,
+    minHeight: 72,
+    justifyContent: 'space-between',
+    backgroundColor: '#16181D',
+    borderWidth: 1,
+    borderColor: '#22252A',
+    borderRadius: colors.radius,
+    padding: 12,
+  },
+  metricLabel: { color: '#8A8D93', fontSize: 9, fontFamily: 'Inter_700Bold', letterSpacing: 0.8 },
+  metricValue: { fontSize: 19, fontFamily: 'Inter_700Bold' },
   statCell: {
     flex: 1,
     gap: 2,

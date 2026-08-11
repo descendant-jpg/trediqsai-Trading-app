@@ -1,0 +1,34 @@
+Review replit.md for our project rules. I am getting an error on the Portfolio screen: "column trades.pnl does not exist". 
+
+Fix the database schema and completely overhaul `app/(tabs)/portfolio.tsx` into a premium, institutional-grade analytics dashboard with fully functional logic.
+
+### 1. Fix the Database Schema (CRITICAL)
+- Create and execute a Supabase migration to add the missing columns to the `trades` table (if they don't exist):
+  `pnl` (numeric, default 0), `status` (text, default 'open'), `entry_price` (numeric), `close_price` (numeric).
+- Ensure the fetch logic in `portfolio.tsx` wraps the Supabase call in a try/catch block with robust loading states.
+
+### 2. Install Chart Dependencies
+- Install `react-native-chart-kit` and `react-native-svg` (ensure they are Expo-compatible) so we can render an equity curve.
+
+### 3. Build the UI & Functional Logic (`portfolio.tsx`)
+**A. Data Processing (The Math):**
+- Fetch all trades for the user. 
+- Calculate `total_pnl` (sum of all closed trade pnl).
+- Calculate `win_rate` (winning trades / total closed trades).
+- Calculate `profit_factor` (sum of positive pnl / absolute sum of negative pnl).
+- Separate trades into `activeTrades` (status === 'open') and `historyTrades` (status === 'closed').
+
+**B. The Premium Layout (Dark Theme #0A0B0E):**
+- **Header:** "Account Analytics" with a dynamic Global Rank badge (e.g., "🏆 Global Rank: #42") aligned to the right.
+- **Equity Chart:** Render a sleek line chart using `react-native-chart-kit`. Use a bezier curve, Electric Cyan (#00F0FF) for the line, and hide the grid lines for a clean look. (Use dummy data array for the chart points for now, but style it perfectly).
+- **Quant Metrics Grid:** A 2x2 CSS-style grid of dark cards (`bg-[#16181D]`):
+  - Win Rate (colored green/red based on > 50%)
+  - Total P&L (format as +$X.XX)
+  - Profit Factor (e.g., 1.84)
+  - Max Drawdown (dummy value e.g., -4.2%)
+- **Functional Tabs:** Build a custom tab switcher (Active Positions | History). 
+  - When "Active" is clicked, map over `activeTrades`. Render cards showing Asset, Direction (Buy/Sell), Entry Price, and a "Close Trade" action button.
+  - When "History" is clicked, map over `historyTrades`. Render cards showing Asset, Final PnL (colored red/green), and Close Price.
+- **Empty States:** If a tab has no trades, show a highly styled empty state ("No open positions. Check the AI Signals to find your edge.")
+
+Do not explain your steps. Execute the migration, install the chart packages, and write the complete, functional React Native code for the new Portfolio screen.
