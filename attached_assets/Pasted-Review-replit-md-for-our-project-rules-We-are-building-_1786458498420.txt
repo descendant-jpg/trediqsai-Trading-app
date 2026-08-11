@@ -1,0 +1,26 @@
+Review replit.md for our project rules. We are building out the Profile navigation links (`Chart Settings`, `App Guide`, `Help Center`) into fully functional, production-ready screens.
+
+### 1. Database & Dependency Setup
+- Ensure `@react-native-async-storage/async-storage` is installed in the Expo workspace to persist local settings.
+- Create a Supabase migration to add a `support_tickets` table: `id` (uuid), `user_id` (uuid, references auth.users), `subject` (text), `message` (text), `status` (text, default 'open'), `created_at` (timestamp).
+
+### 2. Navigation Update (`app/(tabs)/profile.tsx`)
+- Update the Profile menu list items to use Expo Router to navigate to `/profile/chart-settings`, `/profile/app-guide`, and `/profile/help-center`.
+
+### 3. Functional Chart Settings (`app/profile/chart-settings.tsx`)
+- **UI:** Dark theme (`#0A0B0E`). Build a list of settings with React Native `Switch` components.
+- **Logic:** Implement `AsyncStorage` to load and save these specific boolean states: `useHeikinAshi`, `useInstitutionalColors`, `showDefaultVolume`, `showWatermark`.
+- When the screen mounts, load the saved preferences. When a toggle is pressed, instantly update the state and write the new value to `AsyncStorage`.
+
+### 4. Functional App Guide / Academy (`app/profile/app-guide.tsx`)
+- **UI:** Dark theme. Top header showing "Bootcamp Progress: X%". Below, a list of 4 expandable Glossary items (e.g., Order Block, Liquidity Sweep, FVG, Break of Structure).
+- **Logic:** Use `AsyncStorage` to track an array of `completedModules`. 
+- When a user taps to expand a glossary item, add that item's ID to the `completedModules` array, save it to storage, and dynamically recalculate the Bootcamp Progress percentage based on how many items out of 4 have been read.
+
+### 5. Functional Help Center (`app/profile/help-center.tsx`)
+- **UI:** Dark theme. Top section: "System Status" showing 3 mocked operational green dots. 
+- **The Form:** Below the status, build a Support Ticket form. Include a `TextInput` for 'Subject' and a multiline `TextInput` for 'Message'. 
+- **Logic:** Add a "Submit Ticket" button (`bg-[#00F0FF]`). On press, execute a Supabase insert into the `support_tickets` table using the currently authenticated user's ID, the subject, and the message. 
+- Wrap the submit function in a try/catch. Show an `ActivityIndicator` while submitting, clear the form on success, and show a React Native `Alert` saying "Ticket received. Support will contact you shortly."
+
+Do not explain your steps. Run the necessary dependency installs, execute the Supabase migration, and write the complete, functional React Native code for all three production screens.
