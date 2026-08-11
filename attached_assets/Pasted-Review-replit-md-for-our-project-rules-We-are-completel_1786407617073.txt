@@ -1,0 +1,45 @@
+Review replit.md for our project rules. We are completely pivoting the UI of `website/app/page.tsx` and `website/app/layout.tsx` to a top-tier, ultra-premium fintech SaaS design. 
+
+Remove the sidebar layout entirely. We are moving to a Top Navbar and a stacked, full-width section architecture with a deep black theme (#050505) and Electric Cyan accents (#00F0FF). Ensure perfect alignment using `max-w-7xl mx-auto`, absolutely NO overlapping elements, and make it fully responsive.
+
+### 1. Global Layout & SEO (`layout.tsx`)
+- Export Next.js `metadata` with a highly optimized title: "TradiQs AI | Institutional-Grade Trading Signals & AI Bots" and description.
+- Body must be: `bg-[#050505] text-white font-sans antialiased selection:bg-[#00F0FF] selection:text-black`.
+- Build a fixed Top Navbar (`sticky top-0 z-50 bg-[#050505]/80 backdrop-blur-md border-b border-white/5`):
+  - Left: "TradiQs AI" logo (bold, white).
+  - Center: Hidden on mobile, flex on desktop. Links: Features, Performance, Pricing, Blog. (text-sm text-gray-400 hover:text-white).
+  - Right: A small "Join Waitlist" button (bg-[#00F0FF] text-black rounded-lg px-4 py-2 font-bold).
+
+### 2. Hero Section (`page.tsx`)
+- `min-h-[90vh] pt-32 pb-16 px-6 max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12 items-center`.
+- **Left Column:**
+  - H1: "Institutional trading edge, <span className="text-[#00F0FF]">delivered in real time.</span>" (text-6xl md:text-7xl font-extrabold tracking-tight mb-6).
+  - Subtitle: "AI-driven entries for forex, crypto, and equities. Backed by institutional chart analysis." (text-lg text-gray-400 mb-8).
+  - **Waitlist Form:** A flex row (`w-full max-w-md mb-8`). An email `<input>` (bg-white/5 border border-white/10 rounded-l-xl px-4 py-3 w-full text-white focus:border-[#00F0FF] outline-none) and a submit `<button>` (bg-[#00F0FF] text-black font-bold px-6 py-3 rounded-r-xl).
+  - App Buttons: Two buttons side-by-side (Apple & Android style) with black bg, white borders, rounded-lg.
+- **Right Column (App Mockup Placeholder):**
+  - Create a div that looks like a phone: `w-[300px] h-[600px] mx-auto bg-[#0A0A0A] border-[8px] border-[#1A1A1A] rounded-[3rem] shadow-[0_0_50px_rgba(0,240,255,0.1)] relative overflow-hidden flex flex-col`. Add placeholder signal UI inside it (dummy XAU/USD Buy blocks) to mimic a live app.
+
+### 3. Stats & Brokers Strip (`page.tsx`)
+- Full width `bg-[#0A0A0A] border-y border-white/5 py-12`.
+- Grid of 4 stats: 50,000+ Active Traders, 85% Avg Win Rate, 15,000+ Signals, 146+ Lessons. Text should be large and bold, with gray subtext.
+- Below stats, a centered row: "USED BY TRADERS ON THE WORLD'S LEADING BROKERS" with dummy text logos (Exness, IC Markets, XM).
+
+### 4. How it Works & Features (`page.tsx`)
+- Container: `max-w-7xl mx-auto py-24 px-6`.
+- "Three steps to your first trade." Section: 3-column grid. Cards with numbers 1, 2, 3.
+- "Every tool a serious trader actually uses." Section: 3x2 grid. Cards: `bg-[#0A0A0A] border border-white/5 p-8 rounded-2xl hover:border-[#00F0FF]/50 transition-all`. Include placeholder icons for Instant Alerts, AI Chart Analysis, Volatility Radar, AutoCopy to MT5, Psychology Shield, Learning Hub.
+
+### 5. The Comparison Table (`page.tsx`)
+- Container: `max-w-4xl mx-auto py-24 px-6`. Headline: "Built for traders, not marketing decks."
+- Build a clean CSS Grid table comparing "Capability", "Typical Provider", and "TradiQs AI". Highlight the TradiQs column text in `#00F0FF`.
+
+### 6. Pricing Section (`page.tsx`)
+- Container: `max-w-7xl mx-auto py-24 px-6`. Headline: "Choose your edge."
+- 4-column grid for tiers: Free, Pro, Elite, Whale.
+- Cards: `bg-[#0A0A0A] border border-white/5 rounded-2xl p-8 flex flex-col`. Make the "Elite" card have a `#00F0FF` border to highlight it. Include dummy price points and bullet points for features.
+
+### 7. Footer (`page.tsx`)
+- Standard 4-column large footer with grey text links.
+
+Generate the complete, exhaustive React code for both files. Ensure all buttons have `cursor-pointer` and hover states. No overlapping elements.
