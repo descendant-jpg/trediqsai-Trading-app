@@ -1,4 +1,5 @@
 - [Expo/API port conflicts](expo-web-port-conflicts.md) — blank mobile preview or EADDRINUSE usually means a stray dev server holds an artifact's port; kill it before editing config.
 - [Expo artifact dependencies](expo-artifact-dependencies.md) — Expo imports must be installed in the artifact workspace; root-only packages can produce opaque web 500/white screens.
 - [Native-only modules in Expo](expo-native-only-modules.md) — native-only SDKs need `.web.tsx` stub wrappers; a direct import in the root layout white-screens the whole web bundle.
+- [Which directory Expo serves](expo-live-route-directory.md) — prove the live route dir with a marker-in-bundle test; never infer it from folder names, and never trust typecheck as evidence.
 - [pnpm workspace root is app/](pnpm-workspace-root.md) — the workspace root is `app/`, not the repo root; installing from the repo root writes a stray package-lock.json.
