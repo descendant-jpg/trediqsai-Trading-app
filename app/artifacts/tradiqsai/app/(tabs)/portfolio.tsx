@@ -10,7 +10,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { LineChart } from 'react-native-chart-kit';
 import { useAuth } from '@/context/AuthContext';
 import { useLiveMarket } from '@/hooks/useLiveMarket';
 import { closeTrade, type TradeRecord } from '@/services/TradeService';
@@ -286,28 +285,7 @@ export default function PortfolioScreen() {
           </View>
           <Text style={styles.chartGain}>+8.1%</Text>
         </View>
-        <LineChart
-          data={{ labels: ['M', 'T', 'W', 'T', 'F', 'S', 'S'], datasets: [{ data: EQUITY_POINTS }] }}
-          width={Platform.OS === 'web' ? 620 : 340}
-          height={150}
-          withDots={false}
-          withInnerLines={false}
-          withOuterLines={false}
-          withVerticalLines={false}
-          withHorizontalLines={false}
-          withShadow={false}
-          bezier
-          chartConfig={{
-            backgroundGradientFrom: '#16181D',
-            backgroundGradientTo: '#16181D',
-            color: () => '#00F0FF',
-            labelColor: () => '#6D727B',
-            strokeWidth: 3,
-            propsForLabels: { fontSize: 10 },
-          }}
-          style={styles.chart}
-          formatYLabel={() => ''}
-        />
+        <Text style={styles.chartPlaceholder}>Chart Placeholder</Text>
       </View>
 
       <View style={styles.metricsGrid}>
@@ -466,6 +444,14 @@ const styles = StyleSheet.create({
   chartSubheading: { color: '#6D727B', fontSize: 11, marginTop: 3, fontFamily: 'Inter_400Regular' },
   chartGain: { color: '#2ECA8B', fontSize: 15, fontFamily: 'Inter_700Bold' },
   chart: { marginLeft: -6, marginTop: 4, paddingRight: 16 },
+  chartPlaceholder: {
+    color: '#00F0FF',
+    fontSize: 14,
+    fontFamily: 'Inter_700Bold',
+    paddingHorizontal: 16,
+    paddingVertical: 48,
+    textAlign: 'center',
+  },
   metricsGrid: {
     marginHorizontal: 20,
     marginBottom: 12,
