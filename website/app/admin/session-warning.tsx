@@ -9,9 +9,24 @@ const WARN_THRESHOLD_MS = 15 * 60 * 1000; // 15 minutes
 /** How often to poll the session endpoint (ms). */
 const POLL_INTERVAL_MS = 60 * 1000; // every minute
 
+/** BroadcastChannel name for cross-tab session sync. */
+const CHANNEL_NAME = 'admin-session-sync';
+
+type SyncMessage =
+  | { type: 'extended'; expiresAt: number }
+  | { type: 'dismissed' };
+
 function formatMinutes(ms: number): string {
   const mins = Math.max(0, Math.ceil(ms / 60_000));
   return mins === 1 ? '1 minute' : `${mins} minutes`;
+}
+
+/** Create a BroadcastChannel if the API is available, otherwise return null. */
+function openChannel(): BroadcastChannel | null {
+  if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+    return new BroadcastChannel(CHANNEL_NAME);
+  }
+  return null;
 }
 
 export function SessionWarningBanner() {
@@ -20,6 +35,7 @@ export function SessionWarningBanner() {
   const [extending, setExtending] = useState(false);
   const [extended, setExtended] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const channelRef = useRef<BroadcastChannel | null>(null);
 
   const fetchExpiry = useCallback(async () => {
     try {
@@ -38,11 +54,32 @@ export function SessionWarningBanner() {
     }
   }, []);
 
+  // Set up BroadcastChannel listener and polling interval.
   useEffect(() => {
     fetchExpiry();
     intervalRef.current = setInterval(fetchExpiry, POLL_INTERVAL_MS);
+
+    // Open cross-tab channel (may be null in unsupported environments).
+    const channel = openChannel();
+    channelRef.current = channel;
+
+    if (channel) {
+      channel.onmessage = (event: MessageEvent<SyncMessage>) => {
+        const msg = event.data;
+        if (msg.type === 'extended') {
+          const remaining = msg.expiresAt - Date.now();
+          setMsRemaining(remaining);
+          setExtended(true);
+          setDismissed(false);
+        } else if (msg.type === 'dismissed') {
+          setDismissed(true);
+        }
+      };
+    }
+
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
+      if (channel) channel.close();
     };
   }, [fetchExpiry]);
 
@@ -53,12 +90,32 @@ export function SessionWarningBanner() {
       if (res.ok) {
         setExtended(true);
         setDismissed(false);
-        // Re-fetch expiry so the countdown updates immediately
+        // Re-fetch expiry so the countdown updates immediately.
         await fetchExpiry();
+
+        // Notify other tabs that the session was extended.
+        try {
+          const sessionRes = await fetch('/api/admin/session', { cache: 'no-store' });
+          if (sessionRes.ok) {
+            const data = await sessionRes.json();
+            channelRef.current?.postMessage({
+              type: 'extended',
+              expiresAt: data.expiresAt as number,
+            } satisfies SyncMessage);
+          }
+        } catch {
+          // Cross-tab sync is best-effort; ignore errors.
+        }
       }
     } finally {
       setExtending(false);
     }
+  }
+
+  function handleDismiss() {
+    setDismissed(true);
+    // Notify other tabs to dismiss their banner too.
+    channelRef.current?.postMessage({ type: 'dismissed' } satisfies SyncMessage);
   }
 
   // Only show when within the warning window and not dismissed/extended
@@ -96,7 +153,7 @@ export function SessionWarningBanner() {
         </button>
       </div>
       <button
-        onClick={() => setDismissed(true)}
+        onClick={handleDismiss}
         aria-label="Dismiss session warning"
         className="rounded-lg p-1 text-amber-400/60 transition hover:bg-amber-500/20 hover:text-amber-300"
         type="button"
