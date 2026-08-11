@@ -8,9 +8,12 @@ import {
 } from '../../../../lib/admin-auth';
 import {
   clearLoginAttempts,
+  clearGlobalLoginAttempts,
   getClientIp,
   isLoginBlocked,
+  isGlobalLoginBlocked,
   recordFailedLogin,
+  recordGlobalFailedLogin,
 } from '../../../../lib/admin-rate-limit';
 
 /** This route touches the database, so it must not be statically optimised. */
@@ -18,13 +21,28 @@ export const dynamic = 'force-dynamic';
 
 const TOO_MANY_ATTEMPTS = 'Too many attempts. Please try again later.';
 
+/**
+ * Shown when the global limit is hit so operators can distinguish a distributed
+ * brute-force attack from an individual IP lockout in server logs / alerts.
+ */
+const TOO_MANY_GLOBAL_ATTEMPTS =
+  'Too many failed sign-in attempts from multiple locations. Please try again later.';
+
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req);
 
+  // Per-IP check: stops a single address from making many guesses.
   // Attempts are counted in Postgres, so a lockout survives a restart or
   // redeploy and applies across every running instance.
   if (await isLoginBlocked(ip)) {
     return NextResponse.json({ error: TOO_MANY_ATTEMPTS }, { status: 429 });
+  }
+
+  // Global check: stops an attacker who spreads guesses across a pool of
+  // addresses (botnet, VPN rotation, IPv6) from exceeding the total budget
+  // even though no single IP tripped the per-IP cap.
+  if (await isGlobalLoginBlocked()) {
+    return NextResponse.json({ error: TOO_MANY_GLOBAL_ATTEMPTS }, { status: 429 });
   }
 
   if (!isAdminAuthConfigured()) {
@@ -44,9 +62,16 @@ export async function POST(req: NextRequest) {
   }
 
   if (!verifyAdminPassword(password)) {
-    // Only wrong passwords count against the limit.
-    const nowBlocked = await recordFailedLogin(ip);
-    return nowBlocked
+    // Only wrong passwords count against the limit — both per-IP and global.
+    const [nowBlockedIp, nowBlockedGlobal] = await Promise.all([
+      recordFailedLogin(ip),
+      recordGlobalFailedLogin(),
+    ]);
+
+    if (nowBlockedGlobal) {
+      return NextResponse.json({ error: TOO_MANY_GLOBAL_ATTEMPTS }, { status: 429 });
+    }
+    return nowBlockedIp
       ? NextResponse.json({ error: TOO_MANY_ATTEMPTS }, { status: 429 })
       : NextResponse.json({ error: 'Incorrect password.' }, { status: 401 });
   }
@@ -59,9 +84,9 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // A correct password wipes the slate, so an admin who mistyped a few times
-  // is not left one attempt away from a lockout.
-  await clearLoginAttempts(ip);
+  // A correct password wipes both counters, so an admin who got the right
+  // password in after an attacker was flooding starts the next window clean.
+  await Promise.all([clearLoginAttempts(ip), clearGlobalLoginAttempts()]);
 
   const res = NextResponse.json({ ok: true });
   res.cookies.set(ADMIN_COOKIE, token, {

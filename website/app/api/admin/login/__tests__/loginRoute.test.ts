@@ -3,15 +3,19 @@
  *
  * These check the wiring rather than the counting: that only wrong passwords
  * count against the limit, that a locked-out caller is turned away before the
- * password is even checked, and that a correct password clears the record.
+ * password is even checked, and that a correct password clears both the per-IP
+ * and global records.
  */
 import { NextRequest } from 'next/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const limiter = vi.hoisted(() => ({
   isLoginBlocked: vi.fn(async () => false),
+  isGlobalLoginBlocked: vi.fn(async () => false),
   recordFailedLogin: vi.fn(async () => false),
+  recordGlobalFailedLogin: vi.fn(async () => false),
   clearLoginAttempts: vi.fn(async () => {}),
+  clearGlobalLoginAttempts: vi.fn(async () => {}),
   getClientIp: vi.fn(() => '203.0.113.7'),
 }));
 
@@ -34,8 +38,11 @@ beforeEach(() => {
   process.env.ADMIN_PASSWORD = PASSWORD;
   process.env.SESSION_SECRET = 'test-secret';
   limiter.isLoginBlocked.mockResolvedValue(false);
+  limiter.isGlobalLoginBlocked.mockResolvedValue(false);
   limiter.recordFailedLogin.mockResolvedValue(false);
+  limiter.recordGlobalFailedLogin.mockResolvedValue(false);
   limiter.clearLoginAttempts.mockClear();
+  limiter.clearGlobalLoginAttempts.mockClear();
 });
 
 afterEach(() => {
@@ -50,23 +57,27 @@ describe('admin sign-in endpoint', () => {
     expect(res.cookies.get(ADMIN_COOKIE)?.value).toBeTruthy();
     // A successful sign-in must never count against the limit.
     expect(limiter.recordFailedLogin).not.toHaveBeenCalled();
+    expect(limiter.recordGlobalFailedLogin).not.toHaveBeenCalled();
   });
 
-  it('forgets earlier mistypes once the admin gets it right', async () => {
+  it('forgets per-IP and global mistypes once the admin gets it right', async () => {
     await POST(signInRequest(PASSWORD));
     expect(limiter.clearLoginAttempts).toHaveBeenCalledWith('203.0.113.7');
+    expect(limiter.clearGlobalLoginAttempts).toHaveBeenCalled();
   });
 
-  it('counts a wrong password against the limit', async () => {
+  it('counts a wrong password against both the per-IP and global limits', async () => {
     const res = await POST(signInRequest('wrong'));
 
     expect(res.status).toBe(401);
     expect(limiter.recordFailedLogin).toHaveBeenCalledWith('203.0.113.7');
+    expect(limiter.recordGlobalFailedLogin).toHaveBeenCalled();
     expect(res.cookies.get(ADMIN_COOKIE)?.value).toBeFalsy();
   });
 
-  it('reports the lockout on the attempt that triggers it', async () => {
+  it('reports the per-IP lockout on the attempt that triggers it', async () => {
     limiter.recordFailedLogin.mockResolvedValue(true);
+    limiter.recordGlobalFailedLogin.mockResolvedValue(false);
 
     const res = await POST(signInRequest('wrong'));
 
@@ -76,7 +87,30 @@ describe('admin sign-in endpoint', () => {
     });
   });
 
-  it('turns a locked-out caller away without checking the password', async () => {
+  it('reports the global lockout on the attempt that triggers it', async () => {
+    limiter.recordFailedLogin.mockResolvedValue(false);
+    limiter.recordGlobalFailedLogin.mockResolvedValue(true);
+
+    const res = await POST(signInRequest('wrong'));
+
+    expect(res.status).toBe(429);
+    await expect(res.json()).resolves.toEqual({
+      error: 'Too many failed sign-in attempts from multiple locations. Please try again later.',
+    });
+  });
+
+  it('prefers the global lockout message when both limits trip at once', async () => {
+    limiter.recordFailedLogin.mockResolvedValue(true);
+    limiter.recordGlobalFailedLogin.mockResolvedValue(true);
+
+    const res = await POST(signInRequest('wrong'));
+
+    expect(res.status).toBe(429);
+    const body = await res.json();
+    expect(body.error).toMatch(/multiple locations/);
+  });
+
+  it('turns a per-IP locked-out caller away without checking the password', async () => {
     limiter.isLoginBlocked.mockResolvedValue(true);
 
     // Even the correct password must not get through while locked out —
@@ -87,10 +121,32 @@ describe('admin sign-in endpoint', () => {
     expect(res.cookies.get(ADMIN_COOKIE)?.value).toBeFalsy();
   });
 
-  it('does not issue a session while locked out', async () => {
+  it('turns a globally locked-out caller away without checking the password', async () => {
+    limiter.isLoginBlocked.mockResolvedValue(false);
+    limiter.isGlobalLoginBlocked.mockResolvedValue(true);
+
+    const res = await POST(signInRequest(PASSWORD));
+
+    expect(res.status).toBe(429);
+    await expect(res.json()).resolves.toEqual({
+      error: 'Too many failed sign-in attempts from multiple locations. Please try again later.',
+    });
+    expect(res.cookies.get(ADMIN_COOKIE)?.value).toBeFalsy();
+  });
+
+  it('does not issue a session while per-IP locked out', async () => {
     limiter.isLoginBlocked.mockResolvedValue(true);
     const res = await POST(signInRequest(PASSWORD));
     expect(limiter.clearLoginAttempts).not.toHaveBeenCalled();
+    expect(limiter.clearGlobalLoginAttempts).not.toHaveBeenCalled();
+    expect(res.status).toBe(429);
+  });
+
+  it('does not issue a session while globally locked out', async () => {
+    limiter.isGlobalLoginBlocked.mockResolvedValue(true);
+    const res = await POST(signInRequest(PASSWORD));
+    expect(limiter.clearLoginAttempts).not.toHaveBeenCalled();
+    expect(limiter.clearGlobalLoginAttempts).not.toHaveBeenCalled();
     expect(res.status).toBe(429);
   });
 
@@ -98,6 +154,7 @@ describe('admin sign-in endpoint', () => {
     const res = await POST(signInRequest(undefined));
     expect(res.status).toBe(401);
     expect(limiter.recordFailedLogin).toHaveBeenCalled();
+    expect(limiter.recordGlobalFailedLogin).toHaveBeenCalled();
   });
 
   it('rejects a body that is not valid JSON', async () => {

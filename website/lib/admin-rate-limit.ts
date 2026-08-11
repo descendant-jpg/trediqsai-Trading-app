@@ -15,6 +15,20 @@
  *
  * Only *failed* attempts count, and a correct password clears the record, so
  * an admin who mistypes a couple of times is not left near the limit.
+ *
+ * Two independent counters run in parallel:
+ *
+ *  1. Per-IP  — capped at MAX_LOGIN_ATTEMPTS per window.  Stops an individual
+ *               address from making many guesses.
+ *
+ *  2. Global  — capped at MAX_GLOBAL_LOGIN_ATTEMPTS per window.  Stops an
+ *               attacker who spreads guesses across a pool of addresses (a
+ *               botnet, VPN rotation, or plain IPv6) from exceeding that total
+ *               across all IPs.  Stored under the sentinel key "__global__" in
+ *               the same admin_login_attempts table so it shares the same
+ *               durability guarantees.
+ *
+ * A correct password clears both counters.
  */
 import { getSupabaseServer } from './supabase-server';
 
@@ -23,6 +37,23 @@ export const LOGIN_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 
 /** Failed attempts allowed per IP per window. */
 export const MAX_LOGIN_ATTEMPTS = 10;
+
+/**
+ * Total failed attempts allowed across ALL IPs per window.
+ *
+ * Set at 5× the per-IP cap so that a single attacker cycling through enough
+ * addresses to bypass the per-IP check is still slowed down globally, while a
+ * legitimate admin who mistypes a few times from a new location is nowhere near
+ * this threshold.
+ */
+export const MAX_GLOBAL_LOGIN_ATTEMPTS = 50;
+
+/**
+ * Sentinel key used to store the global counter in the same
+ * admin_login_attempts table as the per-IP rows.  The double underscores make
+ * it an invalid IPv4/IPv6 address so it can never collide with a real caller.
+ */
+export const GLOBAL_ATTEMPTS_KEY = '__global__';
 
 // ---------------------------------------------------------------------------
 // In-process fallback, used only when Postgres is unavailable
@@ -37,17 +68,17 @@ function pruneLocal(now: number): void {
   }
 }
 
-function localCount(ip: string, now: number): number {
-  const window = localAttempts.get(ip);
+function localCount(key: string, now: number): number {
+  const window = localAttempts.get(key);
   if (!window || now - window.windowStart >= LOGIN_WINDOW_MS) return 0;
   return window.attempts;
 }
 
-function localRecordFailure(ip: string, now: number): number {
+function localRecordFailure(key: string, now: number): number {
   pruneLocal(now);
-  const window = localAttempts.get(ip);
+  const window = localAttempts.get(key);
   if (!window || now - window.windowStart >= LOGIN_WINDOW_MS) {
-    localAttempts.set(ip, { attempts: 1, windowStart: now });
+    localAttempts.set(key, { attempts: 1, windowStart: now });
     return 1;
   }
   window.attempts += 1;
@@ -74,6 +105,10 @@ function warnDegraded(operation: string, detail: unknown): void {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Per-IP helpers
+// ---------------------------------------------------------------------------
+
 /** True when this IP has already used up its attempts for the current window. */
 export async function isLoginBlocked(ip: string, now = Date.now()): Promise<boolean> {
   const supabase = getSupabaseServer();
@@ -95,8 +130,9 @@ export async function isLoginBlocked(ip: string, now = Date.now()): Promise<bool
 }
 
 /**
- * Record one failed sign-in. Returns true when that failure has now used up
- * the allowance, so the caller can report the lockout on the same response.
+ * Record one failed sign-in for this IP. Returns true when that failure has
+ * now used up the per-IP allowance, so the caller can report the lockout on
+ * the same response.
  */
 export async function recordFailedLogin(ip: string, now = Date.now()): Promise<boolean> {
   const supabase = getSupabaseServer();
@@ -120,7 +156,7 @@ export async function recordFailedLogin(ip: string, now = Date.now()): Promise<b
   return localRecordFailure(ip, now) >= MAX_LOGIN_ATTEMPTS;
 }
 
-/** Forget an IP's failures after a correct password. */
+/** Forget this IP's failures after a correct password. */
 export async function clearLoginAttempts(ip: string): Promise<void> {
   localAttempts.delete(ip);
 
@@ -133,6 +169,83 @@ export async function clearLoginAttempts(ip: string): Promise<void> {
   } catch (err) {
     // Not security-critical: the window expires on its own.
     warnDegraded('attempt clear', err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Global helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * True when the total number of failed sign-in attempts from all IPs in the
+ * current window has reached MAX_GLOBAL_LOGIN_ATTEMPTS.
+ *
+ * This check stops an attacker who spreads guesses across many addresses from
+ * exceeding the global budget even if no single address trips the per-IP cap.
+ */
+export async function isGlobalLoginBlocked(now = Date.now()): Promise<boolean> {
+  const supabase = getSupabaseServer();
+
+  if (supabase) {
+    try {
+      const { data, error } = await supabase.rpc('admin_login_attempt_count', {
+        p_ip: GLOBAL_ATTEMPTS_KEY,
+        p_window_ms: LOGIN_WINDOW_MS,
+      });
+      if (error) throw new Error(error.message);
+      return (data ?? 0) >= MAX_GLOBAL_LOGIN_ATTEMPTS;
+    } catch (err) {
+      warnDegraded('global attempt lookup', err);
+    }
+  }
+
+  return localCount(GLOBAL_ATTEMPTS_KEY, now) >= MAX_GLOBAL_LOGIN_ATTEMPTS;
+}
+
+/**
+ * Increment the global failed-login counter. Returns true when the global
+ * allowance is now exhausted, so the caller can report it on the same response.
+ */
+export async function recordGlobalFailedLogin(now = Date.now()): Promise<boolean> {
+  const supabase = getSupabaseServer();
+
+  if (supabase) {
+    try {
+      const { data, error } = await supabase.rpc('admin_login_record_failure', {
+        p_ip: GLOBAL_ATTEMPTS_KEY,
+        p_window_ms: LOGIN_WINDOW_MS,
+      });
+      if (error) throw new Error(error.message);
+      localRecordFailure(GLOBAL_ATTEMPTS_KEY, now);
+      return (data ?? 0) >= MAX_GLOBAL_LOGIN_ATTEMPTS;
+    } catch (err) {
+      warnDegraded('global attempt record', err);
+    }
+  }
+
+  return localRecordFailure(GLOBAL_ATTEMPTS_KEY, now) >= MAX_GLOBAL_LOGIN_ATTEMPTS;
+}
+
+/**
+ * Reset the global counter after a correct password.
+ *
+ * Clearing the global counter on a successful sign-in ensures that a
+ * legitimate admin who gets the right password in after an attacker has been
+ * flooding guesses starts the next window with a clean slate.
+ */
+export async function clearGlobalLoginAttempts(): Promise<void> {
+  localAttempts.delete(GLOBAL_ATTEMPTS_KEY);
+
+  const supabase = getSupabaseServer();
+  if (!supabase) return;
+
+  try {
+    const { error } = await supabase.rpc('admin_login_clear', {
+      p_ip: GLOBAL_ATTEMPTS_KEY,
+    });
+    if (error) throw new Error(error.message);
+  } catch (err) {
+    warnDegraded('global attempt clear', err);
   }
 }
 
