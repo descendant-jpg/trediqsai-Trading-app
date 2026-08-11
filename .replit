@@ -1,5 +1,5 @@
 modules = ["nodejs-24"]
-run = "pnpm --dir website dev --hostname 0.0.0.0 --port 8080"
+run = "cd app && REACT_NATIVE_PACKAGER_HOSTNAME=0.0.0.0 EXPO_PACKAGER_PROXY_URL=https://$REPLIT_EXPO_DEV_DOMAIN EXPO_PUBLIC_DOMAIN=$REPLIT_DEV_DOMAIN EXPO_PUBLIC_REPL_ID=$REPL_ID pnpm --filter @workspace/tradiqs-ai exec expo start --host lan --port 8080"
 
 [[ports]]
 localPort = 8080
