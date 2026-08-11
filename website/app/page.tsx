@@ -14,6 +14,7 @@ import {
   Sparkles,
   TrendingUp,
 } from 'lucide-react';
+import WaitlistForm from './components/waitlist-form';
 
 const stats = [
   ['50,000+', 'Active Traders'],
@@ -153,18 +154,7 @@ export default function Home() {
           <p className="mb-8 max-w-xl text-lg leading-8 text-gray-400">
             AI-driven entries for forex, crypto, and equities. Backed by institutional chart analysis.
           </p>
-          <form id="waitlist" className="mb-8 flex w-full max-w-md" action="#">
-            <label className="sr-only" htmlFor="waitlist-email">Email address</label>
-            <input
-              id="waitlist-email"
-              type="email"
-              placeholder="Enter your email"
-              className="w-full rounded-l-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition-colors placeholder:text-white/30 focus:border-[#00F0FF]"
-            />
-            <button type="submit" className="cursor-pointer rounded-r-xl bg-[#00F0FF] px-6 py-3 font-bold text-black transition-colors hover:bg-cyan-300">
-              Join
-            </button>
-          </form>
+          <WaitlistForm />
           <div className="flex flex-wrap gap-3">
             <StoreButton icon={Apple} label="Download on the App Store" />
             <StoreButton icon={Play} label="Get it on Google Play" />
