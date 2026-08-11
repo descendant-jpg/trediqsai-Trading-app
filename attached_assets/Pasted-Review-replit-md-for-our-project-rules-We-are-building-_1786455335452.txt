@@ -1,0 +1,31 @@
+Review replit.md for our project rules. We are building the Trade Execution Engine to allow users to seamlessly open simulated trades directly from the AI Signal cards.
+
+Upgrade `app/(tabs)/signals.tsx` and create a utility file for trade execution logic.
+
+### 1. Database Alignment (Supabase)
+Ensure the `trades` table can support these exact simulated execution fields:
+- `user_id` (uuid)
+- `signal_id` (integer, references ai_signals)
+- `asset` (text)
+- `direction` (text - BUY/SELL)
+- `entry_price` (numeric)
+- `take_profit` (numeric)
+- `stop_loss` (numeric)
+- `position_size_usd` (numeric)
+- `status` (text - default 'open')
+
+### 2. The Execution UI (`signals.tsx`)
+- On the expanded Signal Card (below the AI Analysis), add a "Trade Execution" block `bg-[#12141A] p-4 rounded-xl mt-4 border border-white/5`.
+- **Risk Slider/Selector:** Create three quick-select risk buttons (1%, 2%, 5%) representing the percentage of their $10,000 simulated account they want to allocate. Style the selected state with a `#00F0FF` border and text.
+- **Dynamic Position Sizing text:** As they click a risk percentage, display the calculated dollar amount below it (e.g., "Position Size: $200.00").
+- **Execute Button:** A massive, full-width CTA button at the bottom of the card: "Execute Trade" (`bg-[#00F0FF] text-black font-bold py-4 rounded-xl hover:bg-cyan-400`). 
+
+### 3. The Execution Logic (`lib/tradeExecution.ts`)
+- Create a utility function `executeSimulatedTrade(userId, signal, riskPercentage)`.
+- The function must:
+  1. Calculate the raw dollar amount based on a fixed $10,000 simulated balance.
+  2. Insert a new row into the Supabase `trades` table using the exact Entry, TP1, and SL from the AI Signal.
+  3. Return a success state.
+- Wire this function to the "Execute Trade" button on the UI. Include a React Native `Alert` or toast notification on success saying "Trade Executed. Check Portfolio."
+
+Do not explain your steps. Ensure strict TypeScript types, execute any necessary Supabase schema updates, and write the complete, functional React Native code for the Execution UI and logic.

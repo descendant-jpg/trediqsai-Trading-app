@@ -5,11 +5,16 @@
 create table if not exists public.trades (
   id          uuid primary key default gen_random_uuid(),
   user_id     uuid not null references auth.users (id) on delete cascade,
+  signal_id   uuid references public.ai_signals (id),
   asset       text not null,
   side        text not null check (side in ('BUY', 'SELL')),
+  direction   text not null check (direction in ('BUY', 'SELL')),
   entry_price numeric not null check (entry_price > 0),
+  take_profit numeric,
+  stop_loss   numeric,
+  position_size_usd numeric not null default 0,
   close_price numeric check (close_price > 0),
-  status      text not null default 'OPEN' check (status in ('OPEN', 'CLOSED')),
+  status      text not null default 'open' check (lower(status) in ('open', 'closed')),
   pnl         numeric,
   created_at  timestamptz not null default now(),
   closed_at   timestamptz

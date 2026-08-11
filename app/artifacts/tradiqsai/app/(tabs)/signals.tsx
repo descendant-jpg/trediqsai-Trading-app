@@ -22,6 +22,9 @@ import colors from '@/constants/colors';
 import { useGetSignals, type Signal } from '@workspace/api-client-react';
 import { useSubscription } from '@/lib/revenuecat';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { executeSimulatedTrade } from '@/lib/tradeExecution';
+import { useAuth } from '@/context/AuthContext';
+import { Alert } from 'react-native';
 
 const c = colors.light;
 
@@ -171,6 +174,9 @@ function SignalCard({
   onUpgrade: () => void;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [riskPercentage, setRiskPercentage] = useState<1 | 2 | 5>(2);
+  const [executing, setExecuting] = useState(false);
+  const { session } = useAuth();
   const isBuy = signal.direction === 'BUY';
   const dirColor = isBuy ? '#00F0FF' : '#E54B4B';
   const accent = signal.isPremium ? c.secondary : c.primary;
@@ -268,6 +274,47 @@ function SignalCard({
               <View style={styles.thesisBlock}>
                 <Text style={styles.analysisTitle}>AI THESIS</Text>
                 <Text style={styles.thesisText}>{signal.rationale || 'No thesis available for this signal.'}</Text>
+              </View>
+              <View style={styles.executionBlock}>
+                <Text style={styles.executionTitle}>TRADE EXECUTION</Text>
+                <Text style={styles.executionHint}>Allocate a fixed percentage of your $10,000 simulated account.</Text>
+                <View style={styles.riskRow}>
+                  {[1, 2, 5].map((risk) => (
+                    <Pressable
+                      key={risk}
+                      onPress={() => setRiskPercentage(risk as 1 | 2 | 5)}
+                      style={[styles.riskButton, riskPercentage === risk && styles.riskButtonActive]}
+                      accessibilityRole="button"
+                    >
+                      <Text style={[styles.riskText, riskPercentage === risk && styles.riskTextActive]}>{risk}%</Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <Text style={styles.positionSize}>
+                  Position Size: ${(10000 * (riskPercentage / 100)).toFixed(2)}
+                </Text>
+                <Pressable
+                  style={[styles.executeButton, executing && styles.executeButtonDisabled]}
+                  disabled={executing}
+                  onPress={async () => {
+                    if (!session?.user.id) {
+                      Alert.alert('Sign in required', 'Sign in before executing a simulated trade.');
+                      return;
+                    }
+                    setExecuting(true);
+                    try {
+                      await executeSimulatedTrade(session.user.id, signal, riskPercentage);
+                      Alert.alert('Trade Executed', 'Trade Executed. Check Portfolio.');
+                    } catch (error) {
+                      Alert.alert('Execution failed', error instanceof Error ? error.message : 'Unable to execute trade.');
+                    } finally {
+                      setExecuting(false);
+                    }
+                  }}
+                  testID={`execute-trade-${signal.id}`}
+                >
+                  <Text style={styles.executeButtonText}>{executing ? 'Executing…' : 'Execute Trade'}</Text>
+                </Pressable>
               </View>
             </View>
           )}
@@ -726,6 +773,18 @@ const styles = StyleSheet.create({
   factorText: { color: '#FFFFFF', fontSize: 12, fontFamily: 'Inter_500Medium', flex: 1 },
   thesisBlock: { borderTopWidth: 1, borderTopColor: c.border, paddingTop: 10, gap: 5, marginTop: 3 },
   thesisText: { color: '#8A8D93', fontSize: 12, lineHeight: 18, fontStyle: 'italic' },
+  executionBlock: { backgroundColor: '#12141A', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)', gap: 10, marginTop: 4 },
+  executionTitle: { color: '#FFFFFF', fontSize: 11, fontFamily: 'Inter_700Bold', letterSpacing: 1.2 },
+  executionHint: { color: '#6D727B', fontSize: 11, lineHeight: 16 },
+  riskRow: { flexDirection: 'row', gap: 8 },
+  riskButton: { flex: 1, borderWidth: 1, borderColor: '#30343D', borderRadius: 8, paddingVertical: 10, alignItems: 'center' },
+  riskButtonActive: { borderColor: '#00F0FF', backgroundColor: 'rgba(0,240,255,0.1)' },
+  riskText: { color: '#8A8D93', fontSize: 13, fontFamily: 'Inter_700Bold' },
+  riskTextActive: { color: '#00F0FF' },
+  positionSize: { color: '#FFFFFF', fontSize: 13, fontFamily: 'Inter_700Bold' },
+  executeButton: { backgroundColor: '#00F0FF', borderRadius: 10, paddingVertical: 15, alignItems: 'center' },
+  executeButtonDisabled: { opacity: 0.6 },
+  executeButtonText: { color: '#0A0B0E', fontSize: 15, fontFamily: 'Inter_700Bold' },
   edgeRow: {
     flexDirection: 'row',
     gap: 10,
