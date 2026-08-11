@@ -60,6 +60,7 @@
     "zod-validation-error": "^3.4.0"
   },
   "dependencies": {
+    "@stripe/stripe-react-native": "^0.50.3",
     "@supabase/supabase-js": "^2.112.0",
     "expo-apple-authentication": "^57.0.1",
     "expo-auth-session": "^57.0.5",

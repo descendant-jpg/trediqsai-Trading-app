@@ -34,7 +34,14 @@
       "expo-web-browser",
       "expo-sqlite",
       "expo-apple-authentication",
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "@stripe/stripe-react-native",
+        {
+          "merchantIdentifier": "merchant.com.tradiqsai",
+          "enableGooglePay": true
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
