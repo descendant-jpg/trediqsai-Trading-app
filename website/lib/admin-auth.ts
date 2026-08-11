@@ -87,3 +87,30 @@ export async function isValidSessionToken(
   const expected = await sign(expiresAt, secret);
   return safeEqual(signature, expected);
 }
+
+/**
+ * Return the expiry timestamp (ms since epoch) from a valid session token,
+ * or `null` if the token is missing, malformed, expired, or has an invalid
+ * signature.
+ */
+export async function getSessionExpiry(
+  token: string | undefined | null,
+  now = Date.now(),
+): Promise<number | null> {
+  const secret = process.env.SESSION_SECRET;
+  if (!secret || !token) return null;
+
+  const separator = token.lastIndexOf('.');
+  if (separator <= 0) return null;
+
+  const expiresAt = token.slice(0, separator);
+  const signature = token.slice(separator + 1);
+
+  const expiry = Number(expiresAt);
+  if (!Number.isFinite(expiry) || expiry <= now) return null;
+
+  const expected = await sign(expiresAt, secret);
+  if (!safeEqual(signature, expected)) return null;
+
+  return expiry;
+}
