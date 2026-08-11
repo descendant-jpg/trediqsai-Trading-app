@@ -3,7 +3,60 @@ import { getSupabaseServer } from '../../../lib/supabase-server';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// ---------------------------------------------------------------------------
+// In-memory rate limiter — 5 requests per IP per hour
+// ---------------------------------------------------------------------------
+const WINDOW_MS = 60 * 60 * 1000; // 1 hour
+const MAX_REQUESTS = 5;
+
+interface RateLimitEntry {
+  count: number;
+  windowStart: number;
+}
+
+const rateLimitStore = new Map<string, RateLimitEntry>();
+
+/** Returns true when the request is within the allowed rate, false when limited. */
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitStore.get(ip);
+
+  if (!entry || now - entry.windowStart >= WINDOW_MS) {
+    // First request in this window
+    rateLimitStore.set(ip, { count: 1, windowStart: now });
+    return true;
+  }
+
+  if (entry.count >= MAX_REQUESTS) {
+    return false;
+  }
+
+  entry.count += 1;
+  return true;
+}
+
+/** Best-effort IP extraction that works in Next.js behind a proxy. */
+function getClientIp(req: NextRequest): string {
+  return (
+    req.headers.get('x-forwarded-for')?.split(',')[0].trim() ??
+    req.headers.get('x-real-ip') ??
+    'unknown'
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Route handler
+// ---------------------------------------------------------------------------
 export async function POST(req: NextRequest) {
+  // Rate-limit check
+  const ip = getClientIp(req);
+  if (!checkRateLimit(ip)) {
+    return NextResponse.json(
+      { error: 'Too many requests. Please try again later.' },
+      { status: 429 },
+    );
+  }
+
   let email: string;
   try {
     const body = await req.json();
