@@ -78,6 +78,12 @@
       "namedRegex": "^/admin/users(?:/)?$"
     },
     {
+      "page": "/admin/waitlist",
+      "regex": "^/admin/waitlist(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/admin/waitlist(?:/)?$"
+    },
+    {
       "page": "/blog",
       "regex": "^/blog(?:/)?$",
       "routeKeys": {},
