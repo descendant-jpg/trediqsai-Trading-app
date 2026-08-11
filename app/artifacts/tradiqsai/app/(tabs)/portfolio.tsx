@@ -16,6 +16,7 @@ import { useLiveMarket } from '@/hooks/useLiveMarket';
 import { closeTrade, type TradeRecord } from '@/services/TradeService';
 import { supabase } from '@/utils/supabase';
 import colors from '@/constants/colors';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 function showAlert(title: string, message: string) {
   if (Platform.OS === 'web') {
@@ -232,7 +233,8 @@ export default function PortfolioScreen() {
   const equity = balance != null ? balance + unrealizedTotal : null;
 
   return (
-    <View style={styles.container}>
+    <ErrorBoundary>
+      <View style={styles.container}>
       <View style={styles.header}>
         <View>
           <Text style={styles.eyebrow}>TRADIQS AI / QUANT TERMINAL</Text>
@@ -362,7 +364,8 @@ export default function PortfolioScreen() {
           </Text>
         }
       />
-    </View>
+      </View>
+    </ErrorBoundary>
   );
 }
 

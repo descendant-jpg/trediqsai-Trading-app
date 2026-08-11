@@ -21,6 +21,7 @@ import SignalDetailModal from '@/components/SignalDetailModal';
 import colors from '@/constants/colors';
 import { useGetSignals, type Signal } from '@workspace/api-client-react';
 import { useSubscription } from '@/lib/revenuecat';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 const c = colors.light;
 
@@ -315,7 +316,8 @@ export default function AISignalsScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: topInset }]}>
+    <ErrorBoundary>
+      <View style={[styles.container, { paddingTop: topInset }]}>
       <View style={styles.header}>
         <Feather name="zap" size={20} color={c.primary} />
         <Text style={styles.headerTitle}>TradiQsAI Signal</Text>
@@ -435,7 +437,8 @@ export default function AISignalsScreen() {
 
       {/* Paywall modal opened from a locked signal card */}
       <PaywallModal visible={paywallOpen} onClose={() => setPaywallOpen(false)} />
-    </View>
+      </View>
+    </ErrorBoundary>
   );
 }
 
