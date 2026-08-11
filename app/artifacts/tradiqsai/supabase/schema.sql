@@ -25,6 +25,7 @@ create table if not exists public.ai_signals (
   confidence_score integer check (confidence_score between 0 and 100),
   rationale text,
   risk_reward text,
+  confluence_factors jsonb not null default '[]'::jsonb check (jsonb_typeof(confluence_factors) = 'array'),
   is_vip_only boolean not null default false,
   created_at timestamptz not null default now()
 );

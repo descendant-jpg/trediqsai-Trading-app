@@ -82,6 +82,7 @@ export interface Signal {
   isPremium: boolean;
   time: string;
   rationale: string;
+  confluenceFactors?: string[];
 }
 
 export interface Trader {

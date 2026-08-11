@@ -12,7 +12,7 @@ const SIGNALS = [
     timeframe: "H1",
     status: "Active",
     rr: "1:5.0",
-    confidence: "75%",
+    confidence: "92%",
     risk: "Medium",
     potentialPips: "+400p",
     entry: { price: 2412.5 },
@@ -27,6 +27,7 @@ const SIGNALS = [
     time: "2m ago",
     rationale:
       "Liquidity sweep below Asian session lows into H1 order block; DXY weakness supports upside continuation.",
+    confluenceFactors: ["4H Order Block Retest", "Bullish RSI Divergence", "Institutional Volume Spike"],
   },
   {
     id: "s2",

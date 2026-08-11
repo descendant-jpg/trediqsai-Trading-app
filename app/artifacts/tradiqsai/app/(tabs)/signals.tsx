@@ -72,6 +72,16 @@ function getRiskReward(signal: Signal): string {
   return signal.rr ?? '—';
 }
 
+function getConfluenceFactors(signal: Signal): string[] {
+  const factors = (signal as Signal & { confluenceFactors?: unknown }).confluenceFactors;
+  return Array.isArray(factors) ? factors.filter((factor): factor is string => typeof factor === 'string') : [];
+}
+
+function confidenceScore(signal: Signal): number {
+  const value = Number.parseInt(String(getConfidence(signal)).replace('%', ''), 10);
+  return Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 0;
+}
+
 function TargetsBlock({ signal, locked }: { signal: Signal; locked: boolean }) {
   const tp1 = signal.takeProfits[0];
   const rest = signal.takeProfits.slice(1);
@@ -160,6 +170,7 @@ function SignalCard({
   onTrade: (signal: Signal) => void;
   onUpgrade: () => void;
 }) {
+  const [isExpanded, setIsExpanded] = useState(false);
   const isBuy = signal.direction === 'BUY';
   const dirColor = isBuy ? '#00F0FF' : '#E54B4B';
   const accent = signal.isPremium ? c.secondary : c.primary;
@@ -229,6 +240,39 @@ function SignalCard({
           </Text>
         </View>
       </View>
+
+      {!locked && (
+        <>
+          <View style={styles.confidenceBlock}>
+            <View style={styles.confidenceHeader}>
+              <Text style={styles.edgeLabel}>AI CONFIDENCE</Text>
+              <Text style={styles.confidenceValue}>{confidenceScore(signal)}%</Text>
+            </View>
+            <View style={styles.confidenceTrack}>
+              <View style={[styles.confidenceFill, { width: `${confidenceScore(signal)}%`, backgroundColor: confidenceScore(signal) >= 85 ? '#00F0FF' : confidenceScore(signal) >= 70 ? '#FBBF24' : '#EF4444' }]} />
+            </View>
+          </View>
+          <Pressable style={styles.analysisToggle} onPress={() => setIsExpanded((expanded) => !expanded)} accessibilityRole="button" accessibilityLabel="View AI Analysis">
+            <Text style={styles.analysisToggleText}>View AI Analysis</Text>
+            <Feather name="chevron-down" size={16} color={c.primary} style={{ transform: [{ rotate: isExpanded ? '180deg' : '0deg' }] }} />
+          </Pressable>
+          {isExpanded && (
+            <View style={styles.analysisPanel}>
+              <Text style={styles.analysisTitle}>TECHNICAL CONFLUENCE</Text>
+              {getConfluenceFactors(signal).map((factor) => (
+                <View key={factor} style={styles.factorRow}>
+                  <Feather name="check-circle" size={14} color="#00F0FF" />
+                  <Text style={styles.factorText}>{factor}</Text>
+                </View>
+              ))}
+              <View style={styles.thesisBlock}>
+                <Text style={styles.analysisTitle}>AI THESIS</Text>
+                <Text style={styles.thesisText}>{signal.rationale || 'No thesis available for this signal.'}</Text>
+              </View>
+            </View>
+          )}
+        </>
+      )}
 
       {/* Entry / SL / TP — blurred behind the premium gate for locked signals */}
       <View>
@@ -669,6 +713,19 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     opacity: 0.85,
   },
+  confidenceBlock: { gap: 6, borderTopWidth: 1, borderTopColor: c.border, paddingTop: 10 },
+  confidenceHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  confidenceValue: { color: c.foreground, fontSize: 13, fontFamily: 'Inter_700Bold' },
+  confidenceTrack: { height: 8, borderRadius: 4, overflow: 'hidden', backgroundColor: '#252830' },
+  confidenceFill: { height: '100%', borderRadius: 4 },
+  analysisToggle: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderTopWidth: 1, borderTopColor: c.border },
+  analysisToggleText: { color: c.primary, fontSize: 12, fontFamily: 'Inter_700Bold' },
+  analysisPanel: { backgroundColor: '#0A0B0E', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)', gap: 10 },
+  analysisTitle: { color: '#6D727B', fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 1.4 },
+  factorRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  factorText: { color: '#FFFFFF', fontSize: 12, fontFamily: 'Inter_500Medium', flex: 1 },
+  thesisBlock: { borderTopWidth: 1, borderTopColor: c.border, paddingTop: 10, gap: 5, marginTop: 3 },
+  thesisText: { color: '#8A8D93', fontSize: 12, lineHeight: 18, fontStyle: 'italic' },
   edgeRow: {
     flexDirection: 'row',
     gap: 10,

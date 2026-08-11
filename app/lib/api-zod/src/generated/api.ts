@@ -210,7 +210,8 @@ export const GetSignalsResponseItem = zod.object({
 }),
   "isPremium": zod.boolean(),
   "time": zod.string(),
-  "rationale": zod.string()
+  "rationale": zod.string(),
+  "confluenceFactors": zod.array(zod.string()).optional()
 })
 export const GetSignalsResponse = zod.array(GetSignalsResponseItem)
 
