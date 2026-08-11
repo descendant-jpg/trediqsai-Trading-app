@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/utils/supabase';
-import { ReferralQRModal } from './referral-qr';
+import { ReferralQRModal } from '@/components/ReferralQRModal';
 import colors from '@/constants/colors';
 
 const c = colors.light;

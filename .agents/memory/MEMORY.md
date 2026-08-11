@@ -1,0 +1,1 @@
+- [Expo/API port conflicts](expo-web-port-conflicts.md) — blank mobile preview or EADDRINUSE usually means a stray dev server holds an artifact's port; kill it before editing config.
