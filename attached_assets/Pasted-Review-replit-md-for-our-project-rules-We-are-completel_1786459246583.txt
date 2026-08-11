@@ -1,0 +1,25 @@
+Review replit.md for our project rules. We are completely overhauling the TradiQs Academy screen (`app/profile/app-guide.tsx` or your academy route) to replace static elements with a premium, functional learning hub.
+
+### 1. YouTube Deep-Linking Logic
+- Import `Linking` from `react-native`.
+- Create a horizontal `ScrollView` or `FlatList` titled "YouTube Masterclasses".
+- Build highly styled video cards (`w-64 h-40 bg-[#16181D] rounded-xl overflow-hidden mr-4`). Include a mock thumbnail image, a title, and a neon `#00F0FF` play icon overlay.
+- Wrap the cards in a `TouchableOpacity`. On press, execute: `Linking.openURL('https://youtube.com/watch?v=YOUR_MOCK_VIDEO_ID')` to route the user to the native YouTube app.
+
+### 2. The Institutional Glossary (Searchable Dictionary)
+- Below the videos, build the "Trading Dictionary" section.
+- Add a sticky `TextInput` search bar (`bg-[#12141A] text-white p-3 rounded-lg border border-gray-800 mb-4`) with the placeholder: "Search terms (e.g., Order Block, FVG, ChoCh)..."
+- Create a local state array of at least 5 mock dictionary terms with title and definition.
+- Implement filter logic: As the user types in the search bar, filter the displayed dictionary list instantly. Render the results in sleek accordion-style cards.
+
+### 3. Functional Lot Size Calculator UI
+- Upgrade the "Trader's Toolkit" section. Remove the "Coming Soon" tags.
+- When the "Lot Size Calculator" card is tapped, it should expand (or open a React Native `Modal`) revealing a functional calculator UI.
+- Inside the calculator, include three `TextInput` fields (numeric keyboard): "Account Balance ($)", "Risk (%)", and "Stop Loss (Pips)".
+- Add a massive "Calculate Position" button and a styled text block below it to display the mock result (e.g., "Recommended Lot Size: 0.25").
+
+### 4. Mindset HUD
+- At the very top of the screen (under the main title), add a subtle `bg-[#16181D]` banner with a glowing `#00F0FF` left border.
+- Display a mock "Daily Alpha" trading psychology quote (e.g., "Amateurs focus on how much they can make. Professionals focus on how much they can lose.")
+
+Do not explain your steps. Ensure strict TypeScript types, fluid animations for the layout changes if possible, and write the complete, production-ready React Native code for the new Academy screen.
