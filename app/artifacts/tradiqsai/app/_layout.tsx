@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, Platform } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -24,6 +24,7 @@ import {
   setAuthFailureHandler,
   setAuthSessionRefresher,
   setAuthTokenGetter,
+  customFetch,
 } from '@workspace/api-client-react';
 import { isSupabaseConfigured, supabase } from '@/utils/supabase';
 import { initializeRevenueCat, SubscriptionProvider } from '@/lib/revenuecat';
@@ -146,6 +147,20 @@ export default function RootLayout() {
     Inter_700Bold,
   });
 
+  // Fetch the Stripe publishable key from the server so it is never baked
+  // into the bundle as a hardcoded string.
+  const [stripePublishableKey, setStripePublishableKey] = useState<string>('');
+  useEffect(() => {
+    customFetch<{ publishableKey: string }>('/api/payment/config')
+      .then(({ publishableKey }) => {
+        if (publishableKey) setStripePublishableKey(publishableKey);
+      })
+      .catch(() => {
+        // Non-fatal: StripeProvider will render with an empty key and log a
+        // warning, but the rest of the app continues to work normally.
+      });
+  }, []);
+
   useEffect(() => {
     if (Platform.OS === 'web') return;
     void SplashScreen.preventAutoHideAsync();
@@ -163,18 +178,21 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
-          <StripeProvider publishableKey="pk_test_YOUR_STRIPE_KEY">
-            <SubscriptionProvider>
-              <GestureHandlerRootView style={{ flex: 1 }}>
-                <KeyboardProvider>
-                  <AuthProvider>
+          <StripeProvider publishableKey={stripePublishableKey}>
+            <GestureHandlerRootView style={{ flex: 1 }}>
+              <KeyboardProvider>
+                <AuthProvider>
+                  {/* SubscriptionProvider is inside AuthProvider so its
+                      useSubscriptionContext can call useAuth() to read the
+                      Supabase subscription_tier for Stripe Elite buyers. */}
+                  <SubscriptionProvider>
                     <TradingProvider>
                       <RootLayoutNav />
                     </TradingProvider>
-                  </AuthProvider>
-                </KeyboardProvider>
-              </GestureHandlerRootView>
-            </SubscriptionProvider>
+                  </SubscriptionProvider>
+                </AuthProvider>
+              </KeyboardProvider>
+            </GestureHandlerRootView>
           </StripeProvider>
         </QueryClientProvider>
       </ErrorBoundary>

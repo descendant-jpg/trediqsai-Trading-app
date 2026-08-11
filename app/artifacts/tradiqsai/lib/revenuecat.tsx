@@ -4,6 +4,8 @@ import Purchases from "react-native-purchases";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import Constants from "expo-constants";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useAuth } from "@/context/AuthContext";
+import { isSupabaseConfigured, supabase } from "@/utils/supabase";
 
 const SUBSCRIPTION_CACHE_KEY = "revenuecat.isSubscribed";
 
@@ -48,6 +50,13 @@ export function initializeRevenueCat() {
 }
 
 function useSubscriptionContext() {
+  // The signed-in user — used to check the Supabase subscription_tier as a
+  // supplemental entitlement for Stripe Elite buyers who have no RevenueCat
+  // entitlement. `useAuth()` is safe here because SubscriptionProvider is
+  // mounted inside AuthProvider in _layout.tsx.
+  const { session } = useAuth();
+  const userId = session?.user?.id ?? null;
+
   // Last-known subscription state from AsyncStorage, used until the live
   // customerInfo fetch resolves so the paywall doesn't flash for subscribers.
   const [cachedIsSubscribed, setCachedIsSubscribed] = useState<boolean | null>(null);
@@ -153,8 +162,31 @@ function useSubscriptionContext() {
   const activeEntitlement =
     customerInfoQuery.data?.entitlements.active?.[REVENUECAT_ENTITLEMENT_IDENTIFIER];
 
-  // Prefer live data; fall back to the cached value while loading.
-  const isSubscribed = liveIsSubscribed !== null ? liveIsSubscribed : cachedIsSubscribed === true;
+  // Check the Supabase profile for a server-granted Stripe Elite entitlement.
+  // This is the second leg of the unified entitlement authority: RevenueCat
+  // for in-app store purchases, Supabase subscription_tier for Stripe payers.
+  const [supabaseIsSubscribed, setSupabaseIsSubscribed] = useState(false);
+  useEffect(() => {
+    if (!userId || !isSupabaseConfigured) return;
+    let cancelled = false;
+    void (async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("subscription_tier")
+        .eq("id", userId)
+        .maybeSingle();
+      if (!cancelled) setSupabaseIsSubscribed(data?.subscription_tier === "pro");
+    })().catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  // Prefer live RevenueCat data; fall back to the cached value while loading.
+  // OR grant access when the Supabase profile has subscription_tier = 'pro'
+  // (set server-side after a verified Stripe payment).
+  const rcIsSubscribed = liveIsSubscribed !== null ? liveIsSubscribed : cachedIsSubscribed === true;
+  const isSubscribed = rcIsSubscribed || supabaseIsSubscribed;
 
   // Entitlement is active but the user cancelled in the store: Pro access
   // continues until expirationDate, then the paywall reappears normally.

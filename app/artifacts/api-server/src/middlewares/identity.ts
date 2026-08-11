@@ -14,6 +14,9 @@ const SUPABASE_URL =
 const SUPABASE_KEY =
   process.env["SUPABASE_PUBLISHABLE_KEY"] ??
   process.env["EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY"] ??
+  // The project uses the Supabase anon key under these names:
+  process.env["EXPO_PUBLIC_SUPABASE_ANON_KEY"] ??
+  process.env["NEXT_PUBLIC_SUPABASE_ANON_KEY"] ??
   "";
 
 /** How long a successfully verified token is trusted without re-checking. */
