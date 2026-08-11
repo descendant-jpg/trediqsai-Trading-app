@@ -291,7 +291,11 @@ export default function PortfolioScreen() {
           </View>
           <Text style={styles.chartGain}>+8.1%</Text>
         </View>
-        <Text style={styles.chartPlaceholder}>Chart Placeholder</Text>
+        {Platform.OS === 'web' ? (
+          <Text style={styles.chartPlaceholder}>Chart rendering disabled on Web</Text>
+        ) : (
+          <Text style={styles.chartPlaceholder}>Chart rendering unavailable</Text>
+        )}
       </View>
 
       <View style={styles.metricsGrid}>
