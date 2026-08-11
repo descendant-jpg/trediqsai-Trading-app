@@ -47,3 +47,6 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Admin session revocation state — written at runtime, must not be committed
+website/.admin-revocation

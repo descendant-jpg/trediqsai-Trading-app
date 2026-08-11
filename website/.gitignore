@@ -1,2 +1,5 @@
 .next/
 node_modules/
+
+# Admin session revocation state — written at runtime, must not be committed
+.admin-revocation
