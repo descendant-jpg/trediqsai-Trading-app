@@ -113,7 +113,13 @@ export default function PortfolioScreen() {
     }
     setClosingId(trade.id);
     try {
-      await closeTrade(trade.id, livePrice);
+      const closedTrade = await closeTrade(trade.id, livePrice);
+      if (closedTrade.rankChange) {
+        showAlert(
+          'Rank upgraded',
+          `Congratulations — you reached ${closedTrade.rankChange.newRank} tier!`,
+        );
+      }
       await fetchTrades();
     } catch (err: any) {
       showAlert('Close failed', err?.message ?? 'Unknown error');

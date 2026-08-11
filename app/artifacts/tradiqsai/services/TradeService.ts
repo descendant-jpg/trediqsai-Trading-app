@@ -1,4 +1,5 @@
 import { supabase } from '@/utils/supabase';
+import { calculateUserRank, type RankTier } from '@/lib/rankLogic';
 
 export type TradeRecord = {
   id: string;
@@ -9,7 +10,30 @@ export type TradeRecord = {
   close_price: number | null;
   status: 'OPEN' | 'CLOSED';
   pnl?: number | null;
+  rankChange?: { previousRank: RankTier; newRank: RankTier } | null;
 };
+
+export async function updateUserRankTier(
+  userId: string,
+): Promise<{ changed: boolean; previousRank: RankTier; newRank: RankTier }> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('simulated_pnl, win_rate, rank_tier')
+    .eq('id', userId)
+    .single();
+  if (error) throw new Error(error.message);
+
+  const previousRank = (data.rank_tier ?? 'Bronze') as RankTier;
+  const newRank = calculateUserRank(Number(data.simulated_pnl ?? 0), Number(data.win_rate ?? 0));
+  if (newRank === previousRank) return { changed: false, previousRank, newRank };
+
+  const { error: updateError } = await supabase
+    .from('profiles')
+    .update({ rank_tier: newRank })
+    .eq('id', userId);
+  if (updateError) throw new Error(updateError.message);
+  return { changed: true, previousRank, newRank };
+}
 
 /**
  * Opens a trade for the authenticated user. P&L is never computed here —
@@ -39,7 +63,9 @@ export async function openTrade(
     .single();
 
   if (error) throw new Error(error.message);
-  return data as TradeRecord;
+  const trade = data as TradeRecord;
+  const rankChange = await updateUserRankTier(trade.user_id);
+  return { ...trade, rankChange: rankChange.changed ? rankChange : null };
 }
 
 /**
