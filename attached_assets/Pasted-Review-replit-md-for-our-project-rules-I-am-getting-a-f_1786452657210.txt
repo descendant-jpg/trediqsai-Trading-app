@@ -1,0 +1,25 @@
+Review replit.md for our project rules. I am getting a fatal "Something went wrong" crash when navigating to the Signals tab in the Expo app. This is likely a null reference error mapping over Supabase data before it loads. 
+
+Fix the crash and completely upgrade the `app/(tabs)/signals.tsx` screen to an ultra-premium, highly addictive institutional UI.
+
+### 1. Fix the Data Fetching Crash (CRITICAL)
+- Wrap the Supabase `ai_signals` fetch in a robust try/catch block.
+- Implement strict null checks. If `signals` is undefined or loading, render a premium ActivityIndicator or Skeleton loader, NOT an empty map function.
+
+### 2. Database Upgrades (If missing, update the Supabase types/schema)
+Ensure the `ai_signals` data structure supports these new premium fields:
+- `status`: 'active', 'tp1_hit', 'tp2_hit', 'tp3_hit', 'stopped_out', 'closed'
+- `confidence_score`: integer (e.g., 85)
+- `rationale`: string (e.g., "RSI divergence converging with 4H order block")
+- `risk_reward`: string (e.g., "1:3")
+- `tp1`, `tp2`, `tp3` (replacing a single TP)
+
+### 3. Build the Premium Signals UI (`signals.tsx`)
+- **Header:** Add a "Performance" summary at the top showing a dummy "Overall Win Rate: 82%" and "Active Signals: 3" to build immediate trust.
+- **Signal Cards (The Core):** Create a highly styled card component for each signal using our dark theme (#0A0B0E bg, #16181D card bg, border-gray-800).
+- **Card Header:** Asset ticker (e.g., XAU/USD) on the left. On the right, an Electric Cyan badge for `BUY` or Red for `SELL`, next to the Live Status badge.
+- **Card Body (Data Grid):** A clean CSS grid showing Entry, TP1, TP2, TP3, and SL. 
+- **Card Footer (The Edge):** A highlighted section at the bottom of the card showing the `confidence_score` (e.g., "⚡ 88% AI Conviction") and the `rationale`. 
+- **VIP Lock:** If `is_vip` is true and the user's `tier_level` is 'Free', blur out the Entry/TP/SL numbers and show a premium "Upgrade to Elite to Unlock" button overlay on the card.
+
+Do not explain your steps. Fix the error handling, update the types, and write the complete React Native code for the new Signals screen.
