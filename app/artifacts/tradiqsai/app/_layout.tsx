@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Platform } from 'react-native';
+import { Alert, Platform, StyleSheet, Text, View } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
@@ -180,6 +180,15 @@ export default function RootLayout() {
     Inter_700Bold,
   });
 
+  // Never keep the whole app blank if a font request stalls. React Native
+  // falls back to the platform font until the custom font is available.
+  const [fontLoadTimedOut, setFontLoadTimedOut] = useState(false);
+  useEffect(() => {
+    if (fontsLoaded || fontError) return;
+    const timeout = setTimeout(() => setFontLoadTimedOut(true), 5_000);
+    return () => clearTimeout(timeout);
+  }, [fontsLoaded, fontError]);
+
   // Fetch the Stripe publishable key from the server so it is never baked
   // into the bundle as a hardcoded string.
   const [stripePublishableKey, setStripePublishableKey] = useState<string>('');
@@ -206,7 +215,14 @@ export default function RootLayout() {
     }
   }, [fontsLoaded, fontError]);
 
-  if (!fontsLoaded && !fontError) return null;
+  if (!fontsLoaded && !fontError && !fontLoadTimedOut) {
+    return (
+      <View style={styles.bootScreen}>
+        <Text style={styles.bootTitle}>TRADIQS AI</Text>
+        <Text style={styles.bootStatus}>INITIALIZING TERMINAL…</Text>
+      </View>
+    );
+  }
 
   return (
     <SafeAreaProvider>
@@ -233,3 +249,25 @@ export default function RootLayout() {
     </SafeAreaProvider>
   );
 }
+
+
+const styles = StyleSheet.create({
+  bootScreen: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#050505',
+  },
+  bootTitle: {
+    color: '#00FF00',
+    fontSize: 24,
+    fontWeight: '700',
+    letterSpacing: 3,
+  },
+  bootStatus: {
+    marginTop: 12,
+    color: '#8A8A8A',
+    fontSize: 12,
+    letterSpacing: 1.5,
+  },
+});

@@ -129,14 +129,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!isSupabaseConfigured) return;
 
     let mounted = true;
+    // Auth must never hold the entire root layout on a blank loading frame.
+    // A slow/unreachable Supabase endpoint is treated as signed out until a
+    // later user action retries authentication.
+    const loadingTimeout = setTimeout(() => {
+      if (!mounted) return;
+      setSession(null);
+      setLoading(false);
+    }, 8_000);
+
     supabase.auth
       .getSession()
       .then(({ data }) => {
         if (!mounted) return;
         setSession(data.session);
       })
+      .catch(() => {
+        if (!mounted) return;
+        setSession(null);
+      })
       .finally(() => {
-        if (mounted) setLoading(false);
+        if (!mounted) return;
+        clearTimeout(loadingTimeout);
+        setLoading(false);
       });
 
     const {
@@ -147,6 +162,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       mounted = false;
+      clearTimeout(loadingTimeout);
       subscription.unsubscribe();
     };
   }, []);
