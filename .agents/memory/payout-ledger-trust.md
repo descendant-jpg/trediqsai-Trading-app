@@ -49,3 +49,27 @@ safe for errors meaning *the guarded path is unavailable* (function missing,
 no fresh price). If the RPC ran and **refused** — blown account, failed
 check — falling back walks straight around the rule just enforced.
 Distinguish by error code; default to propagating the refusal.
+
+## Settlement and reservation are part of the ledger
+
+An evaluation "active day" is not a trade-creation day. Credit it only from a
+verified trade's server-assigned settlement timestamp (`closed_at`), and
+require that the trade is closed. Otherwise a trader can farm the minimum-day
+rule with tiny open positions that have never faced a real outcome.
+
+**How to apply:** filter active-day calculations by verified provenance,
+`CLOSED` status, non-null settlement time, and the evaluation period measured
+from that settlement time—not the client-visible creation time.
+
+A monthly payout cap alone also does not stop a repeat request from spending
+the same profit twice. Given earned split `E`, monthly cap `C`, and prior
+reservations `R`, the only safe next amount is `max(0, min(E, C) - R)`.
+
+**Why:** `min(E, C - R)` subtracts reservations only from the cap. When `E` is
+below the cap, a replay can reserve the same earned value again until it fills
+the cap.
+
+**How to apply:** serialize a user's request attempts with a transaction-
+scoped advisory lock (which also covers the no-prior-row case), re-read the
+ledger under that lock, and then insert one reservation. A UI debounce is
+usability only; the database is the fraud boundary.

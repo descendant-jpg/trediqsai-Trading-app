@@ -26,6 +26,21 @@ export interface PayoutEvaluation {
   lockReason: string | null;
 }
 
+export type PayoutRequestStatus = 'REQUESTED' | 'APPROVED' | 'REJECTED' | 'PAID';
+
+/**
+ * A user's own payout request as returned through the RLS-protected
+ * `payout_requests` table. This is display-only: the app cannot create or
+ * change these rows outside the guarded payout RPC.
+ */
+export interface PayoutRequest {
+  id: number;
+  cycleStart: string;
+  amount: number;
+  status: PayoutRequestStatus;
+  createdAt: string;
+}
+
 type UnknownRecord = Record<string, unknown>;
 
 function validMoney(value: unknown, min = 0): value is number {
@@ -62,9 +77,10 @@ export function parsePayoutEvaluation(value: unknown): PayoutEvaluation | null {
 
   const expectedSplit = plan === 'ELITE' ? ELITE_PAYOUT_SPLIT : PRO_PAYOUT_SPLIT;
   const expectedCap = plan === 'ELITE' ? ELITE_MONTHLY_PAYOUT_CAP : PRO_MONTHLY_PAYOUT_CAP;
-  const expectedValue = Math.min(
-    Math.max(0, Number(row.virtual_profit) * expectedSplit),
-    Math.max(0, expectedCap - Number(row.monthly_paid)),
+  const expectedValue = Math.max(
+    0,
+    Math.min(Number(row.virtual_profit) * expectedSplit, expectedCap) -
+      Number(row.monthly_paid),
   );
 
   // The UI never upgrades or inflates a server result. Reject inconsistent
@@ -94,6 +110,56 @@ export function parsePayoutEvaluation(value: unknown): PayoutEvaluation | null {
     eligible: row.eligible,
     lockReason: row.lock_reason as string | null,
   };
+}
+
+/**
+ * Validates history rows instead of rendering partially trusted PostgREST
+ * data. A malformed record means the complete history is treated as
+ * unavailable, never silently displayed as an empty payout history.
+ */
+export function parsePayoutRequests(value: unknown): PayoutRequest[] | null {
+  if (!Array.isArray(value)) return null;
+
+  const parsed: PayoutRequest[] = [];
+  for (const valueRow of value) {
+    if (!valueRow || typeof valueRow !== 'object') return null;
+    const row = valueRow as UnknownRecord;
+    const status: PayoutRequestStatus | null =
+      row.status === 'REQUESTED' ||
+      row.status === 'APPROVED' ||
+      row.status === 'REJECTED' ||
+      row.status === 'PAID'
+        ? row.status
+        : null;
+    const id =
+      typeof row.id === 'number'
+        ? row.id
+        : typeof row.id === 'string' && /^\d+$/.test(row.id)
+          ? Number(row.id)
+          : NaN;
+
+    if (
+      !Number.isSafeInteger(id) ||
+      id <= 0 ||
+      !status ||
+      !validMoney(row.amount, Number.MIN_VALUE) ||
+      typeof row.cycle_start !== 'string' ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(row.cycle_start) ||
+      typeof row.created_at !== 'string' ||
+      !Number.isFinite(Date.parse(row.created_at))
+    ) {
+      return null;
+    }
+
+    parsed.push({
+      id,
+      cycleStart: row.cycle_start,
+      amount: Number(row.amount),
+      status,
+      createdAt: row.created_at,
+    });
+  }
+  return parsed;
 }
 
 export function formatMoney(value: number): string {

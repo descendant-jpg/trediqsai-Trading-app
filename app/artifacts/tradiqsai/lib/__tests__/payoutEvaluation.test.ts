@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ELITE_MONTHLY_PAYOUT_CAP,
   parsePayoutEvaluation,
+  parsePayoutRequests,
   PRO_MONTHLY_PAYOUT_CAP,
 } from '../payoutEvaluation';
 
@@ -53,6 +54,19 @@ describe('payout evaluation response validation', () => {
     }))).toBeNull();
   });
 
+  it('subtracts reserved payouts from earned entitlement, not only the monthly cap', () => {
+    // $2,000 of virtual profit on Pro earns $100. Once that $100 is reserved,
+    // the remaining cap is still $150 — but the trader has no new profit to
+    // request. This is the server response a rapid replay must return.
+    expect(parsePayoutEvaluation(summary({
+      virtual_profit: 2_000,
+      monthly_paid: 100,
+      cashout_value: 0,
+      eligible: false,
+      lock_reason: 'No eligible virtual profit is available to cash out.',
+    }))).toMatchObject({ cashoutValue: 0, eligible: false });
+  });
+
   it('keeps the UI locked when a server response is malformed or missing', () => {
     expect(parsePayoutEvaluation(null)).toBeNull();
     expect(parsePayoutEvaluation(summary({ active_days: 5.5 }))).toBeNull();
@@ -76,5 +90,40 @@ describe('payout evaluation response validation', () => {
     expect(violated?.violated).toBe(true);
     expect(days?.activeDays).toBe(2);
     expect(days?.eligible).toBe(false);
+  });
+});
+
+describe('payout history response validation', () => {
+  it('accepts a valid, server-owned payout request history', () => {
+    expect(parsePayoutRequests([{
+      id: 42,
+      cycle_start: '2026-08-01',
+      amount: 100,
+      status: 'REQUESTED',
+      created_at: '2026-08-12T12:30:00.000Z',
+    }])).toEqual([{
+      id: 42,
+      cycleStart: '2026-08-01',
+      amount: 100,
+      status: 'REQUESTED',
+      createdAt: '2026-08-12T12:30:00.000Z',
+    }]);
+  });
+
+  it('fails closed when any history row is malformed or has an unknown status', () => {
+    expect(parsePayoutRequests([{
+      id: 1,
+      cycle_start: '2026-08-01',
+      amount: 100,
+      status: 'FORGED',
+      created_at: '2026-08-12T12:30:00.000Z',
+    }])).toBeNull();
+    expect(parsePayoutRequests([{
+      id: 1,
+      cycle_start: 'not-a-date',
+      amount: 100,
+      status: 'PAID',
+      created_at: '2026-08-12T12:30:00.000Z',
+    }])).toBeNull();
   });
 });

@@ -27,6 +27,7 @@ import {
   MINIMUM_ACTIVE_DAYS,
   TOTAL_EQUITY_FLOOR,
   formatMoney,
+  type PayoutRequest,
 } from '@/lib/payoutEvaluation';
 import { useSubscription } from '@/lib/revenuecat';
 import { PRIVACY_POLICY, TERMS_AND_CONDITIONS } from '@/lib/legalContent';
@@ -174,6 +175,9 @@ export default function ProfileScreen() {
     evaluation,
     loading: evaluationLoading,
     error: evaluationError,
+    history: payoutHistory,
+    historyLoading,
+    historyError,
     requestPayout,
   } = usePayoutEvaluation();
   const [requestingPayout, setRequestingPayout] = useState(false);
@@ -542,6 +546,28 @@ export default function ProfileScreen() {
             </Text>
           )}
         </View>
+        <View style={styles.payoutHistoryCard} testID="profile-payout-history">
+          <View style={styles.evalHeader}>
+            <Text style={styles.walletLabel}>PAYOUT HISTORY</Text>
+            {historyLoading && <ActivityIndicator size="small" color={c.mutedForeground} />}
+          </View>
+          {payoutHistory ? (
+            payoutHistory.length > 0 ? (
+              payoutHistory.map((request) => (
+                <PayoutHistoryRow key={request.id} request={request} />
+              ))
+            ) : (
+              <Text style={styles.historyEmpty} testID="profile-payout-history-empty">
+                No payout requests yet. Eligible requests will appear here.
+              </Text>
+            )
+          ) : (
+            <Text style={styles.evalLock} testID="profile-payout-history-unavailable">
+              {historyError ??
+                'Payout history is unavailable, so no request status can be shown right now.'}
+            </Text>
+          )}
+        </View>
         <TouchableOpacity style={styles.partnerCard} onPress={() => router.push('/partner-program')} activeOpacity={0.86} testID="profile-partner-program">
           <View style={styles.partnerIcon}><Feather name="dollar-sign" size={21} color="#FFD700" /></View>
           <View style={styles.partnerCopy}><View style={styles.partnerTitleRow}><Text style={styles.partnerTitle}>Partner Program</Text><Text style={styles.partnerBadge}>EARN PASSIVE INCOME</Text></View><Text style={styles.partnerSubtitle}>Build your network. Scale your revenue.</Text></View>
@@ -669,6 +695,38 @@ function EvalRow({ label, value, ok }: { label: string; value: string; ok: boole
   );
 }
 
+const PAYOUT_STATUS: Record<PayoutRequest['status'], { label: string; color: string; icon: IconName }> = {
+  REQUESTED: { label: 'Pending', color: '#E6C65C', icon: 'clock' },
+  APPROVED: { label: 'Approved', color: c.primary, icon: 'check-circle' },
+  PAID: { label: 'Paid', color: c.success, icon: 'check-circle' },
+  REJECTED: { label: 'Rejected', color: c.destructive, icon: 'x-circle' },
+};
+
+function PayoutHistoryRow({ request }: { request: PayoutRequest }) {
+  const status = PAYOUT_STATUS[request.status];
+  const date = new Date(request.createdAt).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+  return (
+    <View
+      style={styles.historyRow}
+      accessibilityRole="text"
+      accessibilityLabel={`Payout request for ${formatMoney(request.amount)} on ${date}: ${status.label}`}
+    >
+      <View>
+        <Text style={styles.historyAmount}>{formatMoney(request.amount)}</Text>
+        <Text style={styles.historyDate}>{date}</Text>
+      </View>
+      <View style={[styles.historyStatus, { borderColor: status.color }]}>
+        <Feather name={status.icon} size={12} color={status.color} />
+        <Text style={[styles.historyStatusText, { color: status.color }]}>{status.label}</Text>
+      </View>
+    </View>
+  );
+}
+
 function Banner({ icon, title, subtitle, onPress, testID }: { icon: IconName; title: string; subtitle: string; onPress: () => void; testID?: string }) {
   return <TouchableOpacity style={styles.banner} onPress={onPress} testID={testID}><View style={styles.bannerIcon}><Feather name={icon} size={22} color={c.primary} /></View><View style={styles.bannerCopy}><Text style={styles.bannerTitle}>{title}</Text><Text style={styles.bannerSubtitle}>{subtitle}</Text></View><Feather name="arrow-up-right" size={18} color={c.primary} /></TouchableOpacity>;
 }
@@ -717,6 +775,13 @@ const styles = StyleSheet.create({
   evalRowValue: { fontSize: 12, fontFamily: 'Inter_700Bold' },
   evalViolation: { color: c.destructive, fontSize: 11, lineHeight: 16, marginTop: 10 },
   evalLock: { color: c.mutedForeground, fontSize: 11, lineHeight: 16, marginTop: 4 },
+  payoutHistoryCard: { backgroundColor: c.card, borderColor: c.border, borderWidth: 1, borderRadius: 14, padding: 16, marginBottom: 16 },
+  historyRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10, borderTopColor: c.border, borderTopWidth: 1 },
+  historyAmount: { color: c.foreground, fontSize: 14, fontFamily: 'Inter_700Bold' },
+  historyDate: { color: c.mutedForeground, fontSize: 10, marginTop: 3 },
+  historyStatus: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4 },
+  historyStatusText: { fontSize: 10, fontFamily: 'Inter_700Bold' },
+  historyEmpty: { color: c.mutedForeground, fontSize: 11, lineHeight: 16 },
   withdrawText: { color: c.primary, fontSize: 11, fontFamily: 'Inter_700Bold' },
   walletDivider: { height: 1, backgroundColor: c.border, marginTop: 16 },
   partnerCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: c.card, borderColor: '#8B7125', borderWidth: 1, borderRadius: 13, padding: 14, marginBottom: 18 },

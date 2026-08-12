@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { parsePayoutEvaluation, type PayoutEvaluation } from '@/lib/payoutEvaluation';
+import {
+  parsePayoutEvaluation,
+  parsePayoutRequests,
+  type PayoutEvaluation,
+  type PayoutRequest,
+} from '@/lib/payoutEvaluation';
 import { isSupabaseConfigured, supabase } from '@/utils/supabase';
 
 const POLL_MS = 15_000;
@@ -15,9 +20,12 @@ export function usePayoutEvaluation() {
   const [evaluation, setEvaluation] = useState<PayoutEvaluation | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [history, setHistory] = useState<PayoutRequest[] | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const mounted = useRef(true);
 
-  const refresh = useCallback(async () => {
+  const refreshEvaluation = useCallback(async () => {
     if (!userId || !isSupabaseConfigured) {
       if (mounted.current) {
         setEvaluation(null);
@@ -47,6 +55,50 @@ export function usePayoutEvaluation() {
     }
   }, [userId]);
 
+  /**
+   * Reads only the signed-in user's rows. The table policy is the authority:
+   * we deliberately do not accept a user ID parameter from the client.
+   * A failed/malformed result stays `null`, which lets the UI state honestly
+   * that history is unavailable instead of impersonating an empty ledger.
+   */
+  const refreshHistory = useCallback(async () => {
+    if (!userId || !isSupabaseConfigured) {
+      if (mounted.current) {
+        setHistory(null);
+        setHistoryError(!userId ? 'Sign in to view payout history.' : 'Payout history is not configured.');
+        setHistoryLoading(false);
+      }
+      return;
+    }
+
+    if (mounted.current) setHistoryLoading(true);
+    try {
+      const { data, error: queryError } = await supabase
+        .from('payout_requests')
+        .select('id, cycle_start, amount, status, created_at')
+        .order('created_at', { ascending: false })
+        .limit(20);
+      if (queryError) throw queryError;
+      const parsed = parsePayoutRequests(data);
+      if (!parsed) throw new Error('Payout history data is incomplete.');
+      if (mounted.current) {
+        setHistory(parsed);
+        setHistoryError(null);
+      }
+    } catch (err) {
+      if (mounted.current) {
+        setHistory(null);
+        setHistoryError(err instanceof Error ? err.message : 'Payout history is unavailable.');
+      }
+    } finally {
+      if (mounted.current) setHistoryLoading(false);
+    }
+  }, [userId]);
+
+  const refresh = useCallback(async () => {
+    await Promise.all([refreshEvaluation(), refreshHistory()]);
+  }, [refreshEvaluation, refreshHistory]);
+
   useEffect(() => {
     mounted.current = true;
     void refresh();
@@ -67,8 +119,21 @@ export function usePayoutEvaluation() {
       setEvaluation(parsed);
       setError(null);
     }
+    // The row commits in the same RPC transaction. Refresh after it resolves
+    // so the history card shows the reservation immediately.
+    await refreshHistory();
     return parsed;
-  }, [userId]);
+  }, [userId, refreshHistory]);
 
-  return { evaluation, loading, error, refresh, requestPayout };
+  return {
+    evaluation,
+    loading,
+    error,
+    history,
+    historyLoading,
+    historyError,
+    refresh,
+    refreshHistory,
+    requestPayout,
+  };
 }

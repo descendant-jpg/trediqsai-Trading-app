@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
@@ -18,24 +18,55 @@ import { join } from 'node:path';
  *
  * They are text assertions, not a live database — a Supabase-backed
  * integration test is tracked separately.
+ *
+ * Migrations are immutable once applied, so a guardrail can be *replaced* by a
+ * later file. These tests therefore resolve each function from the LAST
+ * migration that defines it, which is what a database ends up running after
+ * applying them in order. Asserting against one hardcoded file would pass
+ * while the deployed definition says something else.
  */
 
-const sqlPath = join(
-  __dirname,
-  '..',
-  'migrations',
-  '014_payout_evaluation_guardrails.sql',
-);
-const sql = readFileSync(sqlPath, 'utf8');
+const migrationsDir = join(__dirname, '..', 'migrations');
+const migrations = readdirSync(migrationsDir)
+  .filter((name) => name.endsWith('.sql'))
+  .sort()
+  .map((name) => ({ name, text: readFileSync(join(migrationsDir, name), 'utf8') }));
 
-/** Body of a `create or replace function <name>` block, up to its `$$;` end. */
+/** Every migration concatenated in apply order. */
+const sql = migrations.map((m) => m.text).join('\n');
+
+/**
+ * Body of the FINAL `create or replace function <name>` definition across all
+ * migrations — i.e. the definition a migrated database actually ends up with.
+ */
 function functionBody(name: string): string {
-  const start = sql.indexOf(`create or replace function public.${name}(`);
-  expect(start, `${name} should be defined in the migration`).toBeGreaterThan(-1);
-  const end = sql.indexOf('\n$$;', start);
+  const needle = `create or replace function public.${name}(`;
+  const owner = [...migrations].reverse().find((m) => m.text.includes(needle));
+  expect(owner, `${name} should be defined in some migration`).toBeDefined();
+  const text = owner!.text;
+  const start = text.lastIndexOf(needle);
+  const end = text.indexOf('\n$$;', start);
   expect(end, `${name} should be terminated`).toBeGreaterThan(start);
-  return sql.slice(start, end);
+  return text.slice(start, end);
 }
+
+describe('migration hygiene', () => {
+  it('ships payout corrections as a later migration, not by editing 014', () => {
+    // 014 is already applied in live projects, so a database that recorded it
+    // never reruns it. Corrections must arrive in their own forward file or
+    // they silently do not reach production.
+    const settled = migrations.find((m) =>
+      m.text.includes("count(distinct (t.closed_at at time zone 'UTC')::date)"),
+    );
+    expect(settled, 'a migration should define settlement-based active days').toBeDefined();
+    expect(settled!.name > '014_payout_evaluation_guardrails.sql').toBe(true);
+
+    const original = migrations.find(
+      (m) => m.name === '014_payout_evaluation_guardrails.sql',
+    );
+    expect(original!.text).toContain('cashout := least(virtual_profit * split');
+  });
+});
 
 describe('payout evaluation ledger', () => {
   const summary = functionBody('payout_evaluation_summary');
@@ -51,22 +82,31 @@ describe('payout evaluation ledger', () => {
     expect(summary).toMatch(/total_equity\s*:=\s*10000\s*\+\s*verified_pnl/);
   });
 
-  it('counts only server-priced trades toward profit, daily loss and active days', () => {
+  it('counts only server-priced, closed and settled trades toward active days', () => {
     const serverOnly = summary.match(/price_source\s*=\s*'SERVER'/g) ?? [];
     // verified realized P&L, today's P&L, and the active-day count.
     expect(serverOnly.length).toBeGreaterThanOrEqual(3);
 
     const activeDays = summary.slice(
-      summary.indexOf('into active_days'),
+      summary.indexOf('-- An active day is credited'),
       summary.indexOf('into paid'),
     );
     expect(activeDays).toMatch(/price_source\s*=\s*'SERVER'/);
+    expect(activeDays).toMatch(/status\s*=\s*'CLOSED'/);
+    expect(activeDays).toMatch(/closed_at is not null/);
+    expect(activeDays).toMatch(/closed_at\s*>=\s*cycle::timestamptz/);
+    expect(activeDays).toMatch(/count\(distinct \(t\.closed_at at time zone 'UTC'\)::date\)/);
+    expect(activeDays).not.toMatch(/created_at at time zone/);
   });
 
   it('keeps the monthly cap and split server-side per plan', () => {
     expect(summary).toMatch(/split\s*:=\s*0\.10;[\s\S]*?cap\s*:=\s*500;/);
     expect(summary).toMatch(/split\s*:=\s*0\.05;[\s\S]*?cap\s*:=\s*250;/);
-    expect(summary).toMatch(/cashout\s*:=\s*least\(\s*virtual_profit\s*\*\s*split,\s*greatest\(0,\s*cap\s*-\s*paid\)/);
+    // Paid reservations come off the already-capped earned entitlement, not
+    // only the cap. This prevents the same profit being requested repeatedly.
+    expect(summary).toMatch(
+      /cashout\s*:=\s*greatest\(0,\s*least\(virtual_profit\s*\*\s*split,\s*cap\)\s*-\s*paid\)/,
+    );
   });
 
   it('requires six active days and latches drawdown violations for the cycle', () => {
@@ -92,6 +132,14 @@ describe('payout request', () => {
     expect(lockAt).toBeGreaterThan(-1);
     expect(lockAt).toBeLessThan(summaryAt);
     expect(summaryAt).toBeLessThan(insertAt);
+  });
+
+  it('locks existing cycle reservations after the zero-row-safe advisory lock', () => {
+    const advisoryAt = request.indexOf('pg_advisory_xact_lock');
+    const reservationLockAt = request.indexOf('from public.payout_requests');
+    const summaryAt = request.indexOf('public.payout_evaluation_summary()');
+    expect(reservationLockAt).toBeGreaterThan(advisoryAt);
+    expect(request.slice(reservationLockAt, summaryAt)).toMatch(/for update/);
   });
 
   it('refuses to insert when the recomputed summary is not eligible', () => {
