@@ -1,5 +1,6 @@
 import app from "./app.js";
 import { logger } from "./lib/logger.js";
+import { startMarketPricePublisher } from "./lib/marketPricePublisher.js";
 import { getStripeSync, getStripeCredentials } from "./stripeClient.js";
 
 const rawPort = process.env["PORT"];
@@ -63,6 +64,10 @@ async function initStripe(): Promise<void> {
 }
 
 await initStripe();
+
+// Keeps the service-role-owned reference price fresh so payout-eligible
+// trades can be priced by the server rather than by the client.
+startMarketPricePublisher();
 
 app.listen(port, (err?: Error) => {
   if (err) {

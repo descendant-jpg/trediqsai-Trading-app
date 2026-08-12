@@ -60,6 +60,20 @@ Deno.serve(async (req) => {
     // 1. Live market price.
     const livePrice = await fetchBtcPrice();
 
+    // 1b. Publish it as the server-owned reference price. Trades opened and
+    //     closed through open_server_trade / close_server_trade price
+    //     themselves from this row, so payout-eligible P&L never depends on a
+    //     price the client chose. Stale rows are rejected by the RPCs.
+    const { error: priceErr } = await supabase
+      .from("market_prices")
+      .upsert(
+        { asset: "BTC/USD", price: livePrice, updated_at: new Date().toISOString() },
+        { onConflict: "asset" },
+      );
+    if (priceErr) {
+      console.error("market_prices upsert failed:", priceErr);
+    }
+
     // 2. All OPEN trades (only they create drawdown exposure).
     const { data: openTrades, error: tradesErr } = await supabase
       .from("trades")

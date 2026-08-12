@@ -20,6 +20,14 @@ import { useRouter } from 'expo-router';
 import TimezonePickerModal from '@/components/TimezonePickerModal';
 import { useTrading } from '@/context/TradingContext';
 import { useAuth } from '@/context/AuthContext';
+import { usePayoutEvaluation } from '@/hooks/usePayoutEvaluation';
+import {
+  DAILY_DRAWDOWN_LIMIT,
+  DEMO_STARTING_BALANCE,
+  MINIMUM_ACTIVE_DAYS,
+  TOTAL_EQUITY_FLOOR,
+  formatMoney,
+} from '@/lib/payoutEvaluation';
 import { useSubscription } from '@/lib/revenuecat';
 import { PRIVACY_POLICY, TERMS_AND_CONDITIONS } from '@/lib/legalContent';
 import { supabase } from '@/utils/supabase';
@@ -162,6 +170,13 @@ export default function ProfileScreen() {
   const { session, signOut } = useAuth();
   const { isSubscribed } = useSubscription();
   const { tradingDayTz, setTradingDayTz } = useTrading();
+  const {
+    evaluation,
+    loading: evaluationLoading,
+    error: evaluationError,
+    requestPayout,
+  } = usePayoutEvaluation();
+  const [requestingPayout, setRequestingPayout] = useState(false);
   const [tzPickerOpen, setTzPickerOpen] = useState(false);
   const [username, setUsername] = useState<string | null>(null);
   const [referralCode, setReferralCode] = useState<string | null>(null);
@@ -310,6 +325,51 @@ export default function ProfileScreen() {
     }
   };
 
+  // Fail closed: anything other than a validated, eligible, non-zero server
+  // result keeps the button disabled.
+  const payoutEnabled =
+    !!evaluation &&
+    evaluation.eligible &&
+    !evaluation.violated &&
+    evaluation.cashoutValue > 0 &&
+    !requestingPayout;
+
+  const payoutLockReason = evaluation
+    ? evaluation.violationReason ??
+      evaluation.lockReason ??
+      (evaluation.cashoutValue <= 0
+        ? 'You have reached your monthly payout cap for this cycle.'
+        : 'Evaluation requirements are not met yet.')
+    : evaluationError ?? 'Evaluation data is unavailable.';
+
+  /**
+   * The button is only ever enabled from a validated server result, so this
+   * handler cannot be the thing that authorizes a payout — the RPC re-checks
+   * every rule and is the sole authority on the outcome.
+   */
+  const handleRequestPayout = async () => {
+    if (requestingPayout) return;
+    setRequestingPayout(true);
+    // Captured before the call: the refreshed summary returns the *remaining*
+    // cashout value, which is 0 once this request consumes the cap.
+    const requestedAmount = evaluation?.cashoutValue ?? 0;
+    try {
+      await requestPayout();
+      showAlert(
+        'Payout Requested',
+        `Your payout request for ${formatMoney(requestedAmount)} has been recorded. ` +
+          'Our team reviews requests before funds are released.',
+      );
+    } catch (err: any) {
+      showAlert(
+        'Payout Not Available',
+        err?.message ?? 'We could not verify your payout eligibility right now.',
+      );
+    } finally {
+      setRequestingPayout(false);
+    }
+  };
+
   const referralLink = referralCode
     ? `https://tradiqsai.com/r/${referralCode}`
     : null;
@@ -370,7 +430,118 @@ export default function ProfileScreen() {
             <Text style={styles.upgradeText}>Upgrade to Pro</Text>
           </TouchableOpacity>
         )}
-        <View style={styles.walletCard}><View style={styles.walletTop}><View><Text style={styles.walletLabel}>SIMULATED EQUITY</Text><Text style={styles.walletBalance}>$104,250.00</Text></View><TouchableOpacity style={styles.payout} onPress={() => showAlert('Request Payout', 'Payout requests open at the end of each evaluation cycle.')}><Text style={styles.payoutText}>Request Payout</Text></TouchableOpacity></View><View style={styles.walletDivider} /><View style={styles.walletBottom}><View><Text style={styles.walletLabel}>CASHBACK & REFERRALS</Text><Text style={styles.cashBalance}>${(referralEarned ?? 125.5).toFixed(2)}</Text></View><TouchableOpacity onPress={() => showAlert('Withdraw', 'Referral withdrawals will be available soon.')}><Text style={styles.withdrawText}>Withdraw →</Text></TouchableOpacity></View></View>
+        <View style={styles.walletCard}>
+          <View style={styles.walletTop}>
+            <View style={styles.walletColumn}>
+              <Text style={styles.walletLabel}>DEMO ACCOUNT EQUITY</Text>
+              <Text style={styles.walletBalance} testID="profile-demo-equity">
+                {evaluation ? formatMoney(evaluation.totalEquity) : '—'}
+              </Text>
+              <Text style={styles.walletHint}>
+                Simulated funds from a {formatMoney(DEMO_STARTING_BALANCE)} evaluation account.
+                Not withdrawable.
+              </Text>
+            </View>
+          </View>
+          <View style={styles.walletDivider} />
+          <View style={styles.walletTop}>
+            <View style={styles.walletColumn}>
+              <Text style={styles.walletLabel}>REAL CASHOUT VALUE</Text>
+              <Text style={styles.cashBalance} testID="profile-cashout-value">
+                {evaluation ? formatMoney(evaluation.cashoutValue) : '—'}
+              </Text>
+              <Text style={styles.walletHint}>
+                {evaluation
+                  ? `${evaluation.plan} split ${Math.round(evaluation.profitSplit * 100)}% · ` +
+                    `${formatMoney(evaluation.monthlyPaid)} of ${formatMoney(
+                      evaluation.monthlyCap,
+                    )} monthly cap used`
+                  : 'Payout locked until your evaluation data loads.'}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.payout, !payoutEnabled && styles.payoutDisabled]}
+              onPress={handleRequestPayout}
+              disabled={!payoutEnabled}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !payoutEnabled, busy: requestingPayout }}
+              accessibilityLabel={
+                payoutEnabled
+                  ? `Request payout of ${formatMoney(evaluation?.cashoutValue ?? 0)}`
+                  : `Payout unavailable. ${payoutLockReason}`
+              }
+              testID="profile-request-payout"
+            >
+              {requestingPayout ? (
+                <ActivityIndicator size="small" color={c.primary} />
+              ) : (
+                <Text style={[styles.payoutText, !payoutEnabled && styles.payoutTextDisabled]}>
+                  Request Payout
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+          <View style={styles.walletDivider} />
+          <View style={styles.walletBottom}>
+            <View>
+              <Text style={styles.walletLabel}>CASHBACK & REFERRALS</Text>
+              <Text style={styles.cashBalance}>${(referralEarned ?? 0).toFixed(2)}</Text>
+            </View>
+            <TouchableOpacity onPress={() => showAlert('Withdraw', 'Referral withdrawals will be available soon.')}>
+              <Text style={styles.withdrawText}>Withdraw →</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+        <View style={styles.evalCard} testID="profile-evaluation-status">
+          <View style={styles.evalHeader}>
+            <Text style={styles.walletLabel}>EVALUATION STATUS</Text>
+            {evaluationLoading && !evaluation ? (
+              <ActivityIndicator size="small" color={c.mutedForeground} />
+            ) : (
+              <Text
+                style={[
+                  styles.evalBadge,
+                  evaluation?.eligible ? styles.evalBadgePass : styles.evalBadgeLocked,
+                ]}
+              >
+                {evaluation?.eligible ? 'PAYOUT UNLOCKED' : 'PAYOUT LOCKED'}
+              </Text>
+            )}
+          </View>
+          {evaluation ? (
+            <>
+              <EvalRow
+                label="Daily drawdown"
+                value={`${formatMoney(evaluation.dailyLoss)} / ${formatMoney(DAILY_DRAWDOWN_LIMIT)}`}
+                ok={evaluation.dailyLoss < DAILY_DRAWDOWN_LIMIT}
+              />
+              <EvalRow
+                label="Total drawdown floor"
+                value={`${formatMoney(evaluation.totalEquity)} / ${formatMoney(TOTAL_EQUITY_FLOOR)} min`}
+                ok={evaluation.totalEquity >= TOTAL_EQUITY_FLOOR}
+              />
+              <EvalRow
+                label="Active trading days"
+                value={`${evaluation.activeDays} / ${MINIMUM_ACTIVE_DAYS}`}
+                ok={evaluation.activeDays >= MINIMUM_ACTIVE_DAYS}
+              />
+              {evaluation.violated && (
+                <Text style={styles.evalViolation} testID="profile-evaluation-violation">
+                  {evaluation.violationReason ??
+                    'A drawdown rule was breached. Payouts stay disabled for the rest of this billing cycle.'}
+                </Text>
+              )}
+              {!evaluation.eligible && !evaluation.violated && evaluation.lockReason && (
+                <Text style={styles.evalLock}>{evaluation.lockReason}</Text>
+              )}
+            </>
+          ) : (
+            <Text style={styles.evalLock} testID="profile-evaluation-unavailable">
+              {evaluationError ??
+                'Evaluation data is unavailable, so payouts stay locked until it loads.'}
+            </Text>
+          )}
+        </View>
         <TouchableOpacity style={styles.partnerCard} onPress={() => router.push('/partner-program')} activeOpacity={0.86} testID="profile-partner-program">
           <View style={styles.partnerIcon}><Feather name="dollar-sign" size={21} color="#FFD700" /></View>
           <View style={styles.partnerCopy}><View style={styles.partnerTitleRow}><Text style={styles.partnerTitle}>Partner Program</Text><Text style={styles.partnerBadge}>EARN PASSIVE INCOME</Text></View><Text style={styles.partnerSubtitle}>Build your network. Scale your revenue.</Text></View>
@@ -478,6 +649,26 @@ function Metric({ label, value, color = c.foreground }: { label: string; value: 
   return <View style={styles.metric}><Text style={styles.metricLabel}>{label}</Text><Text style={[styles.metricValue, { color }]}>{value}</Text></View>;
 }
 
+function EvalRow({ label, value, ok }: { label: string; value: string; ok: boolean }) {
+  return (
+    <View
+      style={styles.evalRow}
+      accessibilityRole="text"
+      accessibilityLabel={`${label}: ${value}. ${ok ? 'Requirement met' : 'Requirement not met'}`}
+    >
+      <View style={styles.evalRowLeft}>
+        <Feather
+          name={ok ? 'check-circle' : 'alert-circle'}
+          size={13}
+          color={ok ? c.success : c.destructive}
+        />
+        <Text style={styles.evalRowLabel}>{label}</Text>
+      </View>
+      <Text style={[styles.evalRowValue, { color: ok ? c.success : c.destructive }]}>{value}</Text>
+    </View>
+  );
+}
+
 function Banner({ icon, title, subtitle, onPress, testID }: { icon: IconName; title: string; subtitle: string; onPress: () => void; testID?: string }) {
   return <TouchableOpacity style={styles.banner} onPress={onPress} testID={testID}><View style={styles.bannerIcon}><Feather name={icon} size={22} color={c.primary} /></View><View style={styles.bannerCopy}><Text style={styles.bannerTitle}>{title}</Text><Text style={styles.bannerSubtitle}>{subtitle}</Text></View><Feather name="arrow-up-right" size={18} color={c.primary} /></TouchableOpacity>;
 }
@@ -509,8 +700,23 @@ const styles = StyleSheet.create({
   walletLabel: { color: c.mutedForeground, fontSize: 9, letterSpacing: 1, fontFamily: 'Inter_700Bold' },
   walletBalance: { color: c.foreground, fontSize: 26, fontFamily: 'Inter_700Bold', marginTop: 5 },
   cashBalance: { color: c.success, fontSize: 20, fontFamily: 'Inter_700Bold', marginTop: 5 },
-  payout: { borderColor: c.primary, borderWidth: 1, borderRadius: 16, paddingHorizontal: 11, paddingVertical: 7 },
+  walletColumn: { flex: 1, paddingRight: 12 },
+  walletHint: { color: c.mutedForeground, fontSize: 10, marginTop: 6, lineHeight: 14 },
+  payout: { borderColor: c.primary, borderWidth: 1, borderRadius: 16, paddingHorizontal: 11, paddingVertical: 7, minWidth: 104, alignItems: 'center' },
+  payoutDisabled: { borderColor: c.border, opacity: 0.55 },
   payoutText: { color: c.primary, fontSize: 10, fontFamily: 'Inter_700Bold' },
+  payoutTextDisabled: { color: c.mutedForeground },
+  evalCard: { backgroundColor: c.card, borderColor: c.border, borderWidth: 1, borderRadius: 14, padding: 16, marginBottom: 16 },
+  evalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  evalBadge: { fontSize: 9, letterSpacing: .8, fontFamily: 'Inter_700Bold', borderWidth: 1, borderRadius: 10, paddingHorizontal: 7, paddingVertical: 3 },
+  evalBadgePass: { color: c.success, borderColor: c.success },
+  evalBadgeLocked: { color: c.mutedForeground, borderColor: c.border },
+  evalRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 6 },
+  evalRowLeft: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  evalRowLabel: { color: c.foreground, fontSize: 12 },
+  evalRowValue: { fontSize: 12, fontFamily: 'Inter_700Bold' },
+  evalViolation: { color: c.destructive, fontSize: 11, lineHeight: 16, marginTop: 10 },
+  evalLock: { color: c.mutedForeground, fontSize: 11, lineHeight: 16, marginTop: 4 },
   withdrawText: { color: c.primary, fontSize: 11, fontFamily: 'Inter_700Bold' },
   walletDivider: { height: 1, backgroundColor: c.border, marginTop: 16 },
   partnerCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: c.card, borderColor: '#8B7125', borderWidth: 1, borderRadius: 13, padding: 14, marginBottom: 18 },
