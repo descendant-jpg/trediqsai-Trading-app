@@ -14,8 +14,8 @@ import {
   Inter_500Medium,
   Inter_600SemiBold,
   Inter_700Bold,
-  useFonts,
 } from '@expo-google-fonts/inter';
+import * as Font from 'expo-font';
 import * as Notifications from 'expo-notifications';
 import { Stack, useRouter } from 'expo-router';
 import { usePendingRouteRedirect } from '@/lib/usePendingRouteRedirect';
@@ -173,16 +173,32 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
-  const [fontsLoaded, fontError] = useFonts({
-    Inter_400Regular,
-    Inter_500Medium,
-    Inter_600SemiBold,
-    Inter_700Bold,
-  });
+  const [fontsReady, setFontsReady] = useState(false);
 
-  // Custom fonts are progressive enhancement: the provider tree always mounts
-  // immediately and falls back to platform fonts while Inter loads, so a slow
-  // or failed font fetch can never blank the whole app.
+  // Inter is progressive enhancement. In particular, fontfaceobserver can
+  // reject in web previews when an asset misses its six-second deadline. Catch
+  // that rejection here, then keep rendering with React Native's system-font
+  // fallback instead of making the root navigation depend on a custom font.
+  useEffect(() => {
+    let mounted = true;
+    const loadFonts = async () => {
+      try {
+        await Font.loadAsync({
+          Inter_400Regular,
+          Inter_500Medium,
+          Inter_600SemiBold,
+          Inter_700Bold,
+        });
+      } catch (error) {
+        console.warn('Custom fonts were unavailable; using system fonts instead.', error);
+      } finally {
+        if (mounted) setFontsReady(true);
+      }
+    };
+
+    void loadFonts();
+    return () => { mounted = false; };
+  }, []);
 
   // Fetch the Stripe publishable key from the server so it is never baked
   // into the bundle as a hardcoded string.
@@ -205,10 +221,10 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
-    if (fontsLoaded || fontError) {
+    if (fontsReady) {
       if (Platform.OS !== 'web') void SplashScreen.hideAsync();
     }
-  }, [fontsLoaded, fontError]);
+  }, [fontsReady]);
 
 
   return (
