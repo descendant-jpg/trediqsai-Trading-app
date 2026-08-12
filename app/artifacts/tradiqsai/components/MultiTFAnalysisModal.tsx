@@ -12,7 +12,16 @@ type Analysis = {
 
 type Props = { symbol: string | null; onClose: () => void; onTrade: (symbol: string) => void };
 const colorFor = (value: Direction) => value === 'BULLISH' ? '#21D99B' : value === 'BEARISH' ? '#FF6174' : '#8A929D';
-const money = (value: number) => `$${value.toLocaleString(undefined, { maximumFractionDigits: value >= 100 ? 2 : 5 })}`;
+const money = (value?: number) => `$${Number.isFinite(value) ? value!.toLocaleString(undefined, { maximumFractionDigits: value! >= 100 ? 2 : 5 }) : '—'}`;
+const isDirection = (value: unknown): value is Direction => value === 'BULLISH' || value === 'BEARISH' || value === 'NEUTRAL';
+function isAnalysis(value: unknown): value is Analysis {
+  const data = value as Partial<Analysis> | null;
+  return !!data && typeof data.symbol === 'string' && Number.isFinite(data.price)
+    && Number.isFinite(data.change24h) && Number.isFinite(data.confluence) && isDirection(data.direction)
+    && Array.isArray(data.timeframes) && !!data.levels && Number.isFinite(data.levels.support)
+    && Number.isFinite(data.levels.resistance) && Number.isFinite(data.levels.liquidity)
+    && typeof data.narrative === 'string';
+}
 
 function Skeleton() {
   return <View style={styles.skeleton}><ActivityIndicator color="#00F0FF" /><Text style={styles.loadingText}>Building multi-timeframe confluence…</Text>{[1, 2, 3, 4].map((key) => <View key={key} style={styles.skeletonLine} />)}</View>;
@@ -20,7 +29,7 @@ function Skeleton() {
 
 export function MultiTFAnalysisModal({ symbol, onClose, onTrade }: Props) {
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -35,6 +44,7 @@ export function MultiTFAnalysisModal({ symbol, onClose, onTrade }: Props) {
           method: 'POST',
           body: JSON.stringify({ symbol }),
         });
+        if (!isAnalysis(result)) throw new Error('Analysis response had an invalid shape.');
         if (active) setAnalysis(result);
       } catch (err) {
         console.warn('Multi-timeframe analysis request failed.', err);
@@ -48,29 +58,30 @@ export function MultiTFAnalysisModal({ symbol, onClose, onTrade }: Props) {
   }, [symbol]);
 
   if (!symbol) return null;
-  const sentimentColor = analysis ? colorFor(analysis.direction) : '#00F0FF';
+  const readyAnalysis = isAnalysis(analysis) ? analysis : null;
+  const sentimentColor = readyAnalysis ? colorFor(readyAnalysis.direction) : '#00F0FF';
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <View style={styles.sheet}>
           <View style={styles.handle} />
           <View style={styles.header}>
-            <View><Text style={styles.eyebrow}>MULTI-TIMEFRAME BREAKDOWN</Text><Text style={styles.symbol}>{analysis?.symbol ?? symbol}</Text></View>
+            <View><Text style={styles.eyebrow}>MULTI-TIMEFRAME BREAKDOWN</Text><Text style={styles.symbol}>{readyAnalysis?.symbol ?? symbol}</Text></View>
             <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close multi-timeframe analysis" style={styles.close}><Feather name="x" size={20} color="#F4F7FB" /></Pressable>
           </View>
-          {loading ? <Skeleton /> : error ? (
-            <View style={styles.error}><Feather name="wifi-off" size={22} color="#FF6174" /><Text style={styles.errorText}>{error}</Text><Pressable onPress={() => setAnalysis(null)} style={styles.retry}><Text style={styles.retryText}>CLOSE</Text></Pressable></View>
-          ) : analysis ? (
+          {loading || !readyAnalysis && !error ? <Skeleton /> : error ? (
+            <View style={styles.error}><Feather name="wifi-off" size={22} color="#FF6174" /><Text style={styles.errorText}>{error}</Text><Pressable onPress={onClose} style={styles.retry} accessibilityRole="button" accessibilityLabel="Close unavailable analysis"><Text style={styles.retryText}>CLOSE</Text></Pressable></View>
+          ) : readyAnalysis ? (
             <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-              <View style={styles.priceRow}><Text style={styles.price}>{money(analysis.price)}</Text><Text style={[styles.change, { color: analysis.change24h >= 0 ? '#21D99B' : '#FF6174' }]}>{analysis.change24h >= 0 ? '+' : ''}{analysis.change24h.toFixed(2)}% 24H</Text></View>
-              <View style={[styles.confluence, { borderColor: `${sentimentColor}77` }]}><View style={[styles.gauge, { borderColor: sentimentColor }]}><Text style={[styles.gaugeValue, { color: sentimentColor }]}>{analysis.confluence}%</Text></View><View><Text style={[styles.confluenceTitle, { color: sentimentColor }]}>{analysis.direction} CONFLUENCE</Text><Text style={styles.confluenceSub}>Calculated from live provider candle structure</Text></View></View>
+              <View style={styles.priceRow}><Text style={styles.price}>{money(readyAnalysis?.price)}</Text><Text style={[styles.change, { color: (readyAnalysis?.change24h ?? 0) >= 0 ? '#21D99B' : '#FF6174' }]}>{(readyAnalysis?.change24h ?? 0) >= 0 ? '+' : ''}{(readyAnalysis?.change24h ?? 0).toFixed(2)}% 24H</Text></View>
+              <View style={[styles.confluence, { borderColor: `${sentimentColor}77` }]}><View style={[styles.gauge, { borderColor: sentimentColor }]}><Text style={[styles.gaugeValue, { color: sentimentColor }]}>{readyAnalysis?.confluence ?? 0}%</Text></View><View><Text style={[styles.confluenceTitle, { color: sentimentColor }]}>{readyAnalysis?.direction ?? 'NEUTRAL'} CONFLUENCE</Text><Text style={styles.confluenceSub}>Calculated from live provider candle structure</Text></View></View>
               <Text style={styles.sectionLabel}>TIMEFRAME STRUCTURE</Text>
-              {analysis.timeframes?.map((frame) => <View key={frame.timeframe} style={styles.frame}><View><Text style={styles.frameTime}>{frame.timeframe}</Text><Text style={styles.frameLabel}>{frame.label}</Text></View><View style={styles.frameRight}><Text style={[styles.frameDirection, { color: colorFor(frame.direction) }]}>{frame.direction}</Text><Text style={styles.frameChange}>{frame.changePercent >= 0 ? '+' : ''}{frame.changePercent.toFixed(2)}%</Text></View></View>)}
-              <View style={styles.levels}><Text style={styles.sectionLabel}>KEY PRICE LEVELS</Text>{[['Support Zone', analysis.levels.support, '#21D99B'], ['Resistance Zone', analysis.levels.resistance, '#FF6174'], ['Key Liquidity Pool', analysis.levels.liquidity, '#00F0FF']].map(([label, value, color]) => <View key={String(label)} style={styles.levelRow}><Text style={styles.levelLabel}>{label}</Text><Text style={[styles.levelValue, { color: String(color) }]}>{money(Number(value))}</Text></View>)}</View>
-              <View style={styles.narrative}><View style={styles.narrativeHead}><Feather name="cpu" size={15} color="#00F0FF" /><Text style={styles.narrativeLabel}>ORACLE TECHNICAL NARRATIVE</Text></View><Text style={styles.narrativeText}>{analysis.narrative}</Text></View>
+              {readyAnalysis?.timeframes?.map((frame) => <View key={frame.timeframe} style={styles.frame}><View><Text style={styles.frameTime}>{frame.timeframe ?? '—'}</Text><Text style={styles.frameLabel}>{frame.label ?? 'Market structure'}</Text></View><View style={styles.frameRight}><Text style={[styles.frameDirection, { color: colorFor(frame.direction ?? 'NEUTRAL') }]}>{frame.direction ?? 'NEUTRAL'}</Text><Text style={styles.frameChange}>{(frame.changePercent ?? 0) >= 0 ? '+' : ''}{(frame.changePercent ?? 0).toFixed(2)}%</Text></View></View>)}
+              <View style={styles.levels}><Text style={styles.sectionLabel}>KEY PRICE LEVELS</Text>{[['Support Zone', readyAnalysis?.levels?.support, '#21D99B'], ['Resistance Zone', readyAnalysis?.levels?.resistance, '#FF6174'], ['Key Liquidity Pool', readyAnalysis?.levels?.liquidity, '#00F0FF']].map(([label, value, color]) => <View key={String(label)} style={styles.levelRow}><Text style={styles.levelLabel}>{label}</Text><Text style={[styles.levelValue, { color: String(color) }]}>{money(Number(value))}</Text></View>)}</View>
+              <View style={styles.narrative}><View style={styles.narrativeHead}><Feather name="cpu" size={15} color="#00F0FF" /><Text style={styles.narrativeLabel}>ORACLE TECHNICAL NARRATIVE</Text></View><Text style={styles.narrativeText}>{readyAnalysis?.narrative ?? 'Technical narrative is unavailable.'}</Text></View>
             </ScrollView>
           ) : null}
-          <Pressable disabled={!analysis} onPress={() => analysis && onTrade(analysis.symbol)} style={[styles.trade, !analysis && styles.tradeDisabled]} accessibilityRole="button" accessibilityLabel={`Trade ${symbol} now`}><Text style={styles.tradeText}>TRADE {analysis?.symbol ?? symbol} NOW</Text><Feather name="arrow-up-right" size={18} color="#061014" /></Pressable>
+          <Pressable disabled={!readyAnalysis} onPress={() => readyAnalysis && onTrade(readyAnalysis.symbol)} style={[styles.trade, !readyAnalysis && styles.tradeDisabled]} accessibilityRole="button" accessibilityLabel={`Trade ${symbol} now`}><Text style={styles.tradeText}>TRADE {readyAnalysis?.symbol ?? symbol} NOW</Text><Feather name="arrow-up-right" size={18} color="#061014" /></Pressable>
         </View>
       </View>
     </Modal>
