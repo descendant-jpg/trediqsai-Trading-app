@@ -10,13 +10,17 @@ import {
 } from 'react-native';
 import * as FileSystem from 'expo-file-system';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { customFetch } from '@workspace/api-client-react';
+import { customFetch, ApiError } from '@workspace/api-client-react';
+import { supabase } from '@/utils/supabase';
+
+type ErrorKind = 'unauthenticated' | 'pro_required' | 'generic' | null;
 
 export default function AIAnalysisScreen() {
   const router = useRouter();
   const { imageUri, mode = 'analysis', mediaType = 'image/jpeg' } = useLocalSearchParams<{ imageUri?: string; mode?: 'analysis' | 'signal'; mediaType?: string }>();
   const [loading, setLoading] = useState(true);
   const [analysisResult, setAnalysisResult] = useState('');
+  const [errorKind, setErrorKind] = useState<ErrorKind>(null);
 
   useEffect(() => {
     let active = true;
@@ -40,7 +44,15 @@ export default function AIAnalysisScreen() {
         if (!response.analysis) throw new Error('The analysis service returned no text.');
         if (active) setAnalysisResult(response.analysis);
       } catch (error) {
-        if (active) setAnalysisResult(error instanceof Error ? error.message : 'Unable to analyze this chart.');
+        if (!active) return;
+        if (error instanceof ApiError && error.status === 401) {
+          setErrorKind('unauthenticated');
+        } else if (error instanceof ApiError && error.status === 403) {
+          setErrorKind('pro_required');
+        } else {
+          setErrorKind('generic');
+          setAnalysisResult(error instanceof Error ? error.message : 'Unable to analyze this chart.');
+        }
       } finally {
         if (active) setLoading(false);
       }
@@ -48,6 +60,55 @@ export default function AIAnalysisScreen() {
     analyze();
     return () => { active = false; };
   }, [imageUri]);
+
+  const renderError = () => {
+    if (errorKind === 'unauthenticated') {
+      return (
+        <View style={styles.gateCard}>
+          <Text style={styles.gateIcon}>🔒</Text>
+          <Text style={styles.gateTitle}>Sign in to use Chart Analysis</Text>
+          <Text style={styles.gateBody}>You need an account to access AI-powered chart analysis.</Text>
+          <TouchableOpacity
+            style={styles.ctaButton}
+            onPress={async () => {
+              await supabase.auth.signOut();
+            }}
+          >
+            <Text style={styles.ctaText}>SIGN IN</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.dismissButton} onPress={() => router.back()}>
+            <Text style={styles.dismissText}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    if (errorKind === 'pro_required') {
+      return (
+        <View style={styles.gateCard}>
+          <Text style={styles.gateIcon}>⭐</Text>
+          <Text style={styles.gateTitle}>Chart Analysis is a Pro feature</Text>
+          <Text style={styles.gateBody}>Upgrade to Pro or Elite to unlock AI-powered chart analysis and signal generation.</Text>
+          <TouchableOpacity
+            style={styles.ctaButton}
+            onPress={() => router.push({ pathname: '/paywall', params: { defaultTier: 'ELITE' } } as never)}
+          >
+            <Text style={styles.ctaText}>UPGRADE NOW</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.dismissButton} onPress={() => router.back()}>
+            <Text style={styles.dismissText}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.resultCard}>
+        <Text style={styles.resultLabel}>{mode === 'signal' ? 'SIGNAL PLAN' : 'STRUCTURED TRADING BIAS'}</Text>
+        <Text style={styles.result}>{analysisResult}</Text>
+      </View>
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -63,14 +124,13 @@ export default function AIAnalysisScreen() {
         <ScrollView contentContainerStyle={styles.content}>
           <Text style={styles.eyebrow}>TRADIQS VISION ENGINE</Text>
           <Text style={styles.title}>Chart intelligence.</Text>
-          {imageUri ? <Image source={{ uri: imageUri }} style={styles.image} resizeMode="cover" /> : null}
-          <View style={styles.resultCard}>
-            <Text style={styles.resultLabel}>{mode === 'signal' ? 'SIGNAL PLAN' : 'STRUCTURED TRADING BIAS'}</Text>
-            <Text style={styles.result}>{analysisResult}</Text>
-          </View>
-          <TouchableOpacity style={styles.closeButton} onPress={() => router.back()}>
-            <Text style={styles.closeText}>CLOSE ANALYSIS</Text>
-          </TouchableOpacity>
+          {imageUri && !errorKind ? <Image source={{ uri: imageUri }} style={styles.image} resizeMode="cover" /> : null}
+          {renderError()}
+          {!errorKind && (
+            <TouchableOpacity style={styles.closeButton} onPress={() => router.back()}>
+              <Text style={styles.closeText}>CLOSE ANALYSIS</Text>
+            </TouchableOpacity>
+          )}
         </ScrollView>
       )}
     </View>
@@ -92,4 +152,12 @@ const styles = StyleSheet.create({
   result: { color: '#E7EAF0', fontSize: 14, lineHeight: 22 },
   closeButton: { backgroundColor: '#00F0FF', borderRadius: 10, alignItems: 'center', padding: 17, marginTop: 20 },
   closeText: { color: '#061014', fontSize: 12, fontWeight: '900', letterSpacing: 1.2 },
+  gateCard: { backgroundColor: '#16181D', borderWidth: 1, borderColor: '#29323A', borderRadius: 14, padding: 24, marginTop: 16, alignItems: 'center' },
+  gateIcon: { fontSize: 36, marginBottom: 14 },
+  gateTitle: { color: '#FFF', fontSize: 20, fontWeight: '800', textAlign: 'center', marginBottom: 10 },
+  gateBody: { color: '#7C8490', fontSize: 14, lineHeight: 21, textAlign: 'center', marginBottom: 24 },
+  ctaButton: { backgroundColor: '#00F0FF', borderRadius: 10, alignItems: 'center', paddingVertical: 15, paddingHorizontal: 32, width: '100%', marginBottom: 12 },
+  ctaText: { color: '#061014', fontSize: 12, fontWeight: '900', letterSpacing: 1.2 },
+  dismissButton: { alignItems: 'center', paddingVertical: 10 },
+  dismissText: { color: '#7C8490', fontSize: 13 },
 });
