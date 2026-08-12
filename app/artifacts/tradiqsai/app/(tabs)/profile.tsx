@@ -169,7 +169,7 @@ type ActiveModal =
 export default function ProfileScreen() {
   const router = useRouter();
   const { session, signOut } = useAuth();
-  const { isSubscribed } = useSubscription();
+  const { isSubscribed, isAdmin } = useSubscription();
   const { tradingDayTz, setTradingDayTz } = useTrading();
   const {
     evaluation,
@@ -418,7 +418,7 @@ export default function ProfileScreen() {
             {!!email && <Text style={styles.email}>{email}</Text>}
             <View style={styles.planBadge}>
               <Text style={styles.planText}>
-                {isSubscribed ? 'PRO PLAN' : 'FREE PLAN'}
+                {isAdmin ? 'ADMIN · PRO PLAN' : isSubscribed ? 'PRO PLAN' : 'FREE PLAN'}
               </Text>
             </View>
           </View>

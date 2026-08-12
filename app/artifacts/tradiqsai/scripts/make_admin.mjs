@@ -32,15 +32,21 @@ if (!user) {
 
 const { data: profile, error } = await supabase
   .from('profiles')
-  .update({ role: 'admin' })
+  .update({
+    role: 'admin',
+    tier: 'pro',
+    // Staff overrides win over billing-derived tiers in the API entitlement
+    // check, so an admin's internal access cannot be reset by billing sync.
+    manual_tier_override: 'pro',
+  })
   .eq('id', user.id)
-  .select('id, email, username, role')
+  .select('id, email, username, role, tier, manual_tier_override')
   .single();
 
 if (error) {
   if (error.code === '42703' || error.code === 'PGRST204') {
     throw new Error(
-      'The profiles.role column is missing. Apply supabase/migrations/017_admin_roles.sql in the Supabase SQL editor, then rerun this script.',
+      'A required admin entitlement column is missing. Apply migrations 010_profile_tier_columns.sql and 017_admin_roles.sql in the Supabase SQL editor, then rerun this script.',
     );
   }
   throw error;

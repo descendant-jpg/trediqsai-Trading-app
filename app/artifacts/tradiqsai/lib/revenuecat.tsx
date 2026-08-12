@@ -6,6 +6,7 @@ import Constants from "expo-constants";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "@/context/AuthContext";
 import { isSupabaseConfigured, supabase } from "@/utils/supabase";
+import { hasProfileProAccess, isProfileAdmin, type ProfileEntitlement } from "@/lib/profileEntitlements";
 
 const SUBSCRIPTION_CACHE_KEY = "revenuecat.isSubscribed";
 
@@ -162,20 +163,29 @@ function useSubscriptionContext() {
   const activeEntitlement =
     customerInfoQuery.data?.entitlements.active?.[REVENUECAT_ENTITLEMENT_IDENTIFIER];
 
-  // Check the Supabase profile for a server-granted Stripe Elite entitlement.
-  // This is the second leg of the unified entitlement authority: RevenueCat
-  // for in-app store purchases, Supabase subscription_tier for Stripe payers.
+  // Read the server-owned profile entitlement. RevenueCat is for store
+  // purchases; the profile covers server-granted paid tiers and staff admins.
+  // This is display/access state only—sensitive API actions verify it again.
   const [supabaseIsSubscribed, setSupabaseIsSubscribed] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   useEffect(() => {
-    if (!userId || !isSupabaseConfigured) return;
+    if (!userId || !isSupabaseConfigured) {
+      setSupabaseIsSubscribed(false);
+      setIsAdmin(false);
+      return;
+    }
     let cancelled = false;
     void (async () => {
       const { data } = await supabase
         .from("profiles")
-        .select("subscription_tier")
+        .select("role, tier, manual_tier_override")
         .eq("id", userId)
         .maybeSingle();
-      if (!cancelled) setSupabaseIsSubscribed(data?.subscription_tier === "pro");
+      if (!cancelled) {
+        const profile = data as ProfileEntitlement | null;
+        setSupabaseIsSubscribed(hasProfileProAccess(profile));
+        setIsAdmin(isProfileAdmin(profile));
+      }
     })().catch(() => {});
     return () => {
       cancelled = true;
@@ -183,8 +193,7 @@ function useSubscriptionContext() {
   }, [userId]);
 
   // Prefer live RevenueCat data; fall back to the cached value while loading.
-  // OR grant access when the Supabase profile has subscription_tier = 'pro'
-  // (set server-side after a verified Stripe payment).
+  // OR grant access from the server-owned profile tier/override/admin role.
   const rcIsSubscribed = liveIsSubscribed !== null ? liveIsSubscribed : cachedIsSubscribed === true;
   const isSubscribed = rcIsSubscribed || supabaseIsSubscribed;
 
@@ -207,6 +216,7 @@ function useSubscriptionContext() {
     offerings: offeringsQuery.data,
     activeEntitlement,
     isSubscribed,
+    isAdmin,
     isWindingDown,
     windDownExpirationDate,
     isLoading: subscriptionResolving || (!isSubscribed && offeringsQuery.isLoading),
