@@ -1198,7 +1198,13 @@ begin
 
   select * into cycle_row
     from public.payout_evaluation_cycles
-   where user_id = caller and cycle_start = cycle;
+   where user_id = caller and cycle_start = cycle
+   for update;
+
+  -- The cycle row is locked above before any eligibility or payout-cap
+  -- calculation. The request RPC also locks every existing reservation row
+  -- before calling this summary, so the monthly total is stable for the
+  -- entire read/validate/insert transaction.
 
   -- An active day is credited only when a verified trade settles. Open trades
   -- (including tiny, never-closed positions) do not count, and the calendar

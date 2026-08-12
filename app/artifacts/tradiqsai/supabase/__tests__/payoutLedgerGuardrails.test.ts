@@ -124,6 +124,7 @@ describe('payout evaluation ledger', () => {
 
 describe('payout request', () => {
   const request = functionBody('request_evaluation_payout');
+  const summary = functionBody('payout_evaluation_summary');
 
   it('recomputes eligibility under a per-user lock before reserving', () => {
     const lockAt = request.indexOf('pg_advisory_xact_lock');
@@ -140,6 +141,18 @@ describe('payout request', () => {
     const summaryAt = request.indexOf('public.payout_evaluation_summary()');
     expect(reservationLockAt).toBeGreaterThan(advisoryAt);
     expect(request.slice(reservationLockAt, summaryAt)).toMatch(/for update/);
+  });
+
+  it('locks evaluation status and monthly totals before calculating eligibility', () => {
+    expect(summary).toMatch(/from public\.profiles[\s\S]*?where id = caller for update/);
+    const cycleSelect = summary.slice(summary.indexOf('select * into cycle_row'), summary.indexOf('-- The cycle row is locked'));
+    expect(cycleSelect).toMatch(/from public\.payout_evaluation_cycles[\s\S]*?for update/);
+    const reservationLockAt = request.indexOf('from public.payout_requests');
+    const summaryAt = request.indexOf('public.payout_evaluation_summary()');
+    const insertAt = request.indexOf('insert into public.payout_requests');
+    expect(reservationLockAt).toBeLessThan(summaryAt);
+    expect(summaryAt).toBeLessThan(insertAt);
+    expect(request).toMatch(/pg_advisory_xact_lock/);
   });
 
   it('refuses to insert when the recomputed summary is not eligible', () => {
