@@ -20,6 +20,7 @@ afterEach(() => {
 
 describe("market news publisher", () => {
   it("uses development articles without a provider key and writes only unknown records", async () => {
+    vi.stubEnv("FINNHUB_API_KEY", "");
     const { publishMarketNews } = await loadModule();
     const calls: Array<{ url: string; init?: RequestInit }> = [];
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {

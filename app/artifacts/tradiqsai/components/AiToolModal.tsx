@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Modal,
   Platform,
   ScrollView,
@@ -13,7 +14,7 @@ import {
   View,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { fetchMarketNews, type MarketNews } from '@/services/supabaseService';
+import { customFetch } from '@workspace/api-client-react';
 
 export type AiToolKind =
   | 'code'
@@ -33,6 +34,7 @@ export type AiToolModalTool = {
 const CYAN = '#00F0FF';
 const GREEN = '#00E676';
 const RED = '#FF6174';
+type LiveNews = { headline: string; summary: string; url: string; image: string; datetime: number };
 
 function notify(title: string, message: string) {
   if (Platform.OS === 'web') window.alert(`${title}\n\n${message}`);
@@ -46,13 +48,16 @@ export function AiToolModal({ tool, onClose }: { tool: AiToolModalTool; onClose:
   const [stopLoss, setStopLoss] = useState('40');
   const [journal, setJournal] = useState('');
   const [symbol, setSymbol] = useState('EURUSD');
-  const [news, setNews] = useState<MarketNews[]>([]);
+  const [news, setNews] = useState<LiveNews[]>([]);
   const [newsState, setNewsState] = useState<'idle' | 'loading' | 'error' | 'ready'>('idle');
+  const [selectedArticle, setSelectedArticle] = useState<LiveNews | null>(null);
+  const [sentiment, setSentiment] = useState('');
+  const [sentimentState, setSentimentState] = useState<'idle' | 'loading' | 'error' | 'ready'>('idle');
 
   const loadNews = async () => {
     setNewsState('loading');
     try {
-      setNews(await fetchMarketNews());
+      setNews(await customFetch<LiveNews[]>('/api/market-news'));
       setNewsState('ready');
     } catch {
       setNewsState('error');
@@ -62,6 +67,22 @@ export function AiToolModal({ tool, onClose }: { tool: AiToolModalTool; onClose:
   useEffect(() => {
     if (tool.kind === 'news') void loadNews();
   }, [tool.kind]);
+
+  const analyzeArticle = async (article: LiveNews) => {
+    setSelectedArticle(article);
+    setSentimentState('loading');
+    try {
+      const result = await customFetch<{ analysis: string }>('/api/market-news/sentiment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ headline: article.headline, summary: article.summary }),
+      });
+      setSentiment(result.analysis);
+      setSentimentState('ready');
+    } catch {
+      setSentimentState('error');
+    }
+  };
 
   const lotSize = ((Number(balance) || 0) * ((Number(risk) || 0) / 100) / ((Number(stopLoss) || 1) * 10)).toFixed(2);
   const generatedCode = prompt
@@ -103,7 +124,9 @@ export function AiToolModal({ tool, onClose }: { tool: AiToolModalTool; onClose:
             {tool.kind === 'psychology' && <><Text style={styles.hint}>Journal your trade thesis before you enter. The coach flags emotional-risk language.</Text><TextInput value={journal} onChangeText={setJournal} placeholder="What is the setup and how are you feeling?" placeholderTextColor="#7C8490" style={styles.input} multiline /><View style={[styles.result, { borderColor: emotion[1] }]}><Text style={[styles.resultValue, { color: emotion[1], fontSize: 17 }]}>{emotion[0]}</Text><Text style={styles.hint}>Risk rule: if emotion is high, reduce size or wait for confirmation.</Text></View></>}
             {tool.kind === 'liquidity' && <><Text style={styles.hint}>Scan a market for likely liquidity pools and fair-value-gap zones.</Text><TextInput value={symbol} onChangeText={setSymbol} autoCapitalize="characters" placeholder="EURUSD" placeholderTextColor="#7C8490" style={styles.input} /><View style={styles.result}><Text style={styles.status}>{symbol || 'MARKET'} · LIQUIDITY MAP</Text><Text style={styles.item}>Buy-side pool · recent swing high</Text><Text style={styles.item}>Fair value gap · intraday imbalance</Text><Text style={styles.item}>Sell-side pool · recent swing low</Text></View></>}
             {tool.kind === 'broker' && <><Text style={styles.hint}>Compare execution characteristics before connecting an account.</Text>{[['Oanda', 'Forex focus · transparent pricing'], ['Exness', 'High leverage · global CFDs'], ['Binance', 'Crypto liquidity · spot and derivatives']].map(([broker, detail]) => <View style={styles.broker} key={broker}><Text style={styles.item}>{broker}</Text><Text style={styles.hint}>{detail}</Text></View>)}</>}
-            {tool.kind === 'news' && <NewsWorkspace state={newsState} news={news} onRetry={() => void loadNews()} />}
+            {tool.kind === 'news' && (selectedArticle
+              ? <NewsAnalysis article={selectedArticle} state={sentimentState} analysis={sentiment} onBack={() => setSelectedArticle(null)} />
+              : <NewsWorkspace state={newsState} news={news} onRetry={() => void loadNews()} onArticle={(article) => void analyzeArticle(article)} />)}
           </ScrollView>
         </View>
       </View>
@@ -117,11 +140,14 @@ function Field({ label, value, onChange }: { label: string; value: string; onCha
 function Matrix({ title, rows }: { title: string; rows: string[][] }) {
   return <><Text style={styles.hint}>{title}</Text>{rows.map(([left, right, value]) => <View style={styles.row} key={`${left}-${right}`}><Text style={styles.item}>{left}</Text><Text style={styles.hint}>vs {right}</Text><Text style={[styles.value, { color: value.startsWith('-') ? RED : GREEN }]}>{value}</Text></View>)}</>;
 }
-function NewsWorkspace({ state, news, onRetry }: { state: string; news: MarketNews[]; onRetry: () => void }) {
-  if (state === 'loading' || state === 'idle') return <View style={styles.loading}><ActivityIndicator color={CYAN} /><Text style={styles.hint}>Loading high-impact market news…</Text></View>;
-  if (state === 'error') return <TouchableOpacity style={styles.retry} onPress={onRetry}><Text style={styles.primaryText}>NEWS UNAVAILABLE · TAP TO RETRY</Text></TouchableOpacity>;
+function NewsWorkspace({ state, news, onRetry, onArticle }: { state: string; news: LiveNews[]; onRetry: () => void; onArticle: (article: LiveNews) => void }) {
+  if (state === 'loading' || state === 'idle') return <View style={styles.loading}><ActivityIndicator color={CYAN} /><View style={styles.skeleton} /><View style={styles.skeleton} /><Text style={styles.hint}>Loading live market headlines…</Text></View>;
+  if (state === 'error') return <TouchableOpacity style={styles.retry} onPress={onRetry}><Text style={styles.primaryText}>REFRESH LIVE NEWS</Text></TouchableOpacity>;
   if (!news.length) return <Text style={styles.hint}>No market headlines are available yet. Pull to refresh later.</Text>;
-  return <>{news.slice(0, 6).map((article) => <View style={styles.news} key={article.id}><Text style={styles.status}>{article.sentiment.toUpperCase()} · {article.category}</Text><Text style={styles.item}>{article.headline}</Text><Text style={styles.hint}>{article.ai_summary}</Text></View>)}</>;
+  return <>{news.map((article) => <TouchableOpacity style={styles.news} key={`${article.url}-${article.datetime}`} onPress={() => onArticle(article)}><View style={styles.newsTop}>{article.image ? <Image source={{ uri: article.image }} style={styles.newsImage} /> : <Feather name="radio" size={20} color={CYAN} />}<Text style={styles.status}>{new Date(article.datetime * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text></View><Text style={styles.item}>{article.headline}</Text><Text style={styles.hint} numberOfLines={3}>{article.summary}</Text><Text style={styles.openAnalysis}>ANALYZE SENTIMENT ›</Text></TouchableOpacity>)}</>;
+}
+function NewsAnalysis({ article, state, analysis, onBack }: { article: LiveNews; state: string; analysis: string; onBack: () => void }) {
+  return <><TouchableOpacity onPress={onBack}><Text style={styles.openAnalysis}>‹ BACK TO MARKET RADAR</Text></TouchableOpacity><View style={styles.news}><Text style={styles.item}>{article.headline}</Text><Text style={styles.hint}>{article.summary}</Text></View>{state === 'loading' ? <View style={styles.loading}><ActivityIndicator color={CYAN} /><Text style={styles.hint}>AI is evaluating market impact…</Text></View> : state === 'error' ? <Text style={styles.hint}>Sentiment analysis is temporarily unavailable. Try another headline shortly.</Text> : <View style={styles.sentiment}><Text style={styles.status}>AI MARKET IMPACT</Text><Text style={styles.analysis}>{analysis}</Text></View>}</>;
 }
 
 const styles = StyleSheet.create({
@@ -137,5 +163,5 @@ const styles = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 9 }, heat: { width: '23%', minHeight: 70, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#293441', borderRadius: 10, backgroundColor: '#151A21' }, heatName: { color: '#FFF', fontWeight: '800' }, heatValue: { marginTop: 5, fontWeight: '800', fontSize: 12 },
   result: { borderRadius: 12, borderWidth: 1, borderColor: '#284A55', backgroundColor: '#101B20', padding: 14, gap: 8 }, resultValue: { color: GREEN, fontSize: 23, fontWeight: '900' }, item: { color: '#EDF2F7', fontSize: 13, fontWeight: '700', lineHeight: 19 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 13, borderRadius: 10, backgroundColor: '#171B22' }, value: { marginLeft: 'auto', fontWeight: '900' },
-  broker: { borderRadius: 11, borderWidth: 1, borderColor: '#303844', backgroundColor: '#15191F', padding: 14, gap: 4 }, loading: { alignItems: 'center', gap: 12, paddingVertical: 34 }, retry: { backgroundColor: '#20363D', borderRadius: 10, padding: 15, alignItems: 'center' }, news: { borderRadius: 11, borderWidth: 1, borderColor: '#303844', backgroundColor: '#15191F', padding: 14, gap: 7 },
+  broker: { borderRadius: 11, borderWidth: 1, borderColor: '#303844', backgroundColor: '#15191F', padding: 14, gap: 4 }, loading: { alignItems: 'center', gap: 12, paddingVertical: 34 }, retry: { backgroundColor: '#20363D', borderRadius: 10, padding: 15, alignItems: 'center' }, news: { borderRadius: 11, borderWidth: 1, borderColor: '#303844', backgroundColor: '#15191F', padding: 14, gap: 7 }, newsTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, newsImage: { width: 42, height: 30, borderRadius: 5, backgroundColor: '#202834' }, openAnalysis: { color: CYAN, fontSize: 10, fontWeight: '900', letterSpacing: .7, marginTop: 3 }, sentiment: { borderRadius: 12, borderWidth: 1, borderColor: '#275160', backgroundColor: '#0B171B', padding: 16, gap: 10 }, analysis: { color: '#EAF8FA', fontSize: 14, lineHeight: 22 }, skeleton: { width: '100%', height: 76, borderRadius: 10, backgroundColor: '#1B222B' },
 });

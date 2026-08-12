@@ -1,0 +1,27 @@
+CRITICAL FORCE WORK DIRECTIVE: WIRE UP LIVE MARKET NEWS AND AI SENTIMENT USING FINNHUB.
+
+Review replit.md for our project rules. The Market Radar and AI News Analyser modals are successfully opening but show "News Unavailable". We are going to connect them to the Finnhub API via our Node.js/Express backend.
+
+### 1. Build the Secure Backend News Route
+- Create a new secure route in the Express backend: `GET /api/market-news`.
+- In this route, make an HTTP GET request to Finnhub's news endpoint: 
+  `https://finnhub.io/api/v1/news?category=general&token=${process.env.FINNHUB_API_KEY}`
+- Ensure the backend reads the `FINNHUB_API_KEY` from the environment variables safely.
+- Map the Finnhub response to a clean, standardized JSON array containing exactly what the frontend needs: `headline` (title), `summary` (description), `url` (link), `image`, and `datetime`.
+- Implement a 5-minute memory cache (e.g., using `node-cache` or a simple timestamp variable) to avoid rate-limiting the Finnhub API on multiple frontend re-renders.
+
+### 2. Wire the Market Radar (Frontend)
+- Update the `Market Radar` component to fetch from our new `GET /api/market-news` endpoint on mount.
+- Remove the "News Unavailable" error state.
+- Render the live fetched news as a sleek, scrollable list of interactive cards. Include a loading skeleton state while fetching.
+
+### 3. Wire the AI News Analyser 
+- Update the `AI News Analyser` to accept a selected news headline/summary as a prop or route parameter.
+- Add an `onPress` handler to the `Market Radar` news cards that routes the user to the `AI News Analyser`, passing the tapped article's text.
+- Connect the `AI News Analyser` to our existing Anthropic/AI backend endpoint. Prompt the AI to evaluate the headline and return a structured response: 
+  1. Overall Sentiment (Bullish/Bearish/Neutral)
+  2. Affected Assets (e.g., USD, BTC, Gold)
+  3. A 2-sentence impact breakdown.
+- Display this AI analysis in a premium, formatted UI within the modal.
+
+EXECUTION REQUIREMENT: Prove the integration works by confirming the backend route successfully authenticates with Finnhub, the Market Radar displays real headlines, and tapping a headline passes it to the AI for sentiment analysis.

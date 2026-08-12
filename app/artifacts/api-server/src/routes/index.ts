@@ -7,6 +7,7 @@ import autopilotRouter from "./autopilot";
 import { createArcadeRouter } from "./arcade";
 import paymentRouter from "./payment";
 import multiTimeframeRouter from "./multiTimeframe";
+import marketNewsRouter from "./marketNews";
 
 const router: IRouter = Router();
 
@@ -18,5 +19,6 @@ router.use(autopilotRouter);
 router.use(createArcadeRouter());
 router.use(paymentRouter);
 router.use(multiTimeframeRouter);
+router.use(marketNewsRouter);
 
 export default router;

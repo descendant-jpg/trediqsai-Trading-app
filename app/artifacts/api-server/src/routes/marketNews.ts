@@ -1,0 +1,89 @@
+import { Router, type IRouter } from "express";
+import Anthropic from "@anthropic-ai/sdk";
+import { z } from "zod";
+import { identity, requestUserId, ANONYMOUS_USER } from "../middlewares/identity";
+import { hasProAccess } from "../lib/entitlement";
+import { logger } from "../lib/logger";
+import { rateLimit } from "../middlewares/rateLimit";
+
+const router: IRouter = Router();
+const CACHE_MS = 5 * 60_000;
+const FINNHUB_URL = "https://finnhub.io/api/v1/news?category=general";
+let cache: { expiresAt: number; articles: MarketArticle[] } | null = null;
+
+export type MarketArticle = {
+  headline: string;
+  summary: string;
+  url: string;
+  image: string;
+  datetime: number;
+};
+
+const sentimentRequest = z.object({
+  headline: z.string().trim().min(3).max(500),
+  summary: z.string().trim().max(2_500).default(""),
+});
+
+const sentimentRateLimit = rateLimit({
+  max: 8,
+  windowMs: 60_000,
+  message: "News sentiment is briefly limited. Please try again in a minute.",
+  key: (_req, res) => requestUserId(res),
+});
+
+export async function fetchMarketNews(fetchImpl: typeof fetch = fetch): Promise<MarketArticle[]> {
+  if (cache && cache.expiresAt > Date.now()) return cache.articles;
+  const key = process.env["FINNHUB_API_KEY"];
+  if (!key) throw new Error("FINNHUB_API_KEY is not configured");
+  const response = await fetchImpl(`${FINNHUB_URL}&token=${encodeURIComponent(key)}`);
+  if (!response.ok) throw new Error(`Finnhub news request failed: ${response.status}`);
+  const raw = (await response.json()) as Array<Partial<MarketArticle>>;
+  const articles = raw
+    .filter((article) => article.headline && article.url && typeof article.datetime === "number")
+    .slice(0, 30)
+    .map((article) => ({
+      headline: article.headline!.trim(),
+      summary: article.summary?.trim() || "Open this headline for the latest market context.",
+      url: article.url!,
+      image: article.image ?? "",
+      datetime: article.datetime!,
+    }));
+  cache = { articles, expiresAt: Date.now() + CACHE_MS };
+  return articles;
+}
+
+router.get("/market-news", async (_req, res) => {
+  try {
+    res.json(await fetchMarketNews());
+  } catch (err) {
+    logger.warn({ err }, "Live market news request failed");
+    res.status(503).json({ error: "Live market news is temporarily unavailable." });
+  }
+});
+
+router.post("/market-news/sentiment", identity(), sentimentRateLimit, async (req, res) => {
+  const userId = requestUserId(res);
+  if (userId === ANONYMOUS_USER) return res.status(401).json({ error: "Sign in required." });
+  if (!(await hasProAccess(userId))) return res.status(403).json({ error: "Pro subscription required." });
+  const parsed = sentimentRequest.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "A valid news article is required." });
+  const key = process.env["ANTHROPIC_API_KEY"];
+  if (!key) return res.status(503).json({ error: "News analysis is not configured." });
+  try {
+    const client = new Anthropic({ apiKey: key });
+    const completion = await client.messages.create({
+      model: process.env["NEWS_SENTIMENT_MODEL"] ?? "claude-haiku-4-5-20251001",
+      max_tokens: 300,
+      system: "You are a cautious financial-news analyst. Return exactly: SENTIMENT: Bullish, Bearish, or Neutral; AFFECTED ASSETS: a short comma-separated list; IMPACT: exactly two concise sentences. Never give financial advice.",
+      messages: [{ role: "user", content: `Headline: ${parsed.data.headline}\nSummary: ${parsed.data.summary}` }],
+    });
+    const analysis = completion.content.filter((item): item is Anthropic.TextBlock => item.type === "text").map((item) => item.text).join("").trim();
+    if (!analysis) return res.status(502).json({ error: "The news analyzer returned no result." });
+    return res.json({ analysis });
+  } catch (err) {
+    logger.error({ err, userId }, "News sentiment analysis failed");
+    return res.status(502).json({ error: "News sentiment is temporarily unavailable." });
+  }
+});
+
+export default router;
