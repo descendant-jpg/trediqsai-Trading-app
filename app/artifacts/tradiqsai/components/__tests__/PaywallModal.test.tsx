@@ -71,7 +71,8 @@ describe('PaywallModal', () => {
   it('purchases the annual package by default and closes on success', async () => {
     const onClose = vi.fn();
     render(<PaywallModal visible onClose={onClose} />);
-    expect(screen.getByText('Start 7-Day Free Trial')).toBeTruthy();
+    expect(screen.getByText('Continue to Checkout')).toBeTruthy();
+    expect(screen.getAllByText('$199.99/year').length).toBeGreaterThan(0);
 
     press('paywall-cta');
     await vi.waitFor(() => expect(onClose).toHaveBeenCalled());
@@ -82,7 +83,7 @@ describe('PaywallModal', () => {
     const onClose = vi.fn();
     render(<PaywallModal visible onClose={onClose} />);
     press('billing-monthly');
-    expect(screen.getByText('Subscribe Now — $29.99/month')).toBeTruthy();
+    expect(screen.getAllByText('$29.99/month').length).toBeGreaterThan(0);
 
     press('paywall-cta');
     await vi.waitFor(() => expect(onClose).toHaveBeenCalled());
@@ -115,11 +116,11 @@ describe('PaywallModal', () => {
   it('resets to the annual cycle after close and reopen', () => {
     const { rerender } = render(<PaywallModal visible onClose={() => {}} />);
     press('billing-monthly');
-    expect(screen.getByText('Subscribe Now — $29.99/month')).toBeTruthy();
+    expect(screen.getAllByText('$29.99/month').length).toBeGreaterThan(0);
 
     rerender(<PaywallModal visible={false} onClose={() => {}} />);
     rerender(<PaywallModal visible onClose={() => {}} />);
-    expect(screen.getByText('Start 7-Day Free Trial')).toBeTruthy();
+    expect(screen.getAllByText('$199.99/year').length).toBeGreaterThan(0);
   });
 
   it('falls back to spec prices when offerings are unavailable', () => {

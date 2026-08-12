@@ -344,12 +344,11 @@ describe('PRO-locked bot', () => {
 
   it('opens the paywall from the unlock button and closes it again', () => {
     renderScreen();
-    expect(screen.queryByTestId('paywall-card')).toBeNull();
     press('unlock-quantum-inst');
-    expect(screen.getByTestId('paywall-card')).toBeTruthy();
-
-    press('paywall-close');
-    expect(screen.queryByTestId('paywall-card')).toBeNull();
+    expect(routerPush).toHaveBeenCalledWith({
+      pathname: '/paywall',
+      params: { defaultTier: 'ELITE' },
+    });
   });
 
   it('subscribers see full metrics and controls on the PRO bot', () => {

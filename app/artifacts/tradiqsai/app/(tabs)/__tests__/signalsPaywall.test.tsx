@@ -27,6 +27,7 @@ vi.mock('@expo/vector-icons', () => ({
 }));
 
 vi.mock('expo-router', () => ({
+  useLocalSearchParams: () => ({}),
   useRouter: () => ({ push: vi.fn() }),
 }));
 
@@ -41,6 +42,12 @@ vi.mock('@/components/PaywallModal', () => ({
 
 vi.mock('@/components/SignalDetailModal', () => ({
   default: () => null,
+}));
+vi.mock('@/lib/tradeExecution', () => ({
+  executeSimulatedTrade: vi.fn(),
+}));
+vi.mock('@/context/AuthContext', () => ({
+  useAuth: () => ({ session: null }),
 }));
 
 const subscription = vi.hoisted(() => ({
