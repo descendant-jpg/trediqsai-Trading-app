@@ -30,6 +30,8 @@ import type {
   OracleChatRequest,
   OracleChatResponse,
   Signal,
+  StrategyBriefRequest,
+  StrategyBriefResponse,
   Trader
 } from './api.schemas';
 
@@ -499,6 +501,78 @@ export const useSendOracleChat = <TError = ErrorType<OracleChatError>,
         TContext
       > => {
       return useMutation(getSendOracleChatMutationOptions(options));
+    }
+
+export const getSendStrategyBriefUrl = () => {
+
+
+
+
+  return `/api/oracle/strategy-brief`
+}
+
+/**
+ * Returns a single sentence of technical parameters an AutoPilot strategy is monitoring, used by the deployment terminal. Runs on the server so the Anthropic key is never shipped in the app bundle.
+ * @summary Generate a one-sentence AutoPilot strategy brief
+ */
+export const sendStrategyBrief = async (strategyBriefRequest: StrategyBriefRequest, options?: Parameters<typeof customFetch>[1]): Promise<StrategyBriefResponse> => {
+
+  return customFetch<StrategyBriefResponse>(getSendStrategyBriefUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(strategyBriefRequest)
+  }
+);}
+
+
+
+
+
+export const getSendStrategyBriefMutationOptions = <TError = ErrorType<OracleChatError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendStrategyBrief>>, TError,{data: BodyType<StrategyBriefRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendStrategyBrief>>, TError,{data: BodyType<StrategyBriefRequest>}, TContext> => {
+
+const mutationKey = ['sendStrategyBrief'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendStrategyBrief>>, {data: BodyType<StrategyBriefRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  sendStrategyBrief(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SendStrategyBriefMutationResult = NonNullable<Awaited<ReturnType<typeof sendStrategyBrief>>>
+    export type SendStrategyBriefMutationBody = BodyType<StrategyBriefRequest>
+    export type SendStrategyBriefMutationError = ErrorType<OracleChatError>
+
+    /**
+ * @summary Generate a one-sentence AutoPilot strategy brief
+ */
+export const useSendStrategyBrief = <TError = ErrorType<OracleChatError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendStrategyBrief>>, TError,{data: BodyType<StrategyBriefRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof sendStrategyBrief>>,
+        TError,
+        {data: BodyType<StrategyBriefRequest>},
+        TContext
+      > => {
+      return useMutation(getSendStrategyBriefMutationOptions(options));
     }
 
 export const getGetSignalsUrl = () => {

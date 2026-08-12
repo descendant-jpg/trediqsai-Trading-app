@@ -3,6 +3,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import {
   SendOracleChatBody,
   SendOracleChatResponse,
+  SendStrategyBriefBody,
+  SendStrategyBriefResponse,
 } from "@workspace/api-zod";
 import { logger } from "../lib/logger";
 import { rateLimit } from "../middlewares/rateLimit";
@@ -106,6 +108,63 @@ router.post("/oracle/chat", oracleRateLimit, async (req, res) => {
   } catch (err) {
     logger.error({ err }, "Oracle chat completion failed");
     res.status(502).json({ error: "The Oracle couldn't reach its AI model." });
+  }
+});
+
+/**
+ * One-sentence "what am I watching" brief shown in the AutoPilot deployment
+ * terminal. Runs server-side for the same reason as /oracle/chat: the
+ * Anthropic key must never ship inside the Expo bundle, where anything
+ * EXPO_PUBLIC_* is readable by anyone who downloads the app.
+ *
+ * A failure here is cosmetic — the caller falls back to a static line — so
+ * errors return a plain message rather than blocking a deployment.
+ */
+router.post("/oracle/strategy-brief", oracleRateLimit, async (req, res) => {
+  const parsed = SendStrategyBriefBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid request body" });
+    return;
+  }
+
+  const client = getClient();
+  if (!client) {
+    res.status(503).json({
+      error: "The strategy engine isn't configured yet (missing ANTHROPIC_API_KEY).",
+    });
+    return;
+  }
+
+  const { botName, capitalPercent } = parsed.data;
+  try {
+    const message = await client.messages.create({
+      model: process.env["ORACLE_MODEL"] ?? "claude-sonnet-5",
+      max_tokens: 300,
+      system:
+        "You write terse, technical one-line status output for an algorithmic trading terminal. Reply with a single sentence, no preamble, no markdown, no quotes.",
+      messages: [
+        {
+          role: "user",
+          content: `You are an institutional trading bot named ${botName}. Generate 1 sentence of highly technical trading parameters you are currently monitoring based on a ${capitalPercent}% allocation.`,
+        },
+      ],
+    });
+
+    const brief = message.content
+      .filter((block): block is Anthropic.TextBlock => block.type === "text")
+      .map((block) => block.text)
+      .join("")
+      .trim();
+
+    if (!brief) {
+      res.status(502).json({ error: "The strategy engine returned an empty response." });
+      return;
+    }
+
+    res.json(SendStrategyBriefResponse.parse({ brief }));
+  } catch (err) {
+    logger.error({ err }, "Strategy brief generation failed");
+    res.status(502).json({ error: "The strategy engine couldn't reach its AI model." });
   }
 });
 

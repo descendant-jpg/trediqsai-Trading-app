@@ -82,7 +82,6 @@ export interface Signal {
   isPremium: boolean;
   time: string;
   rationale: string;
-  confluenceFactors?: string[];
 }
 
 export interface Trader {
@@ -222,6 +221,23 @@ export interface AutopilotBotUpdate {
 
 export interface AutopilotError {
   error: string;
+}
+
+export interface StrategyBriefRequest {
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  botName: string;
+  /**
+     * @minimum 10
+     * @maximum 100
+     */
+  capitalPercent: number;
+}
+
+export interface StrategyBriefResponse {
+  brief: string;
 }
 
 export interface HealthStatus {

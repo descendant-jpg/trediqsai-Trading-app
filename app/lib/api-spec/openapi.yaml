@@ -160,6 +160,34 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/OracleChatError"
+  /oracle/strategy-brief:
+    post:
+      operationId: sendStrategyBrief
+      tags: [oracle]
+      summary: Generate a one-sentence AutoPilot strategy brief
+      description: >-
+        Returns a single sentence of technical parameters an AutoPilot
+        strategy is monitoring, used by the deployment terminal. Runs on the
+        server so the Anthropic key is never shipped in the app bundle.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StrategyBriefRequest"
+      responses:
+        "200":
+          description: Generated strategy brief
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StrategyBriefResponse"
+        "503":
+          description: AI backend unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OracleChatError"
   /signals:
     get:
       operationId: getSignals
@@ -527,6 +555,24 @@ components:
         error:
           type: string
       required: [error]
+    StrategyBriefRequest:
+      type: object
+      properties:
+        botName:
+          type: string
+          minLength: 1
+          maxLength: 80
+        capitalPercent:
+          type: number
+          minimum: 10
+          maximum: 100
+      required: [botName, capitalPercent]
+    StrategyBriefResponse:
+      type: object
+      properties:
+        brief:
+          type: string
+      required: [brief]
     HealthStatus:
       type: object
       properties:

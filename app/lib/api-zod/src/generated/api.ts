@@ -176,6 +176,27 @@ export const SendOracleChatResponse = zod.object({
 
 
 /**
+ * Returns a single sentence of technical parameters an AutoPilot strategy is monitoring, used by the deployment terminal. Runs on the server so the Anthropic key is never shipped in the app bundle.
+ * @summary Generate a one-sentence AutoPilot strategy brief
+ */
+export const sendStrategyBriefBodyBotNameMax = 80;
+
+export const sendStrategyBriefBodyCapitalPercentMin = 10;
+export const sendStrategyBriefBodyCapitalPercentMax = 100;
+
+
+
+export const SendStrategyBriefBody = zod.object({
+  "botName": zod.string().min(1).max(sendStrategyBriefBodyBotNameMax),
+  "capitalPercent": zod.number().min(sendStrategyBriefBodyCapitalPercentMin).max(sendStrategyBriefBodyCapitalPercentMax)
+})
+
+export const SendStrategyBriefResponse = zod.object({
+  "brief": zod.string()
+})
+
+
+/**
  * @summary List AI trading signals
  */
 export const GetSignalsResponseItem = zod.object({
@@ -210,8 +231,7 @@ export const GetSignalsResponseItem = zod.object({
 }),
   "isPremium": zod.boolean(),
   "time": zod.string(),
-  "rationale": zod.string(),
-  "confluenceFactors": zod.array(zod.string()).optional()
+  "rationale": zod.string()
 })
 export const GetSignalsResponse = zod.array(GetSignalsResponseItem)
 

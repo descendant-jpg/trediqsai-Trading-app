@@ -4,3 +4,4 @@
 - [Which directory Expo serves](expo-live-route-directory.md) — prove the live route dir with a marker-in-bundle test; never infer it from folder names, and never trust typecheck as evidence.
 - [pnpm workspace root is app/](pnpm-workspace-root.md) — the workspace root is `app/`, not the repo root; installing from the repo root writes a stray package-lock.json.
 - [Entitlement is server-owned](entitlement-is-server-owned.md) — tier/subscription columns must never be client-writable; RLS alone can't scope columns, so pair it with GRANT UPDATE (col).
+- [Supabase schema drift](supabase-schema-drift.md) — migrations in the repo are often NOT applied; probe PostgREST before trusting a table/RPC exists, and DDL needs the SQL editor.

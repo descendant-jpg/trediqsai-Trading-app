@@ -33,4 +33,6 @@ export * from './signalStopLoss';
 export * from './signalTakeProfit';
 export * from './signalTakeProfitId';
 export * from './signalTimeline';
+export * from './strategyBriefRequest';
+export * from './strategyBriefResponse';
 export * from './trader';
