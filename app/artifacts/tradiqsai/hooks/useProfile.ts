@@ -29,23 +29,30 @@ export function useProfile() {
   const mounted = useRef(true);
 
   const refresh = useCallback(async () => {
-    if (!userId || !isSupabaseConfigured) return;
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id, balance, daily_starting_balance, account_status')
-      .eq('id', userId)
-      .maybeSingle();
-    if (error) {
-      console.error('Failed to load profile', error.message);
+    if (!userId || !isSupabaseConfigured) {
+      if (mounted.current) setProfile(null);
       return;
     }
-    if (mounted.current && data) {
-      setProfile({
-        id: data.id,
-        balance: Number(data.balance),
-        daily_starting_balance: Number(data.daily_starting_balance),
-        account_status: data.account_status === 'BLOWN' ? 'BLOWN' : 'ACTIVE',
-      });
+
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, balance, daily_starting_balance, account_status')
+        .eq('id', userId)
+        .maybeSingle();
+      if (error) throw error;
+
+      if (mounted.current && data) {
+        setProfile({
+          id: data.id,
+          balance: Number(data.balance),
+          daily_starting_balance: Number(data.daily_starting_balance),
+          account_status: data.account_status === 'BLOWN' ? 'BLOWN' : 'ACTIVE',
+        });
+      }
+    } catch (error) {
+      console.warn('Profile refresh failed; using simulated account state.', error);
+      if (mounted.current) setProfile(null);
     }
   }, [userId]);
 

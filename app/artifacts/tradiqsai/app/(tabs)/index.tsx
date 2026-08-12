@@ -22,6 +22,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PaywallModal } from '@/components/PaywallModal';
 import { LatestInsightsModal } from '@/components/LatestInsightsModal';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import type { ErrorFallbackProps } from '@/components/ErrorFallback';
 import * as ImagePicker from 'expo-image-picker';
 
 const c = colors.light;
@@ -248,12 +250,36 @@ const FALLBACK_TICKERS: Ticker[] = [
   { symbol: 'NVDA', lastPrice: '118.65', priceChangePercent: '1.43' },
 ];
 
-function sessionState(session: Session, now: Date) {
-  const hour = Number(
-    new Intl.DateTimeFormat('en-US', { timeZone: session.zone, hour: 'numeric', hourCycle: 'h23' })
-      .format(now),
+function isTicker(value: unknown): value is Ticker {
+  if (!value || typeof value !== 'object') return false;
+  const ticker = value as Partial<Ticker>;
+  return typeof ticker.symbol === 'string'
+    && typeof ticker.lastPrice === 'string'
+    && typeof ticker.priceChangePercent === 'string';
+}
+
+function HomeWidgetFallback({ resetError }: ErrorFallbackProps) {
+  return (
+    <View style={styles.widgetFallback}>
+      <Text style={styles.widgetFallbackText}>This dashboard panel is temporarily unavailable.</Text>
+      <Pressable onPress={resetError} accessibilityRole="button" accessibilityLabel="Retry dashboard panel">
+        <Text style={styles.widgetFallbackRetry}>RETRY</Text>
+      </Pressable>
+    </View>
   );
-  return hour >= session.openHour && hour < session.closeHour;
+}
+
+function sessionState(session: Session, now: Date) {
+  try {
+    const hour = Number(
+      new Intl.DateTimeFormat('en-US', { timeZone: session.zone, hour: 'numeric', hourCycle: 'h23' })
+        .format(now),
+    );
+    return Number.isFinite(hour) && hour >= session.openHour && hour < session.closeHour;
+  } catch (error) {
+    console.warn(`Market session time unavailable for ${session.city}.`, error);
+    return false;
+  }
 }
 
 function greetingForHour(hour: number) {
@@ -274,7 +300,9 @@ export default function HomeScreen() {
   const [pickerMessage, setPickerMessage] = useState<string | null>(null);
   const tickerOffset = useRef(new Animated.Value(0)).current;
   const { profile } = useProfile();
-  const topInset = Platform.OS === 'web' ? 38 : insets.top + 10;
+  const topInset = Platform.OS === 'web' ? 38 : (insets?.top ?? 0) + 10;
+  const bottomInset = insets?.bottom ?? 0;
+  const safeTickers = Array.isArray(tickers) ? tickers.filter(isTicker) : FALLBACK_TICKERS;
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -298,8 +326,9 @@ export default function HomeScreen() {
             ? { symbol, lastPrice: String(quote.regularMarketPrice), priceChangePercent: String(quote.regularMarketChangePercent) }
             : fallback;
         });
-        if (active) setTickers(updatedTickers);
-      } catch {
+        if (active) setTickers(Array.isArray(updatedTickers) ? updatedTickers : FALLBACK_TICKERS);
+      } catch (error) {
+        console.warn('Market ticker refresh failed; using local fallback quotes.', error);
         if (active) setTickers(FALLBACK_TICKERS);
       }
     };
@@ -359,7 +388,7 @@ export default function HomeScreen() {
   return (
     <View style={styles.homeContainer}>
       <ScrollView
-        contentContainerStyle={[styles.homeContent, { paddingTop: topInset, paddingBottom: 115 + insets.bottom }]}
+        contentContainerStyle={[styles.homeContent, { paddingTop: topInset, paddingBottom: 115 + bottomInset }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.homeHeader}>
@@ -390,7 +419,7 @@ export default function HomeScreen() {
              style={[styles.tickerRow, { transform: [{ translateX: tickerOffset }] }]}
              onLayout={(event) => setTickerTrackWidth(event.nativeEvent.layout.width)}
            >
-            {[...(tickers ?? []), ...(tickers ?? [])].map((ticker, index) => {
+            {[...safeTickers, ...safeTickers].map((ticker, index) => {
              const change = Number(ticker.priceChangePercent);
               const isUp = change >= 0;
               return <View key={`${ticker.symbol}-${index}`} style={styles.tickerPill}><Text style={styles.tickerSymbol}>{ticker.symbol}</Text><Text style={styles.tickerPrice}>${Number(ticker.lastPrice).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text><Text style={[styles.tickerChange, { color: isUp ? '#00FF00' : '#FF0000' }]}>{`${isUp ? '+' : ''}${change.toFixed(2)}%`}</Text></View>;
@@ -504,8 +533,18 @@ export default function HomeScreen() {
           </Text>
         </View>
       </ScrollView>
-      <PaywallModal visible={paywallOpen} onClose={() => setPaywallOpen(false)} />
-      <LatestInsightsModal visible={insightsOpen} onClose={() => setInsightsOpen(false)} />
+      <ErrorBoundary
+        FallbackComponent={HomeWidgetFallback}
+        onError={(error) => console.warn('Paywall widget failed to render.', error)}
+      >
+        <PaywallModal visible={paywallOpen} onClose={() => setPaywallOpen(false)} />
+      </ErrorBoundary>
+      <ErrorBoundary
+        FallbackComponent={HomeWidgetFallback}
+        onError={(error) => console.warn('Insights widget failed to render.', error)}
+      >
+        <LatestInsightsModal visible={insightsOpen} onClose={() => setInsightsOpen(false)} />
+      </ErrorBoundary>
     </View>
   );
 }
@@ -549,6 +588,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   homeContainer: { flex: 1, backgroundColor: c.background },
+  widgetFallback: { margin: 16, padding: 14, borderRadius: 10, borderWidth: 1, borderColor: c.border, backgroundColor: c.card, gap: 8 },
+  widgetFallbackText: { color: c.mutedForeground, fontSize: 12 },
+  widgetFallbackRetry: { color: c.primary, fontSize: 11, fontFamily: 'Inter_700Bold' },
   homeContent: { paddingHorizontal: 16, gap: 16 },
   homeHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   titleStatus: { flexDirection: 'row', alignItems: 'center', gap: 8 },
