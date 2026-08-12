@@ -22,6 +22,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PaywallModal } from '@/components/PaywallModal';
 import { LatestInsightsModal } from '@/components/LatestInsightsModal';
+import * as ImagePicker from 'expo-image-picker';
 
 const c = colors.light;
 
@@ -235,6 +236,8 @@ const FEATURED_MARKETS = [
   ['EUR/USD', 'SELL', '1.0850'],
   ['NVDA', 'BUY', '128.40'],
 ] as const;
+const TICKER_SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT'];
+type Ticker = { symbol: string; lastPrice: string; priceChangePercent: string };
 
 function sessionState(session: Session, now: Date) {
   const hour = Number(
@@ -257,6 +260,8 @@ export default function HomeScreen() {
   const [now, setNow] = useState(() => new Date());
   const [paywallOpen, setPaywallOpen] = useState(false);
   const [insightsOpen, setInsightsOpen] = useState(false);
+  const [tickers, setTickers] = useState<Ticker[]>([]);
+  const [pickerMessage, setPickerMessage] = useState<string | null>(null);
   const { profile } = useProfile();
   const topInset = Platform.OS === 'web' ? 38 : insets.top + 10;
 
@@ -264,6 +269,36 @@ export default function HomeScreen() {
     const timer = setInterval(() => setNow(new Date()), 60_000);
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const loadTickers = async () => {
+      try {
+        const response = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbols=${encodeURIComponent(JSON.stringify(TICKER_SYMBOLS))}`);
+        if (!response.ok) throw new Error('Ticker unavailable');
+        const data = (await response.json()) as Ticker[];
+        if (active) setTickers(data);
+      } catch {
+        if (active) setTickers([]);
+      }
+    };
+    loadTickers();
+    const timer = setInterval(loadTickers, 60_000);
+    return () => { active = false; clearInterval(timer); };
+  }, []);
+
+  const openGallery = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) { setPickerMessage('Photo access is required to analyze a chart.'); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
+    if (!result.canceled) router.push('/live-chart' as never);
+  };
+  const openCamera = async () => {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) { setPickerMessage('Camera access is required to analyze a chart.'); return; }
+    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 1 });
+    if (!result.canceled) router.push('/live-chart' as never);
+  };
 
   const localHour = now.getHours();
   const sessionStates = useMemo(() => SESSIONS.map((session) => ({
@@ -287,7 +322,7 @@ export default function HomeScreen() {
           >
             <Feather name="sun" size={19} color={c.primary} />
           </TouchableOpacity>
-          <Text style={styles.homeTitle}>TradiQs AI</Text>
+           <View style={styles.titleStatus}><Text style={styles.homeTitle}>TradiQs AI</Text><View style={styles.online}><View style={styles.onlineDot} /><Text style={styles.onlineText}>Online</Text></View></View>
           <TouchableOpacity
             style={styles.headerButton}
             onPress={() => router.push('/notifications' as never)}
@@ -300,13 +335,20 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.greetingRow}>
-          <View>
-            <Text style={styles.greeting}>{greetingForHour(localHour)}, Trader</Text>
-            <Text style={styles.greetingSub}>Your institutional edge starts here.</Text>
-          </View>
-          <View style={styles.online}><View style={styles.onlineDot} /><Text style={styles.onlineText}>Online</Text></View>
-        </View>
+         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tickerRow}>
+           {(tickers.length ? tickers : TICKER_SYMBOLS.map((symbol) => ({ symbol, lastPrice: '—', priceChangePercent: '—' }))).map((ticker) => {
+             const change = Number(ticker.priceChangePercent);
+             return <View key={ticker.symbol} style={styles.tickerPill}><Text style={styles.tickerSymbol}>{ticker.symbol.replace('USDT', '')}</Text><Text style={styles.tickerPrice}>{ticker.lastPrice === '—' ? '—' : Number(ticker.lastPrice).toLocaleString(undefined, { maximumFractionDigits: 2 })}</Text><Text style={[styles.tickerChange, { color: change >= 0 ? c.success : c.destructive }]}>{ticker.priceChangePercent === '—' ? '—' : `${change >= 0 ? '+' : ''}${change.toFixed(2)}%`}</Text></View>;
+           })}
+         </ScrollView>
+
+         <Text style={styles.sectionLabel}>ANALYZE CHART WITH AI</Text>
+         <View style={styles.visionRow}>
+           <Pressable style={styles.visionCard} onPress={() => router.push('/live-chart' as never)}><Feather name="activity" size={22} color={c.primary} /><Text style={styles.visionTitle}>Live Chart</Text><Text style={styles.visionSub}>TradingView engine</Text></Pressable>
+           <Pressable style={styles.visionCard} onPress={openCamera}><Feather name="camera" size={22} color={c.secondary} /><Text style={styles.visionTitle}>Camera</Text><Text style={styles.visionSub}>Scan a setup</Text></Pressable>
+           <Pressable style={styles.visionCard} onPress={openGallery}><Feather name="image" size={22} color={c.success} /><Text style={styles.visionTitle}>Gallery</Text><Text style={styles.visionSub}>Choose a chart</Text></Pressable>
+         </View>
+         {pickerMessage ? <Pressable onPress={() => setPickerMessage(null)}><Text style={styles.pickerMessage}>{pickerMessage}</Text></Pressable> : null}
 
         <Text style={styles.sectionLabel}>GLOBAL MARKET SESSIONS</Text>
         <View style={styles.sessionTicker}>
@@ -453,6 +495,7 @@ const styles = StyleSheet.create({
   homeContainer: { flex: 1, backgroundColor: c.background },
   homeContent: { paddingHorizontal: 16, gap: 16 },
   homeHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  titleStatus: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   headerButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: c.card, borderWidth: 1, borderColor: c.border, alignItems: 'center', justifyContent: 'center' },
   homeTitle: { color: c.foreground, fontSize: 18, fontFamily: 'Inter_700Bold', letterSpacing: .3 },
   unreadBadge: { position: 'absolute', top: -3, right: -2, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: c.destructive, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: c.background },
@@ -463,6 +506,16 @@ const styles = StyleSheet.create({
   online: { flexDirection: 'row', gap: 6, alignItems: 'center', paddingHorizontal: 9, paddingVertical: 6, borderRadius: 14, backgroundColor: 'rgba(46,202,139,0.10)' },
   onlineDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: c.success },
   onlineText: { color: c.success, fontSize: 11, fontFamily: 'Inter_600SemiBold' },
+  tickerRow: { gap: 8, paddingVertical: 2 },
+  tickerPill: { backgroundColor: c.card, borderWidth: 1, borderColor: c.border, borderRadius: 10, paddingHorizontal: 11, paddingVertical: 8, minWidth: 100 },
+  tickerSymbol: { color: c.mutedForeground, fontSize: 9, fontFamily: 'Inter_700Bold', letterSpacing: 1 },
+  tickerPrice: { color: c.foreground, fontSize: 13, fontFamily: 'Inter_700Bold', marginTop: 3 },
+  tickerChange: { fontSize: 10, fontFamily: 'Inter_700Bold', marginTop: 2 },
+  visionRow: { flexDirection: 'row', gap: 8 },
+  visionCard: { flex: 1, minHeight: 100, backgroundColor: c.card, borderWidth: 1, borderColor: c.border, borderRadius: 12, padding: 11, justifyContent: 'space-between' },
+  visionTitle: { color: c.foreground, fontSize: 12, fontFamily: 'Inter_700Bold' },
+  visionSub: { color: c.mutedForeground, fontSize: 9, fontFamily: 'Inter_400Regular' },
+  pickerMessage: { color: '#FFB020', fontSize: 11, fontFamily: 'Inter_600SemiBold', marginTop: -6 },
   sectionLabel: { color: c.mutedForeground, fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 1.15 },
   sessionTicker: { backgroundColor: c.card, borderWidth: 1, borderColor: c.border, borderRadius: colors.radius, flexDirection: 'row', flexWrap: 'wrap', padding: 6 },
   session: { width: '50%', flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 6 },
