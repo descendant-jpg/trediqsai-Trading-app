@@ -1,0 +1,17 @@
+CRITICAL FORCE WORK DIRECTIVE: YOU ARE FORCED TO IMPLEMENT FULL, COMPLETE, PRODUCTION-READY INFRASTRUCTURE. UNBLOCK THE AUTOMATED TESTS AND ACTIVATE THE VERIFIED PRICING ENGINE.
+
+Review replit.md for our project rules. Now that the app's root white screen is resolved, we must restore the testing pipeline and activate the secure pricing feeds required for payouts.
+
+### 1. Unblock Automated Tests (Fix Regressions)
+- The recent overhauls to the `AuthProvider` (timeouts/fallbacks) and the `TradeService` (server-owned prices via `014_payout_evaluation_guardrails.sql`) have likely broken the test suite mocks.
+- Run the automated test suite (e.g., Jest). 
+- Identify the broken tests. Update the mock data, context providers, and Supabase RPC mocks within the test files so they correctly align with our new fail-safe Auth logic and payout guardrails.
+- Ensure the test runner can complete successfully without hanging or throwing unhandled promise rejections.
+
+### 2. Turn On Verified Trade Pricing (Unblock Payouts)
+- The recent security update strictly requires server-owned prices to compute PnL and allow users to earn payouts. Currently, this price publisher is inactive or undeployed.
+- Locate the mechanism responsible for fetching and publishing trusted market prices (e.g., the Supabase Edge Function `drawdown-monitor`, a `pg_cron` job, or the `api-server` price loop).
+- ACTIVATE this system. If it requires a Supabase CLI deployment (`supabase functions deploy`), a specific SQL trigger to enable the cron job, or a server-side loop initialization, execute it.
+- Verify that real, trusted prices are successfully writing to the server's ledger (e.g., `public.market_prices` or equivalent) so the `closeTrade` RPC can accurately calculate legitimate profit.
+
+EXECUTION REQUIREMENT: The automated test suite must pass with 0 failures. The verified pricing engine must be actively publishing to the database so that users can successfully close simulated trades and accumulate verified real cashout value.
