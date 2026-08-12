@@ -1,0 +1,27 @@
+CRITICAL FORCE WORK DIRECTIVE: YOU ARE FORCED TO IMPLEMENT FULL, COMPLETE, PRODUCTION-READY ROUTING AND UNIFY THE SUBSCRIPTION UI. DO NOT LEAVE BROKEN LINKS, DUPLICATE SCREENS, OR OUTDATED PRICING. 
+
+Review replit.md for our project rules. We are unifying the subscription flow into a single Master Paywall and deleting the conflicting standalone Elite screen.
+
+### 1. Delete Outdated Standalone Elite Screen
+- Locate the standalone Elite upgrade screen (likely named `app/elite.tsx`, `app/tradiqs-elite.tsx`, or similar) that contains the text "$49 LIFETIME ACCESS".
+- COMPLETELY DELETE this file. We are using a single-source-of-truth SaaS paywall now.
+
+### 2. Update Master Paywall to Accept Parameters
+- Open the Master Paywall screen (which contains the PRO vs ELITE toggle and the Apple Pay / Google Pay logic we just built).
+- Import `useLocalSearchParams` from `expo-router`.
+- Update the state initialization to accept a routing parameter: 
+  `const { defaultTier } = useLocalSearchParams();`
+  `const [selectedTier, setSelectedTier] = useState<'PRO' | 'ELITE'>(defaultTier === 'ELITE' ? 'ELITE' : 'PRO');`
+- This ensures if a user clicks an Elite feature, the paywall opens with the Elite tier pre-selected.
+
+### 3. Global Link Audit & Feature Gating
+- Search the entire codebase for any `router.push` or `<Link>` components that were pointing to the deleted standalone Elite screen.
+- Update ALL of them to point to the Master Paywall with the Elite parameter: `router.push({ pathname: '/[INSERT_PAYWALL_ROUTE_NAME]', params: { defaultTier: 'ELITE' } })`. 
+- Ensure restricted features (like "AutoPilot Bots", "BrokerSync Integration", "Whale Wallet Tracking") have an `onPress` that triggers this exact deep-link routing.
+
+### 4. Final Sanity Check
+- Verify the Master Paywall contains the correct Elite pricing ($49.99/mo and $399.99/yr) and the premium Elite benefits.
+- Ensure the Apple Pay and Google Pay conditional rendering is fully intact.
+- Run a TypeScript check (`tsc`) or Expo typecheck to guarantee there are no unresolved or broken routes anywhere in the app.
+
+EXECUTION REQUIREMENT: The app must have only ONE subscription paywall handling both tiers. Tapping any Elite-locked feature must open the Master Paywall with the ELITE toggle pre-selected. No broken links can remain.

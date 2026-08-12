@@ -276,7 +276,7 @@ export default function AiToolsScreen() {
       onError: (error: unknown) => {
         if (isProRequiredError(error)) {
           setConfigBot(null);
-          setPaywallOpen(true);
+          router.push({ pathname: '/paywall', params: { defaultTier: 'ELITE' } });
         }
         // Re-sync so an optimistic-looking UI never keeps a rejected change.
         void refetch();
@@ -420,15 +420,15 @@ export default function AiToolsScreen() {
 
         <Text style={styles.sectionTitle}>HERO TOOLS</Text>
         <View style={styles.heroGrid}>
-          {TOOLS.slice(0, 2).map((tool) => <ToolCard key={tool.name} tool={tool} subscribed={isSubscribed} onOpen={setActiveTool} onPaywall={() => setPaywallOpen(true)} hero />)}
+          {TOOLS.slice(0, 2).map((tool) => <ToolCard key={tool.name} tool={tool} subscribed={isSubscribed} onOpen={setActiveTool} onPaywall={(tier) => tier === 'ELITE' ? router.push({ pathname: '/paywall', params: { defaultTier: 'ELITE' } }) : setPaywallOpen(true)} hero />)}
         </View>
         <Text style={styles.sectionTitle}>AI ANALYSIS</Text>
         <View style={styles.toolGrid}>
-          {TOOLS.slice(2, 7).map((tool) => <ToolCard key={tool.name} tool={tool} subscribed={isSubscribed} onOpen={setActiveTool} onPaywall={() => setPaywallOpen(true)} />)}
+          {TOOLS.slice(2, 7).map((tool) => <ToolCard key={tool.name} tool={tool} subscribed={isSubscribed} onOpen={setActiveTool} onPaywall={(tier) => tier === 'ELITE' ? router.push({ pathname: '/paywall', params: { defaultTier: 'ELITE' } }) : setPaywallOpen(true)} />)}
         </View>
         <Text style={styles.sectionTitle}>TOOLS & UTILITIES</Text>
         <View style={styles.toolGrid}>
-          {TOOLS.slice(7).map((tool) => <ToolCard key={tool.name} tool={tool} subscribed={isSubscribed} onOpen={setActiveTool} onPaywall={() => setPaywallOpen(true)} />)}
+          {TOOLS.slice(7).map((tool) => <ToolCard key={tool.name} tool={tool} subscribed={isSubscribed} onOpen={setActiveTool} onPaywall={(tier) => tier === 'ELITE' ? router.push({ pathname: '/paywall', params: { defaultTier: 'ELITE' } }) : setPaywallOpen(true)} />)}
         </View>
 
         {/* Bot roster */}
@@ -537,7 +537,7 @@ export default function AiToolsScreen() {
                     <Feather name="lock" size={16} color={GOLD} />
                     <TouchableOpacity
                       style={styles.unlockButton}
-                      onPress={() => setPaywallOpen(true)}
+                      onPress={() => router.push({ pathname: '/paywall', params: { defaultTier: 'ELITE' } })}
                       activeOpacity={0.85}
                       testID={`unlock-${bot.id}`}
                     >
@@ -566,9 +566,9 @@ export default function AiToolsScreen() {
   );
 }
 
-function ToolCard({ tool, subscribed, onOpen, onPaywall, hero = false }: { tool: Tool; subscribed: boolean; onOpen: (tool: Tool) => void; onPaywall: () => void; hero?: boolean }) {
+function ToolCard({ tool, subscribed, onOpen, onPaywall, hero = false }: { tool: Tool; subscribed: boolean; onOpen: (tool: Tool) => void; onPaywall: (tier: Tool['tier']) => void; hero?: boolean }) {
   const locked = tool.tier !== 'STARTER' && !subscribed;
-  return <TouchableOpacity style={[styles.toolCard, hero && styles.heroCard, tool.wide && styles.wideCard]} activeOpacity={0.78} onPress={() => locked ? onPaywall() : onOpen(tool)} accessibilityRole="button" accessibilityLabel={`${tool.name}${locked ? ', locked' : ''}`}>
+  return <TouchableOpacity style={[styles.toolCard, hero && styles.heroCard, tool.wide && styles.wideCard]} activeOpacity={0.78} onPress={() => locked ? onPaywall(tool.tier) : onOpen(tool)} accessibilityRole="button" accessibilityLabel={`${tool.name}${locked ? ', locked' : ''}`}>
     <View style={styles.toolIcon}><Feather name={tool.icon} size={hero ? 21 : 17} color={tool.tier === 'ELITE' ? GOLD : CYAN} /></View>
     <View style={styles.toolCopy}><View style={styles.toolTitleRow}><Text style={styles.toolName}>{tool.name}</Text>{locked && <Feather name="lock" size={12} color={GOLD} />}</View><Text style={styles.toolDescription}>{tool.description}</Text></View>
     <TierBadge tier={tool.tier} />

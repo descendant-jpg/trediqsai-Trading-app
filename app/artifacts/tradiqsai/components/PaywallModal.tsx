@@ -15,6 +15,7 @@ import * as Haptics from 'expo-haptics';
 import { Feather } from '@expo/vector-icons';
 import colors from '@/constants/colors';
 import { useSubscription } from '@/lib/revenuecat';
+import { useLocalSearchParams } from 'expo-router';
 
 const c = colors.light;
 
@@ -124,7 +125,10 @@ export function PaywallModal({
   onClose: () => void;
 }) {
   const { offerings, isPurchasing, isRestoring, purchase, restore } = useSubscription();
-  const [selectedTier, setSelectedTier] = useState<SubscriptionTier>('PRO');
+  const { defaultTier } = useLocalSearchParams<{ defaultTier?: string }>();
+  const [selectedTier, setSelectedTier] = useState<SubscriptionTier>(
+    defaultTier === 'ELITE' ? 'ELITE' : 'PRO',
+  );
   const [billingCycle, setBillingCycle] = useState<BillingCycle>('annual');
   const [simulating, setSimulating] = useState(false);
   const [docOpen, setDocOpen] = useState<'terms' | 'privacy' | null>(null);
