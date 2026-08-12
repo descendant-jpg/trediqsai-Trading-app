@@ -19,11 +19,14 @@ import { useSubscription } from '@/lib/revenuecat';
 const c = colors.light;
 
 type BillingCycle = 'monthly' | 'annual';
+type SubscriptionTier = 'PRO' | 'ELITE';
 
 const MONTHLY_PRICE_FALLBACK = '$29.99';
 const ANNUAL_PRICE_FALLBACK = '$199.99';
 
-const FEATURES: { icon: keyof typeof Feather.glyphMap; title: string; body: string }[] = [
+type Feature = { icon: keyof typeof Feather.glyphMap; title: string; body: string };
+
+const PRO_FEATURES: Feature[] = [
   {
     icon: 'crosshair',
     title: 'Real-Time Signal Targets',
@@ -48,6 +51,29 @@ const FEATURES: { icon: keyof typeof Feather.glyphMap; title: string; body: stri
     icon: 'bar-chart-2',
     title: 'Advanced Analytics',
     body: 'Detailed win-rate tracking, equity curves, and risk metrics.',
+  },
+];
+const ELITE_FEATURES: Feature[] = [
+  ...PRO_FEATURES,
+  {
+    icon: 'activity',
+    title: 'Whale Wallet Tracking',
+    body: 'Live alerts for institutional block trades and dark pool activity.',
+  },
+  {
+    icon: 'git-merge',
+    title: 'Direct API Webhooks',
+    body: 'Connect AI signals directly to MT4, MT5, and NinjaTrader.',
+  },
+  {
+    icon: 'zap',
+    title: 'Zero-Delay Execution',
+    body: 'Highest-priority server routing for AutoPilot execution.',
+  },
+  {
+    icon: 'sliders',
+    title: 'Dedicated AI Quant',
+    body: 'Personalized risk-parameter generation for your trading profile.',
   },
 ];
 
@@ -98,6 +124,7 @@ export function PaywallModal({
   onClose: () => void;
 }) {
   const { offerings, isPurchasing, isRestoring, purchase, restore } = useSubscription();
+  const [selectedTier, setSelectedTier] = useState<SubscriptionTier>('PRO');
   const [billingCycle, setBillingCycle] = useState<BillingCycle>('annual');
   const [simulating, setSimulating] = useState(false);
   const [docOpen, setDocOpen] = useState<'terms' | 'privacy' | null>(null);
@@ -111,6 +138,7 @@ export function PaywallModal({
       clearTimeout(simulateTimer.current);
       simulateTimer.current = null;
     }
+    setSelectedTier('PRO');
     setBillingCycle('annual');
     setSimulating(false);
     setDocOpen(null);
@@ -123,7 +151,15 @@ export function PaywallModal({
     [],
   );
 
-  const packages = offerings?.current?.availablePackages ?? [];
+  const proPackages = offerings?.current?.availablePackages ?? [];
+  const elitePackages = useMemo(
+    () =>
+      Object.values(offerings?.all ?? {})
+        .flatMap((offering: any) => offering.availablePackages ?? [])
+        .filter((pkg: any) => /elite|institutional|quant/i.test(pkg.identifier ?? pkg.product?.identifier ?? '')),
+    [offerings],
+  );
+  const packages = selectedTier === 'ELITE' ? elitePackages : proPackages;
   const monthlyPackage = useMemo(
     () =>
       packages.find((p) => p.packageType === 'MONTHLY') ??
@@ -138,14 +174,21 @@ export function PaywallModal({
       null,
     [packages],
   );
-
-  const monthlyPrice = monthlyPackage?.product.priceString ?? MONTHLY_PRICE_FALLBACK;
-  const annualPrice = annualPackage?.product.priceString ?? ANNUAL_PRICE_FALLBACK;
+  const monthlyPrice = monthlyPackage?.product.priceString ?? (selectedTier === 'ELITE' ? '$99.99' : MONTHLY_PRICE_FALLBACK);
+  const annualPrice = annualPackage?.product.priceString ?? (selectedTier === 'ELITE' ? '$799.99' : ANNUAL_PRICE_FALLBACK);
   const selectedPackage = billingCycle === 'annual' ? annualPackage : monthlyPackage;
   const working = isPurchasing || isRestoring || simulating;
+  const accent = selectedTier === 'ELITE' ? '#B026FF' : '#00F0FF';
+  const selectedPrice = billingCycle === 'annual' ? annualPrice : monthlyPrice;
+  const features = selectedTier === 'ELITE' ? ELITE_FEATURES : PRO_FEATURES;
 
   const finishSuccess = () => {
-    notify('Welcome to TradiQs Pro!', 'Your Pro features are now unlocked. Trade like an institution.');
+    notify(
+      `Welcome to TradiQs ${selectedTier === 'ELITE' ? 'Elite' : 'Pro'}!`,
+      selectedTier === 'ELITE'
+        ? 'Your institutional Quant Edge features are now unlocked.'
+        : 'Your Pro features are now unlocked. Trade like an institution.',
+    );
     onClose();
   };
 
@@ -213,24 +256,41 @@ export function PaywallModal({
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
+          <View style={styles.tierSwitcher} testID="tier-switcher">
+            {(['PRO', 'ELITE'] as const).map((tier) => (
+              <TouchableOpacity
+                key={tier}
+                activeOpacity={0.85}
+                style={[styles.tierOption, selectedTier === tier && { borderColor: accent, backgroundColor: `${accent}18` }]}
+                onPress={() => setSelectedTier(tier)}
+                testID={`tier-${tier.toLowerCase()}`}
+              >
+                <Text style={[styles.tierOptionText, selectedTier === tier && { color: accent }]}>
+                  {tier === 'PRO' ? 'TradiQs Pro' : 'TradiQs Elite'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
           {/* Header */}
           <View style={styles.badgeWrap}>
-            <View style={styles.badgeGlow}>
-              <Feather name="zap" size={26} color="#00F0FF" />
+            <View style={[styles.badgeGlow, { borderColor: `${accent}66`, shadowColor: accent, backgroundColor: `${accent}14` }]}>
+              <Feather name={selectedTier === 'ELITE' ? 'award' : 'zap'} size={26} color={accent} />
             </View>
-            <Text style={styles.badgeText}>TRADIQS PRO</Text>
+            <Text style={[styles.badgeText, { color: accent }]}>TRADIQS {selectedTier}</Text>
           </View>
-          <Text style={styles.headline}>Trade Like an Institution</Text>
+          <Text style={styles.headline}>{selectedTier === 'ELITE' ? 'The Institutional Quant Edge' : 'Trade Like an Institution'}</Text>
           <Text style={styles.subtitle}>
-            Unlock unblurred real-time signals, automated trading bots, and full
-            AI Oracle market intelligence.
+            {selectedTier === 'ELITE'
+              ? 'Command priority execution, institutional flow intelligence, and a dedicated AI Quant.'
+              : 'Unlock unblurred real-time signals, automated trading bots, and full AI Oracle market intelligence.'}
           </Text>
 
           {/* Billing toggle */}
           <View style={styles.toggleRow} testID="billing-toggle">
             <TouchableOpacity
               activeOpacity={0.85}
-              style={[styles.toggleOption, billingCycle === 'monthly' && styles.toggleActive]}
+              style={[styles.toggleOption, billingCycle === 'monthly' && [styles.toggleActive, { borderColor: accent, backgroundColor: `${accent}10` }]]}
               onPress={() => setBillingCycle('monthly')}
               testID="billing-monthly"
             >
@@ -244,12 +304,12 @@ export function PaywallModal({
 
             <TouchableOpacity
               activeOpacity={0.85}
-              style={[styles.toggleOption, billingCycle === 'annual' && styles.toggleActive]}
+              style={[styles.toggleOption, billingCycle === 'annual' && [styles.toggleActive, { borderColor: accent, backgroundColor: `${accent}10` }]]}
               onPress={() => setBillingCycle('annual')}
               testID="billing-annual"
             >
-              <View style={styles.saveBadge}>
-                <Text style={styles.saveBadgeText}>SAVE 45%</Text>
+              <View style={[styles.saveBadge, { backgroundColor: accent }]}>
+                <Text style={styles.saveBadgeText}>{selectedTier === 'ELITE' ? 'SAVE 33%' : 'SAVE 45%'}</Text>
               </View>
               <Text
                 style={[styles.togglePlan, billingCycle === 'annual' && styles.togglePlanActive]}
@@ -262,7 +322,7 @@ export function PaywallModal({
 
           {/* Feature list */}
           <View style={styles.features}>
-            {FEATURES.map((feature) => (
+            {features.map((feature) => (
               <View key={feature.title} style={styles.featureRow}>
                 <View style={styles.checkWrap}>
                   <Feather name="check" size={14} color="#00E676" />
@@ -276,22 +336,31 @@ export function PaywallModal({
           </View>
 
           {/* CTA */}
+          <Text style={[styles.selectedPrice, { color: accent }]}>
+            {selectedPrice}{billingCycle === 'annual' ? '/year' : '/month'}
+          </Text>
           <TouchableOpacity
             activeOpacity={0.85}
-            style={[styles.cta, working && styles.ctaDisabled]}
+            style={[
+              styles.paymentButton,
+              Platform.OS === 'ios' && styles.applePayButton,
+              Platform.OS === 'android' && styles.googlePayButton,
+              Platform.OS === 'web' && { backgroundColor: accent },
+              working && styles.ctaDisabled,
+            ]}
             onPress={handleSubscribe}
             disabled={working}
             testID="paywall-cta"
           >
-            {isPurchasing || simulating ? (
-              <ActivityIndicator color="#0A0B0E" />
-            ) : billingCycle === 'annual' ? (
+            {isPurchasing || simulating ? <ActivityIndicator color={Platform.OS === 'web' ? '#0A0B0E' : '#FFFFFF'} /> : (
               <>
-                <Text style={styles.ctaText}>Start 7-Day Free Trial</Text>
-                <Text style={styles.ctaSubText}>then {annualPrice}/year</Text>
+                {Platform.OS === 'ios' ? <Text style={styles.applePayText}>Pay with  Apple Pay</Text> : null}
+                {Platform.OS === 'android' ? <Text style={styles.googlePayText}><Text style={styles.googleMark}>G</Text> Pay</Text> : null}
+                {Platform.OS === 'web' ? <Text style={styles.ctaText}>Continue to Checkout</Text> : null}
+                <Text style={[styles.ctaSubText, Platform.OS !== 'web' && styles.nativePaySubText]}>
+                  {billingCycle === 'annual' ? `${selectedPrice}/year` : `${selectedPrice}/month`}
+                </Text>
               </>
-            ) : (
-              <Text style={styles.ctaText}>Subscribe Now — {monthlyPrice}/month</Text>
             )}
           </TouchableOpacity>
           <Text style={styles.cancelHint}>Cancel anytime. Billed to your store account.</Text>
@@ -373,6 +442,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     paddingTop: 34,
     paddingBottom: 32,
+  },
+  tierSwitcher: {
+    flexDirection: 'row',
+    gap: 8,
+    padding: 4,
+    borderRadius: colors.radius,
+    backgroundColor: '#12141A',
+    borderWidth: 1,
+    borderColor: '#22252A',
+    marginBottom: 22,
+  },
+  tierOption: {
+    flex: 1,
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: 'transparent',
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  tierOptionText: {
+    color: '#8A8D93',
+    fontSize: 12,
+    fontFamily: 'Inter_700Bold',
   },
   badgeWrap: {
     alignItems: 'center',
@@ -493,19 +585,35 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_400Regular',
     lineHeight: 18,
   },
-  cta: {
+  selectedPrice: {
+    textAlign: 'center',
+    fontSize: 15,
+    fontFamily: 'Inter_700Bold',
     marginTop: 28,
+    marginBottom: 9,
+  },
+  paymentButton: {
     minHeight: 58,
+    marginTop: 28,
     borderRadius: colors.radius,
-    backgroundColor: '#00F0FF',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 10,
-    shadowColor: '#00F0FF',
+    shadowColor: '#000000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 14,
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
     elevation: 8,
+  },
+  applePayButton: {
+    backgroundColor: '#000000',
+    borderWidth: 1,
+    borderColor: '#454545',
+  },
+  googlePayButton: {
+    backgroundColor: '#202124',
+    borderWidth: 1,
+    borderColor: '#5F6368',
   },
   ctaDisabled: {
     opacity: 0.6,
@@ -521,6 +629,26 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'Inter_500Medium',
     marginTop: 1,
+  },
+  nativePaySubText: {
+    color: 'rgba(255,255,255,0.72)',
+  },
+  applePayText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 0.2,
+  },
+  googlePayText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 0.2,
+  },
+  googleMark: {
+    color: '#4285F4',
+    fontFamily: 'Inter_700Bold',
+    fontSize: 18,
   },
   cancelHint: {
     color: '#8A8D93',
