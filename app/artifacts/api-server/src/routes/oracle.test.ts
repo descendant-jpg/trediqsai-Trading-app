@@ -263,6 +263,143 @@ describe("POST /oracle/strategy-brief", () => {
   });
 });
 
+describe("POST /oracle/chart-analysis", () => {
+  /**
+   * A base64 payload that satisfies the ≥100-char minimum without being a
+   * real image — we only need to reach the Anthropic mock, not decode pixels.
+   */
+  const VALID_IMAGE = "A".repeat(120);
+  const VALID_BODY = {
+    imageBase64: VALID_IMAGE,
+    mode: "analysis" as const,
+    mediaType: "image/jpeg" as const,
+  };
+
+  /**
+   * Boots a fresh app instance with the identity middleware and entitlement
+   * lookup replaced by in-memory stubs so tests run without Supabase.
+   */
+  async function startAppAs(
+    userId: string,
+    hasPro: boolean,
+    apiKey = "test-key",
+  ): Promise<void> {
+    await new Promise<void>((resolve, reject) =>
+      server.close((err) => (err ? reject(err) : resolve())),
+    );
+    vi.resetModules();
+    vi.stubEnv("ANTHROPIC_API_KEY", apiKey);
+    vi.doMock("@anthropic-ai/sdk", () => ({
+      default: class MockAnthropic {
+        messages = { create: createMock };
+      },
+    }));
+    vi.doMock("../middlewares/identity", () => ({
+      ANONYMOUS_USER: "anonymous",
+      identity: () => (_req: unknown, res: any, next: () => void) => {
+        res.locals["userId"] = userId;
+        next();
+      },
+      requestUserId: (res: any) => res.locals["userId"] ?? "anonymous",
+    }));
+    vi.doMock("../lib/entitlement", () => ({
+      hasProAccess: vi.fn().mockResolvedValue(hasPro),
+    }));
+    const { default: oracleRouter } = await import("./oracle");
+    const app: Express = express();
+    app.use(express.json({ limit: "12mb" }));
+    app.use(oracleRouter);
+    await new Promise<void>((resolve) => {
+      server = app.listen(0, "127.0.0.1", () => resolve());
+    });
+    const { address, port } = server.address() as AddressInfo;
+    baseUrl = `http://${address}:${port}`;
+  }
+
+  afterEach(() => {
+    vi.doUnmock("../middlewares/identity");
+    vi.doUnmock("../lib/entitlement");
+  });
+
+  it("rejects anonymous callers with 401", async () => {
+    await startAppAs("anonymous", false);
+    const { status, body } = await request("POST", "/oracle/chart-analysis", VALID_BODY);
+    expect(status).toBe(401);
+    expect(body.error).toMatch(/sign in/i);
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects free-tier users with 403 and the pro_subscription_required code", async () => {
+    await startAppAs("user-free-123", false);
+    const { status, body } = await request("POST", "/oracle/chart-analysis", VALID_BODY);
+    expect(status).toBe(403);
+    expect(body.code).toBe("pro_subscription_required");
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
+  it("returns a structured analysis object for a valid paid request", async () => {
+    await startAppAs("user-pro-123", true);
+    createMock.mockResolvedValue(
+      textReply("BIAS: Bullish. KEY LEVELS: 2400, 2380. ANALYSIS: Strong uptrend."),
+    );
+    const { status, body } = await request("POST", "/oracle/chart-analysis", VALID_BODY);
+    expect(status).toBe(200);
+    expect(typeof body.analysis).toBe("string");
+    expect(body.analysis).toContain("BIAS");
+    expect(createMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("requests the signal-plan format (ENTRY ZONE, STOP LOSS, TAKE PROFIT, BIAS) in signal mode", async () => {
+    await startAppAs("user-pro-123", true);
+    createMock.mockResolvedValue(
+      textReply(
+        "BIAS: BUY\nENTRY ZONE: 2400–2410\nSTOP LOSS: 2375\nTAKE PROFIT: 2460\nRISK NOTE: Not financial advice.",
+      ),
+    );
+    const { status, body } = await request("POST", "/oracle/chart-analysis", {
+      ...VALID_BODY,
+      mode: "signal",
+    });
+    expect(status).toBe(200);
+    expect(body.analysis).toContain("BUY");
+
+    // The system prompt must instruct the model to produce all four labels.
+    const systemPrompt: string = createMock.mock.calls[0]![0].system;
+    expect(systemPrompt).toContain("BIAS");
+    expect(systemPrompt).toContain("ENTRY ZONE");
+    expect(systemPrompt).toContain("STOP LOSS");
+    expect(systemPrompt).toContain("TAKE PROFIT");
+  });
+
+  it("returns 503 when the AI provider key is not configured", async () => {
+    await startAppAs("user-pro-123", true, "");
+    const { status, body } = await request("POST", "/oracle/chart-analysis", VALID_BODY);
+    expect(status).toBe(503);
+    expect(body.error).toContain("not configured");
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
+  it("returns a recoverable 502 when the AI provider throws during analysis", async () => {
+    await startAppAs("user-pro-123", true);
+    createMock.mockRejectedValue(new Error("upstream provider unavailable"));
+    const { status, body } = await request("POST", "/oracle/chart-analysis", VALID_BODY);
+    expect(status).toBe(502);
+    expect(body.error).toContain("unavailable");
+    expect(createMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects a body missing imageBase64 with 400 before reaching the AI", async () => {
+    await startAppAs("user-pro-123", true);
+    const { status, body } = await request("POST", "/oracle/chart-analysis", {
+      mode: "analysis",
+      mediaType: "image/jpeg",
+    });
+    expect(status).toBe(400);
+    expect(body.error).toContain("valid chart image");
+    expect(createMock).not.toHaveBeenCalled();
+  });
+});
+
 describe("POST /oracle/strategy-brief — Supabase cache", () => {
   const SUPABASE = "https://cache-test.supabase.co";
   /** Supabase calls the route makes, in order, as [method, url] pairs. */
