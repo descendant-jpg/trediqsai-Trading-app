@@ -22,6 +22,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PaywallModal } from '@/components/PaywallModal';
 import { LatestInsightsModal } from '@/components/LatestInsightsModal';
+import { MultiTFAnalysisModal } from '@/components/MultiTFAnalysisModal';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import type { ErrorFallbackProps } from '@/components/ErrorFallback';
 import * as ImagePicker from 'expo-image-picker';
@@ -295,6 +296,7 @@ export default function HomeScreen() {
   const [now, setNow] = useState(() => new Date());
   const [paywallOpen, setPaywallOpen] = useState(false);
   const [insightsOpen, setInsightsOpen] = useState(false);
+  const [analysisSymbol, setAnalysisSymbol] = useState<string | null>(null);
   const [tickers, setTickers] = useState<Ticker[]>(FALLBACK_TICKERS);
   const [tickerTrackWidth, setTickerTrackWidth] = useState(0);
   const [pickerMessage, setPickerMessage] = useState<string | null>(null);
@@ -470,12 +472,12 @@ export default function HomeScreen() {
             <Text style={styles.sampleLabel}>Local sample indicator</Text>
           </View>
           <View style={[styles.widget, styles.biasWidget]}>
-            <Text style={styles.sectionLabel}>MULTI-TF BIAS</Text>
+            <View style={styles.biasHeader}><Text style={styles.sectionLabel}>MULTI-TF BIAS</Text><Pressable onPress={() => setAnalysisSymbol('BTC/USD')} accessibilityRole="button" accessibilityLabel="Open full multi-timeframe analysis"><Text style={styles.fullAnalysis}>Full Analysis →</Text></Pressable></View>
             {(BIAS ?? []).map(([pair, bias, trend]) => (
-              <View key={pair} style={styles.biasRow}>
+              <Pressable key={pair} style={styles.biasRow} onPress={() => setAnalysisSymbol(pair)} accessibilityRole="button" accessibilityLabel={`Open multi-timeframe analysis for ${pair}`}>
                 <Text style={styles.pair}>{pair}</Text>
                 <Text style={[styles.bias, { color: bias === 'BULLISH' ? c.success : c.mutedForeground }]}>{trend} {bias}</Text>
-              </View>
+              </Pressable>
             ))}
             <Text style={styles.sampleLabel}>Deterministic sample</Text>
           </View>
@@ -545,6 +547,14 @@ export default function HomeScreen() {
       >
         <LatestInsightsModal visible={insightsOpen} onClose={() => setInsightsOpen(false)} />
       </ErrorBoundary>
+      <MultiTFAnalysisModal
+        symbol={analysisSymbol}
+        onClose={() => setAnalysisSymbol(null)}
+        onTrade={(symbol) => {
+          setAnalysisSymbol(null);
+          router.push({ pathname: '/live-chart', params: { symbol } } as never);
+        }}
+      />
     </View>
   );
 }
@@ -624,6 +634,8 @@ const styles = StyleSheet.create({
   widgets: { flexDirection: 'row', gap: 10 },
   widget: { backgroundColor: c.card, borderWidth: 1, borderColor: c.border, borderRadius: colors.radius, padding: 13, minHeight: 150 },
   fearWidget: { flex: .85 }, biasWidget: { flex: 1.35 },
+  biasHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 },
+  fullAnalysis: { color: '#00F0FF', fontSize: 9, fontFamily: 'Inter_700Bold' },
   dial: { alignSelf: 'center', width: 92, height: 62, marginTop: 12, borderTopWidth: 8, borderLeftWidth: 8, borderRightWidth: 8, borderColor: c.success, borderTopLeftRadius: 52, borderTopRightRadius: 52, alignItems: 'center', justifyContent: 'flex-end' },
   dialValue: { color: c.foreground, fontSize: 23, fontFamily: 'Inter_700Bold' },
   dialCaption: { color: c.success, fontSize: 9, fontFamily: 'Inter_700Bold', letterSpacing: .7 },

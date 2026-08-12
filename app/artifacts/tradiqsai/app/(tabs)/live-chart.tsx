@@ -1,19 +1,34 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import ViewShot from 'react-native-view-shot';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const chartHtml = (symbol: string) => `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body,#chart{margin:0;width:100%;height:100%;background:#0A0B0E;overflow:hidden}</style></head><body><div id="chart"></div><script src="https://s3.tradingview.com/tv.js"></script><script>new TradingView.widget({container_id:"chart",autosize:true,symbol:"${symbol}",interval:"15",timezone:"Etc/UTC",theme:"dark",style:"1",locale:"en",enable_publishing:false,hide_top_toolbar:false,hide_legend:false,save_image:false,withdateranges:true,studies:["Volume@tv-basicstudies"]});</script></body></html>`;
 const QUICK_SYMBOLS = ['AAPL', 'TSLA', 'NVDA', 'BINANCE:BTCUSD', 'FX:EURUSD'];
+const normalizeSymbol = (value?: string) => {
+  const normalized = value?.trim().toUpperCase() ?? '';
+  if (!/^[A-Z0-9:/=.-]{1,30}$/.test(normalized)) return 'AAPL';
+  if (normalized === 'BTC/USD') return 'BINANCE:BTCUSD';
+  if (normalized === 'EUR/USD') return 'FX:EURUSD';
+  if (normalized === 'GBP/USD') return 'FX:GBPUSD';
+  return normalized.includes(':') ? normalized : `NASDAQ:${normalized}`;
+};
 
 export default function LiveChartScreen() {
   const router = useRouter();
+  const { symbol: requestedSymbol } = useLocalSearchParams<{ symbol?: string }>();
   const insets = useSafeAreaInsets();
   const shotRef = useRef<any>(null);
-  const [search, setSearch] = useState('AAPL');
-  const [symbol, setSymbol] = useState('AAPL');
+  const initialSymbol = normalizeSymbol(requestedSymbol);
+  const [search, setSearch] = useState(initialSymbol);
+  const [symbol, setSymbol] = useState(initialSymbol);
+  useEffect(() => {
+    const nextSymbol = normalizeSymbol(requestedSymbol);
+    setSearch(nextSymbol);
+    setSymbol(nextSymbol);
+  }, [requestedSymbol]);
   const tradingViewEmbedUrl = useMemo(
     () => `https://s.tradingview.com/widgetembed/?frameElementId=tradingview_widget&symbol=${encodeURIComponent(symbol)}&interval=D&hidesidetoolbar=0&symboledit=1&saveimage=1&toolbarbg=f1f3f6&studies=[]&theme=dark&style=1&timezone=Etc%2FUTC`,
     [symbol],
@@ -21,7 +36,7 @@ export default function LiveChartScreen() {
 
   const submitSearch = () => {
     const normalized = search.trim().toUpperCase();
-    if (normalized) setSymbol(normalized.includes(':') ? normalized : `NASDAQ:${normalized}`);
+    if (normalized) setSymbol(normalizeSymbol(normalized));
   };
   const selectQuickSymbol = (quickSymbol: string) => {
     setSearch(quickSymbol);

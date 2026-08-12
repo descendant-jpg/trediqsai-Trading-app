@@ -6,6 +6,7 @@ import oracleRouter from "./oracle";
 import autopilotRouter from "./autopilot";
 import { createArcadeRouter } from "./arcade";
 import paymentRouter from "./payment";
+import multiTimeframeRouter from "./multiTimeframe";
 
 const router: IRouter = Router();
 
@@ -16,5 +17,6 @@ router.use(oracleRouter);
 router.use(autopilotRouter);
 router.use(createArcadeRouter());
 router.use(paymentRouter);
+router.use(multiTimeframeRouter);
 
 export default router;

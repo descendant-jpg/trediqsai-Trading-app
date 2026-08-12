@@ -1,0 +1,29 @@
+CRITICAL FORCE WORK DIRECTIVE: YOU ARE FORCED TO IMPLEMENT A PRODUCTION-READY MULTI-TIMEFRAME ANALYSIS MODAL AND ROUTING SYSTEM. DO NOT USE MOCK HARDCODED SINGLE STATES OR DUMMY BUTTONS.
+
+Review replit.md for our project rules. We are upgrading the MULTI-TF BIAS card on the Home screen (`app/(tabs)/index.tsx`) with a "Full Analysis ->" action and building an in-app Multi-TF Breakdown modal (`components/MultiTFAnalysisModal.tsx`).
+
+### 1. Update Home Screen MULTI-TF BIAS Widget
+- Locate the "MULTI-TF BIAS" card on the Home screen.
+- Add a sleek header button: "Full Analysis ->" in bright cyan (`#00F0FF`).
+- Make both the "Full Analysis ->" button and the individual asset rows (EUR/USD, GBP/USD, BTC/USD) clickable.
+- Tapping any asset row passes that specific symbol into the new `MultiTFAnalysisModal`.
+
+### 2. Build the Multi-TF Analysis Modal (`components/MultiTFAnalysisModal.tsx`)
+Create a dark-themed (`#0A0B0E`), bottom-sheet or full-screen modal featuring:
+1. **Header:** Selected Symbol (e.g., `BTC/USD`), current live price, and a 24h change badge.
+2. **Overall Confluence Gauge:** Display a visual score (e.g., `85% Bullish Confluence`) styled in neon green or cyan.
+3. **Timeframe Breakdown Grid:** Render 4 distinct rows for timeframes:
+   - `15M` (Scalp Momentum)
+   - `1H` (Intraday Structure)
+   - `4H` (Swing Liquidity)
+   - `1D` (Macro Trend)
+   - Each row must display its direction (`BULLISH`, `BEARISH`, `NEUTRAL`) with matching accent colors.
+4. **Key Price Levels Card:** Show `Support Zone`, `Resistance Zone`, and `Key Liquidity Pool`.
+5. **AI Technical Narrative:** Display a 2-sentence summary generated via our server's Anthropic AI endpoint analyzing the multi-timeframe alignment.
+6. **Execution Route Button:** A primary `#00F0FF` action button: `"Trade [SYMBOL] Now"`. Tapping this closes the modal and navigates directly to the trading tab with `symbol` pre-selected.
+
+### 3. Fail-Safe Data Fetching
+- Wrap all backend fetching for multi-timeframe bias in `try/catch/finally` hooks.
+- Ensure that if market data or AI endpoints are loading, the modal displays clean, skeleton-loader cards rather than crashing or throwing unhandled render errors.
+
+EXECUTION REQUIREMENT: The "Full Analysis ->" action must cleanly open the modal with dynamic data for the selected asset, and the "Trade Now" button must route seamlessly to the terminal.
