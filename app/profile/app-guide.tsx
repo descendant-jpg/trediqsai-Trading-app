@@ -1,8 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { useMemo, useState } from 'react';
 import {
   Linking,
-  Modal,
   ScrollView,
   StyleSheet,
   Text,
@@ -13,80 +11,170 @@ import {
 import { Feather } from '@expo/vector-icons';
 import { Stack } from 'expo-router';
 
-const CYAN = '#00F0FF';
-const PROGRESS_KEY = 'tradiqs.completed-modules.v2';
-type Term = { id: string; title: string; definition: string };
-const terms: Term[] = [
-  { id: 'ob', title: 'Order Block', definition: 'A zone where institutional orders accumulated before a strong market displacement.' },
-  { id: 'fvg', title: 'Fair Value Gap (FVG)', definition: 'An imbalance between candles that price may revisit as the market seeks efficient delivery.' },
-  { id: 'choch', title: 'Change of Character (ChoCh)', definition: 'The first meaningful break against the current market structure, often signaling a potential reversal.' },
-  { id: 'liquidity', title: 'Liquidity Sweep', definition: 'A move through obvious highs or lows that collects resting orders before reversing.' },
-  { id: 'bos', title: 'Break of Structure', definition: 'A decisive move beyond a prior swing that signals continuation or a potential change in direction.' },
+const COLORS = {
+  background: '#0A0B0E',
+  card: '#16181D',
+  input: '#12141A',
+  accent: '#00F0FF',
+  text: '#FFFFFF',
+  muted: '#8A919D',
+  border: '#2A3038',
+};
+
+const masterclasses = [
+  { title: 'Beginner Bootcamp', subtitle: 'Build the foundation', color: '#183C4B' },
+  { title: 'Mastering AI Signals', subtitle: 'Read confluence clearly', color: '#30224B' },
+  { title: 'AutoPilot Oracle Setup', subtitle: 'Automate with guardrails', color: '#19463E' },
 ];
-const videos = [
-  { title: 'Reading Institutional Flow', color: '#263D50' },
-  { title: 'Mastering Market Structure', color: '#352750' },
-  { title: 'The Liquidity Playbook', color: '#244A45' },
+
+const curriculum = [
+  { id: 'trading-101', title: 'Trading 101', lessons: ['Candlestick Anatomy', 'Chart Reading', 'How to Buy & Sell'] },
+  { id: 'signals', title: 'TradiQs AI Signals', lessons: ['Reading the Feed', 'Confluence', 'Entry/Exit Rules'] },
+  { id: 'oracle', title: 'The AI Oracle', lessons: ['BrokerSync Connection', 'AutoPilot Allocation', 'Risk Guardrails'] },
 ];
+
+const dictionary = [
+  ['Pip', 'The smallest standard price movement in a currency pair.'],
+  ['Lot Size', 'The number of currency units in a trade position.'],
+  ['Spread', 'The difference between the bid and ask price.'],
+  ['Order Block', 'A price zone where significant institutional orders accumulated.'],
+  ['Liquidity', 'Available orders that allow a market to absorb buying or selling.'],
+  ['Bullish', 'A market condition or view that expects prices to rise.'],
+  ['Bearish', 'A market condition or view that expects prices to fall.'],
+  ['FVG', 'Fair Value Gap: an imbalance between candles that price may revisit.'],
+].map(([title, definition], index) => ({ id: String(index), title, definition }));
+
+const tools = ['Lot Size Calculator', 'P/L Simulator', 'Risk/Reward Planner', 'Margin Calculator'];
 
 export default function AppGuideScreen() {
-  const [open, setOpen] = useState<string | null>(null);
-  const [completed, setCompleted] = useState<string[]>([]);
+  const [expandedModule, setExpandedModule] = useState<string | null>('trading-101');
   const [query, setQuery] = useState('');
-  const [calculatorOpen, setCalculatorOpen] = useState(false);
-  const [balance, setBalance] = useState('');
-  const [risk, setRisk] = useState('');
-  const [stopLoss, setStopLoss] = useState('');
-  const [lotSize, setLotSize] = useState<string | null>(null);
 
-  useEffect(() => {
-    AsyncStorage.getItem(PROGRESS_KEY).then((raw) => {
-      if (!raw) return;
-      try { const parsed: unknown = JSON.parse(raw); if (Array.isArray(parsed)) setCompleted(parsed.filter((id): id is string => typeof id === 'string')); } catch { /* retain empty progress */ }
-    }).catch(() => {});
-  }, []);
-
-  const filteredTerms = useMemo(() => {
-    const value = query.trim().toLowerCase();
-    return terms.filter((term) => !value || `${term.title} ${term.definition}`.toLowerCase().includes(value));
+  const filteredDictionary = useMemo(() => {
+    const search = query.trim().toLowerCase();
+    return dictionary.filter(({ title, definition }) =>
+      `${title} ${definition}`.toLowerCase().includes(search),
+    );
   }, [query]);
-  const markRead = (id: string) => {
-    setOpen(open === id ? null : id);
-    if (completed.includes(id)) return;
-    const next = [...completed, id];
-    setCompleted(next);
-    AsyncStorage.setItem(PROGRESS_KEY, JSON.stringify(next)).catch(() => {});
-  };
-  const calculate = () => {
-    const account = Number(balance);
-    const percentage = Number(risk);
-    const pips = Number(stopLoss);
-    if (account > 0 && percentage > 0 && pips > 0) setLotSize((account * percentage / 100 / (pips * 10)).toFixed(2));
-  };
 
   return (
     <View style={styles.container}>
-      <Stack.Screen options={{ title: 'TradiQs Academy', headerShown: true, headerStyle: { backgroundColor: '#0A0B0E' }, headerTintColor: '#FFF' }} />
+      <Stack.Screen
+        options={{
+          title: 'TradiQs Academy',
+          headerShown: true,
+          headerStyle: { backgroundColor: COLORS.background },
+          headerTintColor: COLORS.text,
+        }}
+      />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={styles.eyebrow}>TRADIQS ACADEMY</Text>
         <Text style={styles.title}>Build your edge.</Text>
-        <View style={styles.hud}><Text style={styles.hudLabel}>DAILY ALPHA</Text><Text style={styles.quote}>“Amateurs focus on how much they can make. Professionals focus on how much they can lose.”</Text></View>
+        <Text style={styles.intro}>A practical learning hub for sharper decisions in every market.</Text>
+
         <Text style={styles.section}>YOUTUBE MASTERCLASSES</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {videos.map((video) => <TouchableOpacity key={video.title} style={[styles.video, { backgroundColor: video.color }]} onPress={() => Linking.openURL('https://youtube.com/watch?v=YOUR_MOCK_VIDEO_ID')} activeOpacity={0.85}><Feather name="play-circle" size={38} color={CYAN} style={styles.play} /><Text style={styles.videoTitle}>{video.title}</Text><Text style={styles.videoMeta}>MASTERCLASS · 12 MIN</Text></TouchableOpacity>)}
+          {masterclasses.map((video) => (
+            <TouchableOpacity
+              key={video.title}
+              style={[styles.videoCard, { backgroundColor: video.color }]}
+              onPress={() => Linking.openURL('https://youtube.com')}
+              activeOpacity={0.85}
+            >
+              <Feather name="play-circle" size={34} color={COLORS.accent} />
+              <Text style={styles.videoTitle}>{video.title}</Text>
+              <Text style={styles.videoSubtitle}>{video.subtitle}</Text>
+              <Text style={styles.videoMeta}>WATCH ON YOUTUBE  ›</Text>
+            </TouchableOpacity>
+          ))}
         </ScrollView>
-        <View style={styles.progressCard}><View style={styles.progressHeader}><Text style={styles.progressTitle}>Bootcamp Progress</Text><Text style={styles.percent}>{Math.round(completed.length / terms.length * 100)}%</Text></View><View style={styles.track}><View style={[styles.fill, { width: `${completed.length / terms.length * 100}%` }]} /></View><Text style={styles.muted}>{completed.length} of {terms.length} dictionary modules read</Text></View>
+
+        <Text style={styles.section}>STRUCTURED CURRICULUM</Text>
+        {curriculum.map((module) => {
+          const isOpen = expandedModule === module.id;
+          return (
+            <View key={module.id} style={styles.moduleCard}>
+              <TouchableOpacity
+                style={styles.moduleHeader}
+                onPress={() => setExpandedModule(isOpen ? null : module.id)}
+                activeOpacity={0.8}
+              >
+                <View style={styles.moduleIndex}><Text style={styles.moduleIndexText}>{module.id === 'trading-101' ? '01' : module.id === 'signals' ? '02' : '03'}</Text></View>
+                <Text style={styles.moduleTitle}>{module.title}</Text>
+                <Feather name={isOpen ? 'chevron-up' : 'chevron-down'} size={18} color={COLORS.accent} />
+              </TouchableOpacity>
+              {isOpen && (
+                <View style={styles.lessonList}>
+                  {module.lessons.map((lesson, index) => (
+                    <View key={lesson} style={styles.lesson}>
+                      <Text style={styles.lessonNumber}>0{index + 1}</Text>
+                      <Text style={styles.lessonText}>{lesson}</Text>
+                      <Feather name="arrow-up-right" size={15} color={COLORS.muted} />
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+          );
+        })}
+
         <Text style={styles.section}>TRADING DICTIONARY</Text>
-        <TextInput value={query} onChangeText={setQuery} placeholder="Search terms (e.g., Order Block, FVG, ChoCh)..." placeholderTextColor="#737983" style={styles.search} />
-        {filteredTerms.map((term) => <View key={term.id} style={styles.card}><TouchableOpacity onPress={() => markRead(term.id)} style={styles.glossaryHeader}><View style={styles.termRow}><Feather name={completed.includes(term.id) ? 'check-circle' : 'book-open'} size={15} color={completed.includes(term.id) ? '#2ECA8B' : CYAN} /><Text style={styles.term}>{term.title}</Text></View><Feather name="chevron-down" size={17} color={CYAN} style={{ transform: [{ rotate: open === term.id ? '180deg' : '0deg' }] }} /></TouchableOpacity>{open === term.id && <Text style={styles.definition}>{term.definition}</Text>}</View>)}
-        <Text style={styles.section}>TRADER'S TOOLKIT</Text>
-        <TouchableOpacity style={styles.toolCard} onPress={() => setCalculatorOpen(true)}><View><Text style={styles.toolTitle}>Lot Size Calculator</Text><Text style={styles.muted}>Size every position with discipline.</Text></View><Feather name="arrow-up-right" size={21} color={CYAN} /></TouchableOpacity>
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search terms..."
+          placeholderTextColor={COLORS.muted}
+          style={styles.search}
+        />
+        {filteredDictionary.map((term) => (
+          <View key={term.id} style={styles.dictionaryCard}>
+            <Text style={styles.term}>{term.title}</Text>
+            <Text style={styles.definition}>{term.definition}</Text>
+          </View>
+        ))}
+        {!filteredDictionary.length && <Text style={styles.empty}>No terms match your search.</Text>}
+
+        <Text style={styles.section}>TRADER&apos;S TOOLKIT</Text>
+        <View style={styles.toolGrid}>
+          {tools.map((tool) => (
+            <TouchableOpacity key={tool} style={styles.toolCard} activeOpacity={0.8}>
+              <Feather name="sliders" size={20} color={COLORS.accent} />
+              <Text style={styles.toolTitle}>{tool}</Text>
+              <Feather name="arrow-up-right" size={16} color={COLORS.muted} />
+            </TouchableOpacity>
+          ))}
+        </View>
       </ScrollView>
-      <Modal visible={calculatorOpen} transparent animationType="slide" onRequestClose={() => setCalculatorOpen(false)}><View style={styles.modalBackdrop}><View style={styles.modal}><TouchableOpacity style={styles.close} onPress={() => setCalculatorOpen(false)}><Feather name="x" size={22} color="#FFF" /></TouchableOpacity><Text style={styles.modalTitle}>Lot Size Calculator</Text>{[['Account Balance ($)', balance, setBalance], ['Risk (%)', risk, setRisk], ['Stop Loss (Pips)', stopLoss, setStopLoss]].map(([label, value, setter]) => <TextInput key={label as string} value={value as string} onChangeText={setter as (value: string) => void} placeholder={label as string} placeholderTextColor="#737983" keyboardType="numeric" style={styles.input} />)}<TouchableOpacity style={styles.calculate} onPress={calculate}><Text style={styles.calculateText}>CALCULATE POSITION</Text></TouchableOpacity>{lotSize && <Text style={styles.result}>Recommended Lot Size: {lotSize}</Text>}</View></View></Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0A0B0E' }, content: { padding: 20, paddingBottom: 48 }, eyebrow: { color: CYAN, fontSize: 10, fontWeight: '700', letterSpacing: 2 }, title: { color: '#FFF', fontSize: 28, fontWeight: '700', marginTop: 8 }, hud: { backgroundColor: '#16181D', borderLeftWidth: 3, borderLeftColor: CYAN, borderRadius: 10, padding: 15, marginTop: 20 }, hudLabel: { color: CYAN, fontSize: 10, fontWeight: '800', letterSpacing: 1.5 }, quote: { color: '#D9DCE2', fontSize: 13, lineHeight: 19, marginTop: 8 }, section: { color: '#6D727B', fontSize: 10, fontWeight: '700', letterSpacing: 1.5, marginTop: 27, marginBottom: 10 }, video: { width: 256, height: 160, borderRadius: 12, marginRight: 12, padding: 14, justifyContent: 'flex-end', overflow: 'hidden' }, play: { position: 'absolute', top: 48, alignSelf: 'center' }, videoTitle: { color: '#FFF', fontSize: 14, fontWeight: '800' }, videoMeta: { color: '#AAB2C0', fontSize: 9, marginTop: 6, letterSpacing: 1 }, progressCard: { backgroundColor: '#16181D', borderRadius: 15, borderWidth: 1, borderColor: '#262930', padding: 17, marginTop: 20 }, progressHeader: { flexDirection: 'row', justifyContent: 'space-between' }, progressTitle: { color: '#FFF', fontSize: 14, fontWeight: '700' }, percent: { color: CYAN, fontSize: 15, fontWeight: '700' }, track: { height: 8, borderRadius: 4, backgroundColor: '#30343D', overflow: 'hidden', marginTop: 15 }, fill: { height: '100%', backgroundColor: CYAN }, muted: { color: '#737983', fontSize: 11, marginTop: 7 }, search: { backgroundColor: '#12141A', color: '#FFF', padding: 13, borderRadius: 9, borderWidth: 1, borderColor: '#2B3039', marginBottom: 10 }, card: { backgroundColor: '#16181D', borderRadius: 12, borderWidth: 1, borderColor: '#262930', marginBottom: 8, paddingHorizontal: 14 }, glossaryHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 53 }, termRow: { flexDirection: 'row', alignItems: 'center', gap: 8 }, term: { color: '#FFF', fontSize: 13, fontWeight: '700' }, definition: { color: '#9A9FA8', fontSize: 12, lineHeight: 18, paddingBottom: 14 }, toolCard: { backgroundColor: '#16181D', borderRadius: 12, borderWidth: 1, borderColor: '#303641', padding: 17, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, toolTitle: { color: '#FFF', fontSize: 15, fontWeight: '800' }, modalBackdrop: { flex: 1, backgroundColor: '#000B', justifyContent: 'flex-end' }, modal: { backgroundColor: '#12141A', borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 22, paddingBottom: 38 }, close: { alignSelf: 'flex-end', padding: 5 }, modalTitle: { color: '#FFF', fontSize: 22, fontWeight: '800', marginBottom: 18 }, input: { backgroundColor: '#1B1E26', color: '#FFF', borderRadius: 9, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#303641' }, calculate: { backgroundColor: CYAN, borderRadius: 10, padding: 17, alignItems: 'center', marginTop: 8 }, calculateText: { color: '#071014', fontWeight: '900', letterSpacing: 1 }, result: { color: '#7CFFCB', fontSize: 18, fontWeight: '800', textAlign: 'center', marginTop: 20 },
+  container: { flex: 1, backgroundColor: COLORS.background },
+  content: { padding: 20, paddingBottom: 50 },
+  eyebrow: { color: COLORS.accent, fontSize: 10, fontWeight: '800', letterSpacing: 2 },
+  title: { color: COLORS.text, fontSize: 30, fontWeight: '800', marginTop: 8 },
+  intro: { color: COLORS.muted, fontSize: 13, lineHeight: 20, marginTop: 8, maxWidth: 330 },
+  section: { color: '#6D727B', fontSize: 10, fontWeight: '800', letterSpacing: 1.6, marginTop: 28, marginBottom: 11 },
+  videoCard: { width: 226, height: 164, borderRadius: 14, padding: 16, marginRight: 12, justifyContent: 'flex-end' },
+  videoTitle: { color: COLORS.text, fontSize: 16, fontWeight: '800', marginTop: 22 },
+  videoSubtitle: { color: '#C0C8D2', fontSize: 11, marginTop: 5 },
+  videoMeta: { color: COLORS.accent, fontSize: 9, fontWeight: '800', letterSpacing: 1, marginTop: 13 },
+  moduleCard: { backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.border, borderRadius: 13, marginBottom: 9, overflow: 'hidden' },
+  moduleHeader: { minHeight: 62, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, gap: 12 },
+  moduleIndex: { width: 30, height: 30, borderRadius: 15, backgroundColor: '#20262D', alignItems: 'center', justifyContent: 'center' },
+  moduleIndexText: { color: COLORS.accent, fontSize: 10, fontWeight: '800' },
+  moduleTitle: { flex: 1, color: COLORS.text, fontSize: 14, fontWeight: '800' },
+  lessonList: { borderTopWidth: 1, borderTopColor: COLORS.border, padding: 8 },
+  lesson: { flexDirection: 'row', alignItems: 'center', padding: 10, gap: 10 },
+  lessonNumber: { color: COLORS.accent, fontSize: 10, fontWeight: '800', width: 22 },
+  lessonText: { flex: 1, color: '#D8DCE2', fontSize: 12 },
+  search: { backgroundColor: COLORS.input, color: COLORS.text, borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, padding: 14, fontSize: 13, marginBottom: 10 },
+  dictionaryCard: { backgroundColor: COLORS.card, borderRadius: 11, padding: 14, marginBottom: 8, borderLeftWidth: 2, borderLeftColor: COLORS.accent },
+  term: { color: COLORS.text, fontSize: 14, fontWeight: '800' },
+  definition: { color: COLORS.muted, fontSize: 12, lineHeight: 18, marginTop: 5 },
+  empty: { color: COLORS.muted, fontSize: 12, paddingVertical: 12 },
+  toolGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 10 },
+  toolCard: { width: '48%', minHeight: 112, backgroundColor: COLORS.card, borderWidth: 1, borderColor: '#35414A', borderRadius: 13, padding: 14, justifyContent: 'space-between' },
+  toolTitle: { color: COLORS.text, fontSize: 13, fontWeight: '800', lineHeight: 18 },
 });
