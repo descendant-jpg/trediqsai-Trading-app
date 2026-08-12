@@ -174,8 +174,8 @@ export function PaywallModal({
       null,
     [packages],
   );
-  const monthlyPrice = monthlyPackage?.product.priceString ?? (selectedTier === 'ELITE' ? '$99.99' : MONTHLY_PRICE_FALLBACK);
-  const annualPrice = annualPackage?.product.priceString ?? (selectedTier === 'ELITE' ? '$799.99' : ANNUAL_PRICE_FALLBACK);
+  const monthlyPrice = monthlyPackage?.product.priceString ?? (selectedTier === 'ELITE' ? '$49.99' : MONTHLY_PRICE_FALLBACK);
+  const annualPrice = annualPackage?.product.priceString ?? (selectedTier === 'ELITE' ? '$399.99' : ANNUAL_PRICE_FALLBACK);
   const selectedPackage = billingCycle === 'annual' ? annualPackage : monthlyPackage;
   const working = isPurchasing || isRestoring || simulating;
   const accent = selectedTier === 'ELITE' ? '#B026FF' : '#00F0FF';
