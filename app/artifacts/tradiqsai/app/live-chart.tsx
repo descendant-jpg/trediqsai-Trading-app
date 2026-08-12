@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { Alert, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
@@ -9,9 +9,12 @@ const chartHtml = (symbol: string) => `<!doctype html><html><head><meta name="vi
 export default function LiveChartScreen() {
   const router = useRouter();
   const shotRef = useRef<any>(null);
-  const [search, setSearch] = useState('BINANCE:BTCUSD');
-  const [symbol, setSymbol] = useState('BINANCE:BTCUSD');
-  const [scanning, setScanning] = useState(false);
+  const [search, setSearch] = useState('AAPL');
+  const [symbol, setSymbol] = useState('AAPL');
+  const tradingViewEmbedUrl = useMemo(
+    () => `https://s.tradingview.com/widgetembed/?frameElementId=tradingview_widget&symbol=${encodeURIComponent(symbol)}&interval=D&hidesidetoolbar=0&symboledit=1&saveimage=1&toolbarbg=f1f3f6&studies=[]&theme=dark&style=1&timezone=Etc%2FUTC`,
+    [symbol],
+  );
 
   const submitSearch = () => {
     const normalized = search.trim().toUpperCase();
@@ -20,14 +23,9 @@ export default function LiveChartScreen() {
   const takeSnapshot = async () => {
     if (!shotRef.current?.capture) return;
     try {
-      await shotRef.current.capture();
-      setScanning(true);
-      setTimeout(() => {
-        setScanning(false);
-        if (Platform.OS === 'web') window.alert('AI Scanning Chart...'); else Alert.alert('AI Scanning Chart...', 'Your snapshot is ready for analysis.');
-      }, 600);
+      const uri = await shotRef.current.capture();
+      if (uri) router.push({ pathname: '/ai-analysis', params: { imageUri: uri } });
     } catch {
-      setScanning(false);
       if (Platform.OS === 'web') window.alert('Unable to capture chart.'); else Alert.alert('Snapshot unavailable', 'Please try again.');
     }
   };
@@ -41,9 +39,15 @@ export default function LiveChartScreen() {
         <TouchableOpacity onPress={submitSearch} style={styles.searchButton}><Text style={styles.searchButtonText}>GO</Text></TouchableOpacity>
       </View>
       <ViewShot ref={shotRef} style={styles.chart} options={{ format: 'jpg', quality: 0.9 }}>
-        <WebView source={{ html: chartHtml(symbol) }} originWhitelist={['*']} javaScriptEnabled domStorageEnabled style={styles.webview} />
+        {Platform.OS === 'web'
+          ? React.createElement('iframe', {
+              key: tradingViewEmbedUrl,
+              src: tradingViewEmbedUrl,
+              title: 'TradingView live chart',
+              style: { flex: 1, width: '100%', height: '100%', borderWidth: 0, backgroundColor: '#0A0B0E' },
+            })
+          : <WebView source={{ html: chartHtml(symbol) }} originWhitelist={['*']} javaScriptEnabled domStorageEnabled style={styles.webview} />}
       </ViewShot>
-      {scanning && <View style={styles.overlay}><Text style={styles.overlayText}>AI Scanning Chart...</Text></View>}
       <TouchableOpacity style={styles.snapshot} onPress={takeSnapshot} activeOpacity={0.85}><Text style={styles.snapshotText}>TAKE SNAPSHOT</Text></TouchableOpacity>
     </View>
   );
@@ -57,10 +61,8 @@ const styles = StyleSheet.create({
   search: { flex: 1, height: 40, color: '#FFF', backgroundColor: '#12141A', borderWidth: 1, borderColor: '#303641', borderRadius: 9, paddingHorizontal: 12, fontSize: 13 },
   searchButton: { height: 40, paddingHorizontal: 12, borderRadius: 9, backgroundColor: '#00F0FF', alignItems: 'center', justifyContent: 'center' },
   searchButtonText: { color: '#061014', fontSize: 11, fontWeight: '900' },
-  chart: { flex: 1, overflow: 'hidden' },
+  chart: { flex: 1, minHeight: 0, overflow: 'hidden' },
   webview: { flex: 1, backgroundColor: '#0A0B0E' },
   snapshot: { margin: 14, height: 58, borderRadius: 13, backgroundColor: '#00FF00', alignItems: 'center', justifyContent: 'center' },
   snapshotText: { color: '#001000', fontSize: 15, fontWeight: '900', letterSpacing: 1.5 },
-  overlay: { position: 'absolute', left: 20, right: 20, bottom: 90, backgroundColor: '#071407EE', borderWidth: 1, borderColor: '#00FF00', borderRadius: 10, padding: 15, alignItems: 'center' },
-  overlayText: { color: '#00FF00', fontSize: 14, fontWeight: '800' },
 });
