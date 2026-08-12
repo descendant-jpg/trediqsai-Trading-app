@@ -29,6 +29,7 @@ import {
 import { isSupabaseConfigured, supabase } from '@/utils/supabase';
 import { initializeRevenueCat, SubscriptionProvider } from '@/lib/revenuecat';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
+import { getNotificationRoute } from '@/services/NotificationService';
 
 // Attach the Supabase access token to every API call so server-side state
 // (e.g. AutoPilot bot settings) is scoped to the signed-in trader.
@@ -119,17 +120,41 @@ function RootLayoutNav() {
 
   useEffect(() => {
     if (Platform.OS === 'web') return;
-    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
-      const signalId = response.notification.request.content.data?.signal_id;
-      if (typeof signalId !== 'string' && typeof signalId !== 'number') return;
+    let mounted = true;
+    const handleResponse = (response: Notifications.NotificationResponse) => {
+      const data = response.notification.request.content.data;
+      const route = getNotificationRoute(data);
+      if (route) {
+        router.push(route as never);
+        return;
+      }
 
-      router.push({
-        pathname: '/(tabs)/signals',
-        params: { highlight_id: String(signalId) },
-      });
+      const signalId = data?.signal_id;
+      if (typeof signalId === 'string' || typeof signalId === 'number') {
+        router.push({
+          pathname: '/(tabs)/signals',
+          params: { highlight_id: String(signalId) },
+        });
+      }
+    };
+
+    // A response listener only receives taps while JavaScript is already
+    // running. Check the launch response as well for a notification tapped
+    // from the background/terminated state.
+    void Notifications.getLastNotificationResponseAsync()
+      .then((response) => {
+        if (mounted && response) handleResponse(response);
+      })
+      .catch(() => {});
+
+    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      handleResponse(response);
     });
 
-    return () => subscription.remove();
+    return () => {
+      mounted = false;
+      subscription.remove();
+    };
   }, [router]);
   const prevUserId = React.useRef(userId);
   useEffect(() => {
