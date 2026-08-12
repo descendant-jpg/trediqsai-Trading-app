@@ -1,0 +1,28 @@
+CRITICAL FORCE WORK DIRECTIVE: YOU ARE FORCED TO ACTIVATE ALL PRO/ELITE FEATURES AND WIRE EVERY CARD IN THE AI TOOLS TAB. DO NOT LEAVE ANY CARD AS AN INERT DUMMY BUTTON.
+
+Review replit.md for our project rules. The Pro and Elite features in the AI Tools tab (`app/(tabs)/ai-tools.tsx` or similar) are non-functional or blocked.
+
+### 1. Unified Entitlement & Role Check
+- Update the access control logic across all tool cards in `AI Tools`.
+- Define a central permission helper:
+  `const canAccessTool = (requiredTier: 'starter' | 'pro' | 'elite') => role === 'admin' || tierLevel >= requiredLevel;`
+- Ensure that users with `role === 'admin'` or an active `pro`/`elite` tier pass this check cleanly without triggering upgrade paywalls.
+
+### 2. Wire Every Tool Card to Functional Screens/Modals
+Attach active press handlers (`onPress`) to EVERY tool card in the tab:
+
+1. **AI Signal Generator & Chart Analysis:** Launch `ImagePicker` chart upload modal with instant AI analysis breakdown.
+2. **AutoPilot Bots:** Toggle bot state or open the bot configuration sheet.
+3. **AI News Analyser & Market Radar:** Connect to our `public.market_news` feed and display high-impact news sentiment.
+4. **Psychology Coach:** Open the trade journal & emotional risk evaluator.
+5. **Liquidity Scanner:** Open institutional liquidity level & FVG detector modal.
+6. **Currency Heatmap & Correlation Finder:** Render live currency strength matrix widget.
+7. **Code Lab:** Open the AI PineScript / MQL indicator & EA generator workspace.
+8. **Risk Calculator:** Open the interactive position size & pip risk calculator modal.
+9. **Account Tracker & Broker Comparison:** Open broker matrix and account metrics sync sheet.
+
+### 3. Fail-Safe Render & Unlocked UI State
+- Wrap all tool interactions inside `try/catch` handlers so missing backend data displays clean skeleton states instead of crashing.
+- Render "UNLOCKED" or active badges on tool cards when the user satisfies the tier requirements or has `role === 'admin'`.
+
+EXECUTION REQUIREMENT: Audit every card in the AI Tools hub, apply the unified admin/tier permission gate, and verify that tapping any tool card opens its functional feature view without error boundaries.
