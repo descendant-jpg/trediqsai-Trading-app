@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,12 +10,11 @@ import {
 } from 'react-native';
 import * as FileSystem from 'expo-file-system';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-
-const prompt = 'You are an institutional quantitative analyst. Analyze this trading chart. Provide a concise response with three sections: 1. BIAS (Bullish, Bearish, or Neutral). 2. KEY LEVELS (Support and Resistance). 3. ANALYSIS (Brief explanation of price action and indicators).';
+import { customFetch } from '@workspace/api-client-react';
 
 export default function AIAnalysisScreen() {
   const router = useRouter();
-  const { imageUri } = useLocalSearchParams<{ imageUri?: string }>();
+  const { imageUri, mode = 'analysis', mediaType = 'image/jpeg' } = useLocalSearchParams<{ imageUri?: string; mode?: 'analysis' | 'signal'; mediaType?: string }>();
   const [loading, setLoading] = useState(true);
   const [analysisResult, setAnalysisResult] = useState('');
 
@@ -32,33 +30,15 @@ export default function AIAnalysisScreen() {
         const base64 = await FileSystem.readAsStringAsync(imageUri, {
           encoding: FileSystem.EncodingType.Base64,
         });
-        const apiKey = process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY;
-        if (!apiKey) throw new Error('Anthropic API key is not configured.');
-        const response = await fetch('https://api.anthropic.com/v1/messages', {
+        const response = await customFetch<{ analysis: string }>('/api/oracle/chart-analysis', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'x-api-key': apiKey,
-            'anthropic-version': '2023-06-01',
-            ...(Platform.OS === 'web' ? { 'anthropic-dangerous-direct-browser-access': 'true' } : {}),
           },
-          body: JSON.stringify({
-            model: 'claude-3-5-sonnet-20240620',
-            max_tokens: 700,
-            messages: [{
-              role: 'user',
-              content: [
-                { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64 } },
-                { type: 'text', text: prompt },
-              ],
-            }],
-          }),
+          body: JSON.stringify({ imageBase64: base64, mode: mode === 'signal' ? 'signal' : 'analysis', mediaType: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(mediaType) ? mediaType : 'image/jpeg' }),
         });
-        const payload = await response.json() as { content?: Array<{ type: string; text?: string }>; error?: { message?: string } };
-        if (!response.ok) throw new Error(payload.error?.message || 'The analysis service returned an error.');
-        const text = payload.content?.find((item) => item.type === 'text')?.text;
-        if (!text) throw new Error('The analysis service returned no text.');
-        if (active) setAnalysisResult(text);
+        if (!response.analysis) throw new Error('The analysis service returned no text.');
+        if (active) setAnalysisResult(response.analysis);
       } catch (error) {
         if (active) setAnalysisResult(error instanceof Error ? error.message : 'Unable to analyze this chart.');
       } finally {
@@ -85,7 +65,7 @@ export default function AIAnalysisScreen() {
           <Text style={styles.title}>Chart intelligence.</Text>
           {imageUri ? <Image source={{ uri: imageUri }} style={styles.image} resizeMode="cover" /> : null}
           <View style={styles.resultCard}>
-            <Text style={styles.resultLabel}>STRUCTURED TRADING BIAS</Text>
+            <Text style={styles.resultLabel}>{mode === 'signal' ? 'SIGNAL PLAN' : 'STRUCTURED TRADING BIAS'}</Text>
             <Text style={styles.result}>{analysisResult}</Text>
           </View>
           <TouchableOpacity style={styles.closeButton} onPress={() => router.back()}>

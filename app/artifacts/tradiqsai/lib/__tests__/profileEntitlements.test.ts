@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hasProfileProAccess, isProfileAdmin } from '../profileEntitlements';
+import { getProfileAccessTier, hasProfileProAccess, isProfileAdmin } from '../profileEntitlements';
 
 describe('profile entitlements', () => {
   it('grants admin accounts Pro access', () => {
@@ -16,5 +16,15 @@ describe('profile entitlements', () => {
   it('keeps unentitled accounts locked', () => {
     expect(hasProfileProAccess({ role: 'user', tier: 'free' })).toBe(false);
     expect(hasProfileProAccess(null)).toBe(false);
+  });
+
+  it('honors an active trial and expires it when its timestamp passes', () => {
+    expect(getProfileAccessTier({ free_trial_until: '2099-01-01T00:00:00.000Z' })).toBe('pro');
+    expect(getProfileAccessTier({ free_trial_until: '2000-01-01T00:00:00.000Z' })).toBe('starter');
+  });
+
+  it('lets a staff override revoke an older paid tier', () => {
+    expect(getProfileAccessTier({ tier: 'elite', manual_tier_override: 'free' })).toBe('starter');
+    expect(hasProfileProAccess({ tier: 'pro', manual_tier_override: 'starter' })).toBe(false);
   });
 });

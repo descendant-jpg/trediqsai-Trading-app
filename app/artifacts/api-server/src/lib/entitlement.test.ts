@@ -68,6 +68,7 @@ describe("supabase tier lookup query contract", () => {
     // one of these, this assertion is the tripwire.
     const selected = (parsed.searchParams.get("select") ?? "").split(",");
     expect(selected).toEqual([
+      "role",
       "tier",
       "manual_tier_override",
       "free_trial_until",

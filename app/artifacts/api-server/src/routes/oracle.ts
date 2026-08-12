@@ -8,6 +8,9 @@ import {
 } from "@workspace/api-zod";
 import { logger } from "../lib/logger";
 import { rateLimit } from "../middlewares/rateLimit";
+import { identity, requestUserId, ANONYMOUS_USER } from "../middlewares/identity";
+import { hasProAccess } from "../lib/entitlement";
+import { z } from "zod";
 
 const router: IRouter = Router();
 const STRATEGY_BRIEF_CACHE_TTL_MS = 15 * 60_000;
@@ -28,6 +31,11 @@ const SYSTEM_PROMPT = [
   "Never claim to have live market data; when asked for current prices or real-time numbers, explain you don't have a live feed and reason from general market structure instead.",
   "Always remind users that nothing you say is financial advice when giving anything resembling a trade idea.",
 ].join(" ");
+const chartRequestSchema = z.object({
+  imageBase64: z.string().min(100).max(8_000_000),
+  mode: z.enum(["analysis", "signal"]),
+  mediaType: z.enum(["image/jpeg", "image/png", "image/webp", "image/gif"]),
+});
 
 type TradingContext = NonNullable<
   ReturnType<typeof SendOracleChatBody.parse>["tradingContext"]
@@ -204,6 +212,33 @@ router.post("/oracle/chat", oracleRateLimit, async (req, res) => {
   } catch (err) {
     logger.error({ err }, "Oracle chat completion failed");
     res.status(502).json({ error: "The Oracle couldn't reach its AI model." });
+  }
+});
+
+router.post("/oracle/chart-analysis", identity(), oracleRateLimit, async (req, res) => {
+  const userId = requestUserId(res);
+  if (userId === ANONYMOUS_USER) return res.status(401).json({ error: "Sign in required." });
+  if (!(await hasProAccess(userId))) return res.status(403).json({ error: "Pro subscription required.", code: "pro_subscription_required" });
+  const parsed = chartRequestSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "A valid chart image is required." });
+  const client = getClient();
+  if (!client) return res.status(503).json({ error: "Chart analysis is not configured yet." });
+  const signalPrompt = parsed.data.mode === "signal"
+    ? "Return exactly five concise labeled lines: BIAS (BUY, SELL, or WAIT), ENTRY ZONE, STOP LOSS, TAKE PROFIT, and RISK NOTE. Do not guarantee outcomes; add 'Not financial advice' in RISK NOTE."
+    : "Return concise sections for BIAS, KEY LEVELS, and ANALYSIS. Do not guarantee outcomes and include that this is not financial advice.";
+  try {
+    const message = await client.messages.create({
+      model: process.env["CHART_ANALYSIS_MODEL"] ?? "claude-haiku-4-5-20251001",
+      max_tokens: 600,
+      system: `You are a cautious institutional chart analyst. ${signalPrompt}`,
+      messages: [{ role: "user", content: [{ type: "image", source: { type: "base64", media_type: parsed.data.mediaType, data: parsed.data.imageBase64 } }, { type: "text", text: "Analyze this uploaded trading chart." }] }],
+    });
+    const analysis = message.content.filter((block): block is Anthropic.TextBlock => block.type === "text").map((block) => block.text).join("").trim();
+    if (!analysis) return res.status(502).json({ error: "The chart analyzer returned no result." });
+    return res.json({ analysis });
+  } catch (err) {
+    logger.error({ err, userId }, "Chart analysis failed");
+    return res.status(502).json({ error: "Chart analysis is temporarily unavailable." });
   }
 });
 

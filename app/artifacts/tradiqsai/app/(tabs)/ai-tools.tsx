@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   getGetAutopilotQueryKey,
@@ -30,7 +31,9 @@ import {
   type AutopilotState,
 } from '@workspace/api-client-react';
 import { PaywallModal } from '@/components/PaywallModal';
+import { AiToolModal, type AiToolKind } from '@/components/AiToolModal';
 import colors from '@/constants/colors';
+import { canAccessTool } from '@/lib/aiToolAccess';
 import { legacyOracleRedirectTarget } from '@/lib/legacyOracleRedirect';
 import { useSubscription } from '@/lib/revenuecat';
 
@@ -129,23 +132,22 @@ type Tool = {
   description: string;
   tier: ToolTier;
   icon: React.ComponentProps<typeof Feather>['name'];
-  kind?: 'code' | 'correlation' | 'heatmap' | 'risk';
+  kind: AiToolKind;
   wide?: boolean;
 };
-const TIER_LEVEL: Record<ToolTier, number> = { STARTER: 1, PRO: 2, ELITE: 3 };
 const TOOLS: Tool[] = [
-  { name: 'AI Signal Generator', description: 'Upload chart, get instant BUY/SELL signal with TP & SL', tier: 'PRO', icon: 'trending-up' },
-  { name: 'AutoPilot Bots', description: 'Cloud-hosted GRID & DCA bots that trade for you 24/7', tier: 'ELITE', icon: 'cpu' },
-  { name: 'AI Chart Analysis', description: 'Upload trading charts for AI-powered analysis', tier: 'PRO', icon: 'bar-chart-2' },
-  { name: 'AI News Analyser', description: 'Analyse forex news & economic events with AI', tier: 'PRO', icon: 'globe' },
-  { name: 'Psychology Coach', description: 'Stop revenge trading and emotional losses forever', tier: 'ELITE', icon: 'heart' },
-  { name: 'Market Radar', description: 'Top forex, crypto, stock & commodity news — highest impact', tier: 'PRO', icon: 'radio' },
-  { name: 'Liquidity Scanner', description: 'Detect institutional stop-hunts & Fair Value Gaps', tier: 'ELITE', icon: 'crosshair' },
+  { name: 'AI Signal Generator', description: 'Upload chart, get instant BUY/SELL signal with TP & SL', tier: 'PRO', icon: 'trending-up', kind: 'risk' },
+  { name: 'AutoPilot Bots', description: 'Cloud-hosted GRID & DCA bots that trade for you 24/7', tier: 'PRO', icon: 'cpu', kind: 'risk' },
+  { name: 'AI Chart Analysis', description: 'Upload trading charts for AI-powered analysis', tier: 'PRO', icon: 'bar-chart-2', kind: 'risk' },
+  { name: 'AI News Analyser', description: 'Analyse forex news & economic events with AI', tier: 'PRO', icon: 'globe', kind: 'news' },
+  { name: 'Psychology Coach', description: 'Stop revenge trading and emotional losses forever', tier: 'ELITE', icon: 'heart', kind: 'psychology' },
+  { name: 'Market Radar', description: 'Top forex, crypto, stock & commodity news — highest impact', tier: 'PRO', icon: 'radio', kind: 'news' },
+  { name: 'Liquidity Scanner', description: 'Detect institutional stop-hunts & Fair Value Gaps', tier: 'ELITE', icon: 'crosshair', kind: 'liquidity' },
   { name: 'Correlation Finder', description: 'Discover how currency pairs move together', tier: 'STARTER', icon: 'link-2', kind: 'correlation' },
   { name: 'Currency Heatmap', description: 'Cross pair pressure map with directional bias', tier: 'PRO', icon: 'grid', kind: 'heatmap' },
-  { name: 'Broker Comparison', description: 'Find the best broker for your trading style', tier: 'STARTER', icon: 'briefcase' },
+  { name: 'Broker Comparison', description: 'Find the best broker for your trading style', tier: 'STARTER', icon: 'briefcase', kind: 'broker' },
   { name: 'Code Lab', description: 'AI-powered Indicator Builder + Robot Builder (EA)', tier: 'ELITE', icon: 'code', kind: 'code' },
-  { name: 'Account Tracker', description: 'Connect MT4/MT5 and get AI trading insights', tier: 'PRO', icon: 'activity', wide: true },
+  { name: 'Account Tracker', description: 'Connect MT4/MT5 and get AI trading insights', tier: 'PRO', icon: 'activity', kind: 'broker', wide: true },
   { name: 'Risk Calculator', description: 'Calculate exact lot size based on SL pips', tier: 'STARTER', icon: 'target', kind: 'risk', wide: true },
 ];
 
@@ -154,23 +156,22 @@ function TierBadge({ tier }: { tier: ToolTier }) {
   return <View style={[styles.tierBadge, { borderColor: color }]}><Text style={[styles.tierText, { color }]}>{tier}</Text></View>;
 }
 
-function ToolModal({ tool, onClose }: { tool: Tool; onClose: () => void }) {
-  const [prompt, setPrompt] = useState('');
-  const [balance, setBalance] = useState('10000');
-  const [risk, setRisk] = useState('1');
-  const [stopLoss, setStopLoss] = useState('40');
-  const lotSize = ((Number(balance) || 0) * ((Number(risk) || 0) / 100) / ((Number(stopLoss) || 1) * 10)).toFixed(2);
-  return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.toolBackdrop}><View style={styles.toolSheet}>
-        <View style={styles.configHeader}><View><Text style={styles.configTitle}>{tool.name}</Text><TierBadge tier={tool.tier} /></View><TouchableOpacity onPress={onClose}><Feather name="x" size={20} color="#FFF" /></TouchableOpacity></View>
-        {tool.kind === 'code' && <><Text style={styles.modalHint}>Describe your indicator/bot...</Text><TextInput value={prompt} onChangeText={setPrompt} placeholder="Describe your indicator/bot..." placeholderTextColor={c.mutedForeground} style={styles.modalInput} multiline /><Text style={styles.modalLabel}>CODE OUTPUT</Text><View style={styles.codeOutput}><Text style={styles.codeText}>{prompt ? `// Generated MQL5 blueprint\n// ${prompt}\nint OnInit() { return(INIT_SUCCEEDED); }` : '// Your MQL5 code will appear here.'}</Text></View><TouchableOpacity style={styles.modalPrimary}><Text style={styles.modalPrimaryText}>Copy MQL5 Code</Text></TouchableOpacity></>}
-        {tool.kind === 'correlation' && <><Text style={styles.modalHint}>Live pair relationship matrix</Text>{[['EURUSD', 'USDCHF', '-0.92'], ['GBPUSD', 'EURUSD', '0.84'], ['AUDUSD', 'USDCAD', '-0.71'], ['USDJPY', 'XAUUSD', '-0.63']].map(([a, b, value]) => <View style={styles.tableRow} key={`${a}-${b}`}><Text style={styles.tableCell}>{a}</Text><Text style={styles.tableCell}>vs {b}</Text><Text style={[styles.tableValue, { color: value.startsWith('-') ? CRIMSON : GREEN }]}>{value}</Text></View>)}</>}
-        {tool.kind === 'heatmap' && <><Text style={styles.modalHint}>Currency strength · 24 hour change</Text><View style={styles.heatGrid}>{[['USD', '+2.4%', GREEN], ['EUR', '+0.8%', GREEN], ['GBP', '-0.4%', CRIMSON], ['JPY', '-1.8%', CRIMSON], ['AUD', '+1.1%', GREEN], ['CAD', '-0.7%', CRIMSON], ['CHF', '+0.2%', GREEN], ['NZD', '-1.2%', CRIMSON]].map(([name, value, color]) => <View style={[styles.heatCell, { borderColor: color as string }]} key={name as string}><Text style={styles.heatName}>{name}</Text><Text style={[styles.heatValue, { color: color as string }]}>{value}</Text></View>)}</View></>}
-        {tool.kind === 'risk' && <><Text style={styles.modalHint}>Position size calculator</Text><Text style={styles.modalLabel}>BALANCE ($)</Text><TextInput value={balance} onChangeText={setBalance} keyboardType="decimal-pad" style={styles.modalInput} /><Text style={styles.modalLabel}>RISK (%)</Text><TextInput value={risk} onChangeText={setRisk} keyboardType="decimal-pad" style={styles.modalInput} /><Text style={styles.modalLabel}>STOP LOSS (PIPS)</Text><TextInput value={stopLoss} onChangeText={setStopLoss} keyboardType="decimal-pad" style={styles.modalInput} /><View style={styles.lotResult}><Text style={styles.modalHint}>EXACT LOT SIZE</Text><Text style={styles.lotValue}>{lotSize} Lots</Text></View></>}
-      </View></View>
-    </Modal>
-  );
+function ChartUploadModal({ visible, onClose, onSelected }: { visible: boolean; onClose: () => void; onSelected: (asset: { uri: string; mimeType?: string | null }) => void }) {
+  const selectChart = async (camera: boolean) => {
+    try {
+      const permission = camera
+        ? await ImagePicker.requestCameraPermissionsAsync()
+        : await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) return;
+      const result = camera
+        ? await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.8 })
+        : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
+      if (!result.canceled && result.assets[0]?.uri) onSelected(result.assets[0]);
+    } catch {
+      // The chooser remains usable after a platform picker failure.
+    }
+  };
+  return <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}><View style={styles.toolBackdrop}><View style={styles.toolSheet}><View style={styles.configHeader}><View><Text style={styles.configTitle}>AI Chart Analysis</Text><Text style={styles.modalHint}>Choose a chart to generate a structured market breakdown.</Text></View><TouchableOpacity onPress={onClose}><Feather name="x" size={20} color="#FFF" /></TouchableOpacity></View><TouchableOpacity style={styles.modalPrimary} onPress={() => void selectChart(false)}><Text style={styles.modalPrimaryText}>UPLOAD CHART IMAGE</Text></TouchableOpacity><TouchableOpacity style={styles.secondaryAction} onPress={() => void selectChart(true)}><Text style={styles.secondaryActionText}>TAKE CHART PHOTO</Text></TouchableOpacity></View></View></Modal>;
 }
 
 /** "2026-08-04" → "Mon, Aug 4" (parsed as local time). */
@@ -228,7 +229,11 @@ export default function AiToolsScreen() {
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { isSubscribed } = useSubscription();
+  const {
+    isSubscribed,
+    isAdmin = false,
+    accessTier = isSubscribed ? 'pro' : 'starter',
+  } = useSubscription();
   const queryClient = useQueryClient();
 
   // Legacy deep-link mapping: the Oracle chat used to live on this tab.
@@ -290,6 +295,9 @@ export default function AiToolsScreen() {
   const [configBot, setConfigBot] = useState<Bot | null>(null);
   const [paywallOpen, setPaywallOpen] = useState(false);
   const [activeTool, setActiveTool] = useState<Tool | null>(null);
+  const [chartUploadOpen, setChartUploadOpen] = useState(false);
+  const [chartMode, setChartMode] = useState<'analysis' | 'signal'>('analysis');
+  const [toolError, setToolError] = useState<string | null>(null);
   const logScrollRef = useRef<ScrollView>(null);
 
   const masterActive = autopilot?.masterActive ?? false;
@@ -317,6 +325,47 @@ export default function AiToolsScreen() {
   const saveConfig = (bot: Bot, capital: number, drawdown: number) => {
     updateBot({ botId: bot.id, data: { capital, drawdown } });
     setConfigBot(null);
+  };
+
+  const openTool = (tool: Tool) => {
+    try {
+      setToolError(null);
+      if (tool.name === 'AI Signal Generator' || tool.name === 'AI Chart Analysis') {
+        setChartMode(tool.name === 'AI Signal Generator' ? 'signal' : 'analysis');
+        setChartUploadOpen(true);
+        return;
+      }
+      if (tool.name === 'AutoPilot Bots') {
+        if (bots[0]) setConfigBot(bots[0]);
+        else router.push('/profile/autopilot');
+        return;
+      }
+      if (tool.name === 'Account Tracker') {
+        router.push('/profile/brokersync');
+        return;
+      }
+      setActiveTool(tool);
+    } catch {
+      setToolError(`Couldn't open ${tool.name}. Please try again.`);
+    }
+  };
+
+  const openPaywall = (tier: ToolTier) => {
+    try {
+      if (tier === 'ELITE') router.push({ pathname: '/paywall', params: { defaultTier: 'ELITE' } });
+      else setPaywallOpen(true);
+    } catch {
+      setToolError('Upgrade options are temporarily unavailable. Please try again.');
+    }
+  };
+
+  const onChartSelected = (asset: { uri: string; mimeType?: string | null }) => {
+    try {
+      setChartUploadOpen(false);
+      router.push({ pathname: '/ai-analysis', params: { imageUri: asset.uri, mode: chartMode, mediaType: asset.mimeType ?? 'image/jpeg' } });
+    } catch {
+      setToolError('The chart was selected, but analysis could not open. Please try again.');
+    }
   };
 
   return (
@@ -420,16 +469,17 @@ export default function AiToolsScreen() {
 
         <Text style={styles.sectionTitle}>HERO TOOLS</Text>
         <View style={styles.heroGrid}>
-          {TOOLS.slice(0, 2).map((tool) => <ToolCard key={tool.name} tool={tool} subscribed={isSubscribed} onOpen={setActiveTool} onPaywall={(tier) => tier === 'ELITE' ? router.push({ pathname: '/paywall', params: { defaultTier: 'ELITE' } }) : setPaywallOpen(true)} hero />)}
+          {TOOLS.slice(0, 2).map((tool) => <ToolCard key={tool.name} tool={tool} accessTier={accessTier} isAdmin={isAdmin} onOpen={openTool} onPaywall={openPaywall} hero />)}
         </View>
         <Text style={styles.sectionTitle}>AI ANALYSIS</Text>
         <View style={styles.toolGrid}>
-          {TOOLS.slice(2, 7).map((tool) => <ToolCard key={tool.name} tool={tool} subscribed={isSubscribed} onOpen={setActiveTool} onPaywall={(tier) => tier === 'ELITE' ? router.push({ pathname: '/paywall', params: { defaultTier: 'ELITE' } }) : setPaywallOpen(true)} />)}
+          {TOOLS.slice(2, 7).map((tool) => <ToolCard key={tool.name} tool={tool} accessTier={accessTier} isAdmin={isAdmin} onOpen={openTool} onPaywall={openPaywall} />)}
         </View>
         <Text style={styles.sectionTitle}>TOOLS & UTILITIES</Text>
         <View style={styles.toolGrid}>
-          {TOOLS.slice(7).map((tool) => <ToolCard key={tool.name} tool={tool} subscribed={isSubscribed} onOpen={setActiveTool} onPaywall={(tier) => tier === 'ELITE' ? router.push({ pathname: '/paywall', params: { defaultTier: 'ELITE' } }) : setPaywallOpen(true)} />)}
+          {TOOLS.slice(7).map((tool) => <ToolCard key={tool.name} tool={tool} accessTier={accessTier} isAdmin={isAdmin} onOpen={openTool} onPaywall={openPaywall} />)}
         </View>
+        {toolError && <TouchableOpacity style={styles.toolError} onPress={() => setToolError(null)}><Text style={styles.toolErrorText}>{toolError}</Text></TouchableOpacity>}
 
         {/* Bot roster */}
         <Text style={styles.sectionTitle}>Available AI Algorithms</Text>
@@ -444,7 +494,7 @@ export default function AiToolsScreen() {
           </TouchableOpacity>
         )}
         {bots.map((bot) => {
-          const locked = bot.proOnly && !isSubscribed;
+          const locked = bot.proOnly && !isSubscribed && !isAdmin;
           const running = masterActive && bot.running;
           const cfg = { capital: bot.capital, drawdown: bot.drawdown };
           return (
@@ -558,7 +608,8 @@ export default function AiToolsScreen() {
         onClose={() => setConfigBot(null)}
         onSave={saveConfig}
       />
-      {activeTool && <ToolModal tool={activeTool} onClose={() => setActiveTool(null)} />}
+      {activeTool && <AiToolModal tool={{ name: activeTool.name, kind: activeTool.kind }} onClose={() => setActiveTool(null)} />}
+      <ChartUploadModal visible={chartUploadOpen} onClose={() => setChartUploadOpen(false)} onSelected={onChartSelected} />
 
       {/* Paywall */}
       <PaywallModal visible={paywallOpen} onClose={() => setPaywallOpen(false)} />
@@ -566,12 +617,14 @@ export default function AiToolsScreen() {
   );
 }
 
-function ToolCard({ tool, subscribed, onOpen, onPaywall, hero = false }: { tool: Tool; subscribed: boolean; onOpen: (tool: Tool) => void; onPaywall: (tier: Tool['tier']) => void; hero?: boolean }) {
-  const locked = tool.tier !== 'STARTER' && !subscribed;
+function ToolCard({ tool, accessTier, isAdmin, onOpen, onPaywall, hero = false }: { tool: Tool; accessTier: 'starter' | 'pro' | 'elite'; isAdmin: boolean; onOpen: (tool: Tool) => void; onPaywall: (tier: Tool['tier']) => void; hero?: boolean }) {
+  const requiredTier = tool.tier.toLowerCase() as 'starter' | 'pro' | 'elite';
+  const unlocked = canAccessTool(requiredTier, accessTier, isAdmin);
+  const locked = !unlocked;
   return <TouchableOpacity style={[styles.toolCard, hero && styles.heroCard, tool.wide && styles.wideCard]} activeOpacity={0.78} onPress={() => locked ? onPaywall(tool.tier) : onOpen(tool)} accessibilityRole="button" accessibilityLabel={`${tool.name}${locked ? ', locked' : ''}`}>
     <View style={styles.toolIcon}><Feather name={tool.icon} size={hero ? 21 : 17} color={tool.tier === 'ELITE' ? GOLD : CYAN} /></View>
-    <View style={styles.toolCopy}><View style={styles.toolTitleRow}><Text style={styles.toolName}>{tool.name}</Text>{locked && <Feather name="lock" size={12} color={GOLD} />}</View><Text style={styles.toolDescription}>{tool.description}</Text></View>
-    <TierBadge tier={tool.tier} />
+     <View style={styles.toolCopy}><View style={styles.toolTitleRow}><Text style={styles.toolName}>{tool.name}</Text>{locked ? <Feather name="lock" size={12} color={GOLD} /> : <Text style={styles.unlockedText}>UNLOCKED</Text>}</View><Text style={styles.toolDescription}>{tool.description}</Text></View>
+     {locked ? <TierBadge tier={tool.tier} /> : <View style={styles.unlockedBadge}><Text style={styles.unlockedText}>ACTIVE</Text></View>}
   </TouchableOpacity>;
 }
 
@@ -1084,5 +1137,45 @@ const styles = StyleSheet.create({
     color: '#0A0B0E',
     fontSize: 14,
     fontFamily: 'Inter_700Bold',
+  },
+  secondaryAction: {
+    borderWidth: 1,
+    borderColor: CYAN,
+    borderRadius: 12,
+    paddingVertical: 13,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  secondaryActionText: {
+    color: CYAN,
+    fontSize: 12,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 0.8,
+  },
+  unlockedBadge: {
+    borderWidth: 1,
+    borderColor: 'rgba(0,230,118,0.55)',
+    backgroundColor: 'rgba(0,230,118,0.10)',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+  },
+  unlockedText: {
+    color: GREEN,
+    fontSize: 8,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 0.6,
+  },
+  toolError: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,97,116,0.45)',
+    backgroundColor: 'rgba(255,97,116,0.10)',
+    padding: 12,
+  },
+  toolErrorText: {
+    color: '#FF9DAA',
+    fontSize: 11,
+    fontFamily: 'Inter_600SemiBold',
   },
 });

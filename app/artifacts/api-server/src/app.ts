@@ -58,6 +58,10 @@ app.post(
 
 // JSON / form parsing for all other routes (comes after the webhook route).
 app.use(cors());
+// Chart uploads are intentionally parsed separately from normal API JSON.
+// Base64 image payloads can be several megabytes; every other route retains
+// Express's small default limit.
+app.use("/api/oracle/chart-analysis", express.json({ limit: "9mb" }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

@@ -40,7 +40,7 @@ const PRO_TIERS = new Set(["pro", "elite", "whale", "vip"]);
 const supabaseTierLookup: TierLookup = async (userId) => {
   const params = new URLSearchParams({
     id: `eq.${userId}`,
-    select: "tier,manual_tier_override,free_trial_until",
+    select: "role,tier,manual_tier_override,free_trial_until",
     limit: "1",
   });
   const res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?${params}`, {
@@ -52,12 +52,14 @@ const supabaseTierLookup: TierLookup = async (userId) => {
   if (!res.ok) throw new Error(`Tier lookup failed with status ${res.status}`);
 
   const rows = (await res.json()) as {
+    role?: string | null;
     tier?: string | null;
     manual_tier_override?: string | null;
     free_trial_until?: string | null;
   }[];
   const row = rows[0];
   if (!row) return null;
+  if (row.role?.trim().toLowerCase() === "admin") return "elite";
 
   // An unexpired free trial grants Pro access regardless of the stored tier.
   const trialUntil = row.free_trial_until

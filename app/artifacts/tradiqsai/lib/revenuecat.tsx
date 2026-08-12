@@ -6,7 +6,13 @@ import Constants from "expo-constants";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "@/context/AuthContext";
 import { isSupabaseConfigured, supabase } from "@/utils/supabase";
-import { hasProfileProAccess, isProfileAdmin, type ProfileEntitlement } from "@/lib/profileEntitlements";
+import {
+  getProfileAccessTier,
+  hasProfileProAccess,
+  isProfileAdmin,
+  type AccessTier,
+  type ProfileEntitlement,
+} from "@/lib/profileEntitlements";
 
 const SUBSCRIPTION_CACHE_KEY = "revenuecat.isSubscribed";
 
@@ -132,16 +138,20 @@ function useSubscriptionContext() {
   // This is display/access state only—sensitive API actions verify it again.
   const [supabaseIsSubscribed, setSupabaseIsSubscribed] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [profileAccessTier, setProfileAccessTier] = useState<AccessTier>('starter');
+  const [hasManualTierOverride, setHasManualTierOverride] = useState(false);
   const refreshProfileEntitlement = useCallback(async () => {
     if (!userId || !isSupabaseConfigured) {
       setSupabaseIsSubscribed(false);
       setIsAdmin(false);
+      setProfileAccessTier('starter');
+      setHasManualTierOverride(false);
       return;
     }
 
     const { data, error } = await supabase
       .from("profiles")
-      .select("role, tier, manual_tier_override")
+      .select("role, tier, manual_tier_override, free_trial_until")
       .eq("id", userId)
       .maybeSingle();
     if (error) throw error;
@@ -149,6 +159,8 @@ function useSubscriptionContext() {
     const profile = data as ProfileEntitlement | null;
     setSupabaseIsSubscribed(hasProfileProAccess(profile));
     setIsAdmin(isProfileAdmin(profile));
+    setProfileAccessTier(getProfileAccessTier(profile));
+    setHasManualTierOverride(Boolean(profile?.manual_tier_override?.trim()));
   }, [userId]);
 
   useEffect(() => {
@@ -157,6 +169,8 @@ function useSubscriptionContext() {
       if (!cancelled) {
         setSupabaseIsSubscribed(false);
         setIsAdmin(false);
+        setProfileAccessTier('starter');
+        setHasManualTierOverride(false);
       }
     });
     return () => {
@@ -209,7 +223,15 @@ function useSubscriptionContext() {
   // Prefer live RevenueCat data; fall back to the cached value while loading.
   // OR grant access from the server-owned profile tier/override/admin role.
   const rcIsSubscribed = liveIsSubscribed !== null ? liveIsSubscribed : cachedIsSubscribed === true;
-  const isSubscribed = rcIsSubscribed || supabaseIsSubscribed;
+  const isSubscribed = hasManualTierOverride ? supabaseIsSubscribed : rcIsSubscribed || supabaseIsSubscribed;
+  // RevenueCat's shared entitlement represents Pro access. A server-owned
+  // Elite tier takes precedence when it is present.
+  const accessTier: AccessTier =
+    isAdmin || profileAccessTier === 'elite'
+      ? 'elite'
+      : isSubscribed || profileAccessTier === 'pro'
+        ? 'pro'
+        : 'starter';
 
   // Entitlement is active but the user cancelled in the store: Pro access
   // continues until expirationDate, then the paywall reappears normally.
@@ -231,6 +253,7 @@ function useSubscriptionContext() {
     activeEntitlement,
     isSubscribed,
     isAdmin,
+    accessTier,
     refreshProfileEntitlement,
     isWindingDown,
     windDownExpirationDate,
