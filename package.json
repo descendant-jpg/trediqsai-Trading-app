@@ -9,6 +9,7 @@
   },
   "private": true,
   "dependencies": {
+    "@stripe/stripe-react-native": "^0.74.0",
     "@supabase/supabase-js": "^2.112.2",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^26.2.0",
