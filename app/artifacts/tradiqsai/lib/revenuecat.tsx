@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { AppState, Platform } from "react-native";
 import Purchases from "react-native-purchases";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -127,14 +127,57 @@ function useSubscriptionContext() {
     staleTime: 300 * 1000,
   });
 
+  // Read the server-owned profile entitlement. RevenueCat is for store
+  // purchases; the profile covers server-granted paid tiers and staff admins.
+  // This is display/access state only—sensitive API actions verify it again.
+  const [supabaseIsSubscribed, setSupabaseIsSubscribed] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const refreshProfileEntitlement = useCallback(async () => {
+    if (!userId || !isSupabaseConfigured) {
+      setSupabaseIsSubscribed(false);
+      setIsAdmin(false);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("role, tier, manual_tier_override")
+      .eq("id", userId)
+      .maybeSingle();
+    if (error) throw error;
+
+    const profile = data as ProfileEntitlement | null;
+    setSupabaseIsSubscribed(hasProfileProAccess(profile));
+    setIsAdmin(isProfileAdmin(profile));
+  }, [userId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void refreshProfileEntitlement().catch(() => {
+      if (!cancelled) {
+        setSupabaseIsSubscribed(false);
+        setIsAdmin(false);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshProfileEntitlement]);
+
   // Invalidate the cache when a purchase or restore completes: recompute the
-  // entitlement from the fresh customerInfo and persist it immediately.
-  const applyFreshCustomerInfo = (customerInfo: Awaited<ReturnType<typeof Purchases.getCustomerInfo>>) => {
+  // store entitlement and force a fresh server-owned profile read so screens
+  // switch tiers without requiring an app restart.
+  const applyFreshCustomerInfo = async (
+    customerInfo: Awaited<ReturnType<typeof Purchases.getCustomerInfo>>,
+  ) => {
     const subscribed =
       customerInfo.entitlements.active?.[REVENUECAT_ENTITLEMENT_IDENTIFIER] !== undefined;
     setCachedIsSubscribed(subscribed);
     AsyncStorage.setItem(SUBSCRIPTION_CACHE_KEY, String(subscribed)).catch(() => {});
-    customerInfoQuery.refetch();
+    await Promise.all([
+      customerInfoQuery.refetch(),
+      refreshProfileEntitlement().catch(() => {}),
+    ]);
   };
 
   const purchaseMutation = useMutation({
@@ -142,55 +185,26 @@ function useSubscriptionContext() {
       const { customerInfo } = await Purchases.purchasePackage(packageToPurchase);
       return customerInfo;
     },
-    onSuccess: (customerInfo) => applyFreshCustomerInfo(customerInfo),
+    onSuccess: applyFreshCustomerInfo,
   });
 
   const restoreMutation = useMutation({
     mutationFn: async () => {
       return Purchases.restorePurchases();
     },
-    onSuccess: (customerInfo) => applyFreshCustomerInfo(customerInfo),
+    onSuccess: applyFreshCustomerInfo,
   });
 
   const manageSubscriptionMutation = useMutation({
     mutationFn: async () => {
       await Purchases.showManageSubscriptions();
     },
-    // Refetch in case the user cancelled or changed their plan
+    // Refetch in case the user cancelled or changed their plan.
     onSuccess: () => customerInfoQuery.refetch(),
   });
 
   const activeEntitlement =
     customerInfoQuery.data?.entitlements.active?.[REVENUECAT_ENTITLEMENT_IDENTIFIER];
-
-  // Read the server-owned profile entitlement. RevenueCat is for store
-  // purchases; the profile covers server-granted paid tiers and staff admins.
-  // This is display/access state only—sensitive API actions verify it again.
-  const [supabaseIsSubscribed, setSupabaseIsSubscribed] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
-  useEffect(() => {
-    if (!userId || !isSupabaseConfigured) {
-      setSupabaseIsSubscribed(false);
-      setIsAdmin(false);
-      return;
-    }
-    let cancelled = false;
-    void (async () => {
-      const { data } = await supabase
-        .from("profiles")
-        .select("role, tier, manual_tier_override")
-        .eq("id", userId)
-        .maybeSingle();
-      if (!cancelled) {
-        const profile = data as ProfileEntitlement | null;
-        setSupabaseIsSubscribed(hasProfileProAccess(profile));
-        setIsAdmin(isProfileAdmin(profile));
-      }
-    })().catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [userId]);
 
   // Prefer live RevenueCat data; fall back to the cached value while loading.
   // OR grant access from the server-owned profile tier/override/admin role.
@@ -217,6 +231,7 @@ function useSubscriptionContext() {
     activeEntitlement,
     isSubscribed,
     isAdmin,
+    refreshProfileEntitlement,
     isWindingDown,
     windDownExpirationDate,
     isLoading: subscriptionResolving || (!isSubscribed && offeringsQuery.isLoading),

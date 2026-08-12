@@ -124,7 +124,14 @@ export function PaywallModal({
   visible: boolean;
   onClose: () => void;
 }) {
-  const { offerings, isPurchasing, isRestoring, purchase, restore } = useSubscription();
+  const {
+    offerings,
+    isPurchasing,
+    isRestoring,
+    purchase,
+    restore,
+    refreshProfileEntitlement,
+  } = useSubscription();
   const { defaultTier } = useLocalSearchParams<{ defaultTier?: string }>();
   const [selectedTier, setSelectedTier] = useState<SubscriptionTier>(
     defaultTier === 'ELITE' ? 'ELITE' : 'PRO',
@@ -204,6 +211,9 @@ export function PaywallModal({
     if (selectedPackage) {
       try {
         await purchase(selectedPackage);
+        if (typeof refreshProfileEntitlement === 'function') {
+          await refreshProfileEntitlement().catch(() => {});
+        }
         finishSuccess();
       } catch (err: any) {
         // User cancelled or store error — stay on the paywall.
@@ -233,6 +243,9 @@ export function PaywallModal({
     notify('Restore Purchases', 'Checking App Store receipts...');
     try {
       await restore();
+      if (typeof refreshProfileEntitlement === 'function') {
+        await refreshProfileEntitlement().catch(() => {});
+      }
     } catch (err: any) {
       console.log('Restore failed:', err?.message);
     }
