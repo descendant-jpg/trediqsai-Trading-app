@@ -1,0 +1,35 @@
+CRITICAL FORCE WORK DIRECTIVE: YOU ARE FORCED TO IMPLEMENT FULL, COMPLETE, PRODUCTION-READY FUNCTIONALITY. DO NOT LEAVE DUMMY CODE, TODO COMMENTS, EMPTY ONPRESS HANDLERS, OR PLACEHOLDER MODALS. WRITE EVERY SINGLE LINE OF TYPESCRIPT STATE MANAGEMENT, MATH CALCULATIONS, AND INTERACTIVE UI CONTROLLERS REQUIRED.
+
+Review replit.md for our project rules. We are making the TradiQs Academy component fully functional and production-ready.
+
+### 1. Active Component Targeted
+- Find the file currently rendering the Academy UI (which contains "Build your edge." and the "X" close button, e.g., in `app/(tabs)/profile.tsx`, `components/AcademyModal.tsx`, or `app/profile/app-guide.tsx`). Apply these functional updates directly to that active file.
+
+### 2. YouTube Channel Linking Functionality
+- Import `Linking` from 'react-native'.
+- Wire every video card in the "YOUTUBE MASTERCLASSES" horizontal carousel so pressing it executes:
+  `Linking.openURL('https://www.youtube.com/@tradiqsai')`
+- Test that clicking "WATCH ON YOUTUBE" or the card triggers native URL opening.
+
+### 3. Interactive Lesson Reader Modal
+- Create a local state `selectedLesson` (type string or object | null).
+- Wire every sub-lesson item inside "STRUCTURED CURRICULUM" (e.g., Candlestick Anatomy, Chart Reading, How to Buy & Sell, Reading the Feed, Confluence, Entry/Exit Rules, BrokerSync Connection, AutoPilot Allocation, Risk Guardrails):
+  - Add 2 NEW Curriculum Modules:
+    - **04 Risk Management & Psychology** (Position Sizing, Stop Loss Rules, FOMO Control).
+    - **05 Chart Patterns & Technical Analysis** (Support & Resistance, Trendlines, Reversal Patterns).
+- When any sub-lesson is tapped, set `selectedLesson` and open a full-screen React Native `<Modal>`.
+- Inside the Modal, render rich educational content, bullet points, and key takeaways relevant to that specific lesson, plus a prominent "Close Lesson" button.
+
+### 4. Searchable Dictionary & Detail Expansion
+- Implement active `searchTerm` state linked to the `TextInput`.
+- Filter the dictionary array dynamically (`Pip`, `Lot Size`, `Spread`, `Order Block`, `Liquidity`, `Bullish`, `Bearish`, `FVG`, `Leverage`, `Slippage`, `Margin`).
+- Make dictionary items tappable: pressing a term opens a Modal displaying an in-depth explanation and a practical trading example.
+
+### 5. Production-Ready Toolkit Calculators
+- Create modal states for all 4 tools in the "TRADER'S TOOLKIT" grid:
+  1. **Lot Size Calculator Modal:** Inputs for Account Balance, Risk %, and Stop Loss Pips. Include a "Calculate" button that outputs exact Lot Size.
+  2. **P/L Simulator Modal:** Inputs for Entry Price, Take Profit Price, Stop Loss Price, and Lot Size. Outputs expected Profit ($), Loss ($), and Risk/Reward Ratio.
+  3. **Risk/Reward Planner Modal:** Inputs for Win Rate % and R:R Ratio. Calculates 10-trade expectancy model.
+  4. **Margin Calculator Modal:** Inputs for Leverage (e.g., 50, 100, 500) and Trade Size. Calculates required Margin ($).
+
+EXECUTION REQUIREMENT: Force all event listeners (`onPress`, `onChangeText`), math formulas, and state hooks (`useState`) to be 100% written and functional. Verify the app typechecks cleanly without missing imports.

@@ -24,7 +24,7 @@ import { useSubscription } from '@/lib/revenuecat';
 import { PRIVACY_POLICY, TERMS_AND_CONDITIONS } from '@/lib/legalContent';
 import { supabase } from '@/utils/supabase';
 import colors from '@/constants/colors';
-import { AcademyModal } from '@/components/AcademyModal';
+import { AcademyModal } from '../../components/AcademyModal';
 import { SocialMediaModal } from '@/components/SocialMediaModal';
 import { ChangePasswordModal } from '@/components/ChangePasswordModal';
 import { DeleteAccountModal } from '@/components/DeleteAccountModal';
