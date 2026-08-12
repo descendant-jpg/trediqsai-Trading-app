@@ -92,6 +92,7 @@ export default function TabLayout() {
           ),
         }}
       />
+      <Tabs.Screen name="live-chart" options={{ href: null, headerShown: false }} />
       {/* Leaderboard stays routable (linked from elsewhere) but off the bar. */}
       <Tabs.Screen name="leaderboard" options={{ href: null }} />
       {/* Portfolio remains a full screen from Profile, but is no longer a tab. */}

@@ -33,7 +33,8 @@ export default function LiveChartScreen() {
       const uri = await shotRef.current.capture();
       if (uri) router.push({ pathname: '/ai-analysis', params: { imageUri: uri } });
     } catch {
-      if (Platform.OS === 'web') window.alert('Unable to capture chart.'); else Alert.alert('Snapshot unavailable', 'Please try again.');
+      if (Platform.OS === 'web') window.alert('Unable to capture chart.');
+      else Alert.alert('Snapshot unavailable', 'Please try again.');
     }
   };
 
@@ -46,7 +47,7 @@ export default function LiveChartScreen() {
           <TextInput value={search} onChangeText={setSearch} onSubmitEditing={submitSearch} returnKeyType="search" placeholder="Search stocks..." placeholderTextColor="#737983" style={styles.search} />
           <TouchableOpacity onPress={submitSearch} style={styles.searchButton}><Text style={styles.searchButtonText}>GO</Text></TouchableOpacity>
         </View>
-        <ScrollView horizontal={true} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickSymbols}>
+        <ScrollView horizontal={true} showsHorizontalScrollIndicator={false} style={styles.quickSymbolStrip} contentContainerStyle={styles.quickSymbols}>
           {QUICK_SYMBOLS.map((quickSymbol) => (
             <TouchableOpacity key={quickSymbol} onPress={() => selectQuickSymbol(quickSymbol)} style={[styles.quickChip, symbol === quickSymbol && styles.quickChipActive]}>
               <Text style={[styles.quickChipText, symbol === quickSymbol && styles.quickChipTextActive]}>{quickSymbol}</Text>
@@ -82,9 +83,10 @@ const styles = StyleSheet.create({
   search: { flex: 1, height: 40, color: '#FFF', backgroundColor: '#12141A', borderWidth: 1, borderColor: '#303641', borderRadius: 9, paddingHorizontal: 12, fontSize: 13 },
   searchButton: { height: 40, paddingHorizontal: 12, borderRadius: 9, backgroundColor: '#00F0FF', alignItems: 'center', justifyContent: 'center' },
   searchButtonText: { color: '#061014', fontSize: 11, fontWeight: '900' },
-  quickSymbols: { gap: 7, paddingHorizontal: 14, paddingBottom: 8 },
-  quickChip: { borderWidth: 1, borderColor: '#303641', backgroundColor: '#12141A', borderRadius: 9999, paddingHorizontal: 16, paddingVertical: 8 },
-  quickChipActive: { borderColor: '#00F0FF', backgroundColor: 'rgba(0,240,255,.12)' },
+  quickSymbolStrip: { flexGrow: 0 },
+  quickSymbols: { gap: 7, paddingHorizontal: 14, paddingBottom: 8, alignItems: 'center' },
+  quickChip: { alignSelf: 'flex-start', borderWidth: 1, borderColor: '#303641', borderRadius: 9999, paddingHorizontal: 16, paddingVertical: 6 },
+  quickChipActive: { borderColor: '#00F0FF' },
   quickChipText: { color: '#8A929D', fontSize: 10, fontWeight: '800' },
   quickChipTextActive: { color: '#00F0FF' },
   sentimentBadge: { alignSelf: 'flex-end', flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderColor: 'rgba(0,255,0,.45)', backgroundColor: 'rgba(0,255,0,.08)', borderRadius: 14, paddingHorizontal: 11, paddingVertical: 6, marginHorizontal: 14, marginBottom: 7 },
