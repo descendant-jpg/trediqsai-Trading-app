@@ -47,9 +47,16 @@ vi.mock('expo-file-system', () => ({
 }));
 
 const signOutMock = vi.hoisted(() => vi.fn(async () => ({})));
-vi.mock('@/utils/supabase', () => ({
-  supabase: { auth: { signOut: signOutMock } },
-  isSupabaseConfigured: true,
+const authState = vi.hoisted(() => ({
+  session: { user: { id: 'trader-1' } } as { user: { id: string } } | null,
+  loading: false,
+}));
+const subscriptionState = vi.hoisted(() => ({ isSubscribed: true, isAdmin: false }));
+vi.mock('@/context/AuthContext', () => ({
+  useAuth: () => ({ ...authState, signOut: signOutMock }),
+}));
+vi.mock('@/lib/revenuecat', () => ({
+  useSubscription: () => subscriptionState,
 }));
 
 vi.mock('@expo/vector-icons', () => ({
@@ -67,7 +74,7 @@ vi.mock('expo-router', () => ({
     mode: 'analysis',
     mediaType: 'image/jpeg',
   }),
-  useRouter: () => ({ back: routerBackMock, push: routerPushMock }),
+  useRouter: () => ({ back: routerBackMock, push: routerPushMock, dismissAll: routerBackMock }),
 }));
 
 import AIAnalysisScreen from '../ai-analysis';
@@ -76,6 +83,10 @@ import AIAnalysisScreen from '../ai-analysis';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  authState.session = { user: { id: 'trader-1' } };
+  authState.loading = false;
+  subscriptionState.isSubscribed = true;
+  subscriptionState.isAdmin = false;
 });
 
 afterEach(() => {
@@ -95,7 +106,7 @@ describe('AI Chart Analysis — 401 gate', () => {
     ).toBeTruthy();
   });
 
-  it('SIGN IN button calls supabase.auth.signOut()', async () => {
+  it('SIGN IN button clears the local session and returns to auth', async () => {
     customFetchMock.mockRejectedValue(new MockApiError(401, 'Sign in required.'));
     render(<AIAnalysisScreen />);
 
@@ -153,6 +164,26 @@ describe('AI Chart Analysis — 403 gate', () => {
 
     await waitFor(() => screen.getByText('UPGRADE NOW'));
     expect(signOutMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('AI Chart Analysis — local preview conversion gate', () => {
+  it('shows a guest their locked chart preview without reading or uploading it', async () => {
+    authState.session = null;
+    render(<AIAnalysisScreen />);
+
+    await waitFor(() => expect(screen.getByText('Sign in to use Chart Analysis')).toBeTruthy());
+    expect(screen.getByText('SIGN IN')).toBeTruthy();
+    expect(customFetchMock).not.toHaveBeenCalled();
+  });
+
+  it('shows a free trader the upgrade preview without reading or uploading it', async () => {
+    subscriptionState.isSubscribed = false;
+    render(<AIAnalysisScreen />);
+
+    await waitFor(() => expect(screen.getByText('Chart Analysis is a Pro feature')).toBeTruthy());
+    expect(screen.getByText('UPGRADE NOW')).toBeTruthy();
+    expect(customFetchMock).not.toHaveBeenCalled();
   });
 });
 
