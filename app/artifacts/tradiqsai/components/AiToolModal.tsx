@@ -35,6 +35,18 @@ const CYAN = '#00F0FF';
 const GREEN = '#00E676';
 const RED = '#FF6174';
 type LiveNews = { headline: string; summary: string; url: string; image: string; datetime: number };
+function normalizeNews(value: unknown): LiveNews[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((article): article is Record<string, unknown> => !!article && typeof article === 'object')
+    .map((article) => ({
+      headline: typeof article.headline === 'string' && article.headline.trim() ? article.headline.trim() : 'No title available',
+      summary: typeof article.summary === 'string' ? article.summary.trim() : '',
+      url: typeof article.url === 'string' ? article.url : '',
+      image: typeof article.image === 'string' ? article.image : '',
+      datetime: typeof article.datetime === 'number' && Number.isFinite(article.datetime) ? article.datetime : 0,
+    }));
+}
 
 function notify(title: string, message: string) {
   if (Platform.OS === 'web') window.alert(`${title}\n\n${message}`);
@@ -57,9 +69,11 @@ export function AiToolModal({ tool, onClose }: { tool: AiToolModalTool; onClose:
   const loadNews = async () => {
     setNewsState('loading');
     try {
-      setNews(await customFetch<LiveNews[]>('/api/market-news'));
+      const payload = await customFetch<unknown>('/api/market-news');
+      setNews(normalizeNews(payload));
       setNewsState('ready');
     } catch {
+      setNews([]);
       setNewsState('error');
     }
   };
@@ -143,8 +157,16 @@ function Matrix({ title, rows }: { title: string; rows: string[][] }) {
 function NewsWorkspace({ state, news, onRetry, onArticle }: { state: string; news: LiveNews[]; onRetry: () => void; onArticle: (article: LiveNews) => void }) {
   if (state === 'loading' || state === 'idle') return <View style={styles.loading}><ActivityIndicator color={CYAN} /><View style={styles.skeleton} /><View style={styles.skeleton} /><Text style={styles.hint}>Loading live market headlines…</Text></View>;
   if (state === 'error') return <TouchableOpacity style={styles.retry} onPress={onRetry}><Text style={styles.primaryText}>REFRESH LIVE NEWS</Text></TouchableOpacity>;
-  if (!news.length) return <Text style={styles.hint}>No market headlines are available yet. Pull to refresh later.</Text>;
-  return <>{news.map((article) => <TouchableOpacity style={styles.news} key={`${article.url}-${article.datetime}`} onPress={() => onArticle(article)}><View style={styles.newsTop}>{article.image ? <Image source={{ uri: article.image }} style={styles.newsImage} /> : <Feather name="radio" size={20} color={CYAN} />}<Text style={styles.status}>{new Date(article.datetime * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text></View><Text style={styles.item}>{article.headline}</Text><Text style={styles.hint} numberOfLines={3}>{article.summary}</Text><Text style={styles.openAnalysis}>ANALYZE SENTIMENT ›</Text></TouchableOpacity>)}</>;
+  if (!Array.isArray(news) || !news.length) return <Text style={styles.hint}>No market headlines are available yet. Pull to refresh later.</Text>;
+  return <>{news.map((article, index) => {
+    const headline = article?.headline || 'No title available';
+    const summary = article?.summary || 'Open this headline for current market context.';
+    const image = typeof article?.image === 'string' ? article.image : '';
+    const timestamp = typeof article?.datetime === 'number' && article.datetime > 0
+      ? new Date(article.datetime * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      : 'LIVE';
+    return <TouchableOpacity style={styles.news} key={`${article?.url || headline}-${article?.datetime || index}`} onPress={() => onArticle(article)}><View style={styles.newsTop}>{image ? <Image source={{ uri: image }} style={styles.newsImage} /> : <Feather name="radio" size={20} color={CYAN} />}<Text style={styles.status}>{timestamp}</Text></View><Text style={styles.item}>{headline}</Text><Text style={styles.hint} numberOfLines={3}>{summary}</Text><Text style={styles.openAnalysis}>ANALYZE SENTIMENT ›</Text></TouchableOpacity>;
+  })}</>;
 }
 function NewsAnalysis({ article, state, analysis, onBack }: { article: LiveNews; state: string; analysis: string; onBack: () => void }) {
   return <><TouchableOpacity onPress={onBack}><Text style={styles.openAnalysis}>‹ BACK TO MARKET RADAR</Text></TouchableOpacity><View style={styles.news}><Text style={styles.item}>{article.headline}</Text><Text style={styles.hint}>{article.summary}</Text></View>{state === 'loading' ? <View style={styles.loading}><ActivityIndicator color={CYAN} /><Text style={styles.hint}>AI is evaluating market impact…</Text></View> : state === 'error' ? <Text style={styles.hint}>Sentiment analysis is temporarily unavailable. Try another headline shortly.</Text> : <View style={styles.sentiment}><Text style={styles.status}>AI MARKET IMPACT</Text><Text style={styles.analysis}>{analysis}</Text></View>}</>;
