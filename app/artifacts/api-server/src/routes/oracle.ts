@@ -24,6 +24,13 @@ const oracleRateLimit = rateLimit({
   message:
     "The Oracle needs a breather — you've sent a lot of messages. Try again in a minute.",
 });
+const chartAnalysisRateLimit = rateLimit({
+  max: 5,
+  windowMs: 60_000,
+  message:
+    "Chart analysis is limited to 5 uploads per minute to keep the AI service available. Please try again shortly.",
+  key: (_req, res) => requestUserId(res),
+});
 const SYSTEM_PROMPT = [
   "You are the TradiQs Oracle, the in-app market AI assistant for the TradiQs trading app.",
   "You help traders think about markets: asset analysis, sentiment, notable movers, risk framing, and trading concepts.",
@@ -215,7 +222,7 @@ router.post("/oracle/chat", oracleRateLimit, async (req, res) => {
   }
 });
 
-router.post("/oracle/chart-analysis", identity(), oracleRateLimit, async (req, res) => {
+router.post("/oracle/chart-analysis", identity(), chartAnalysisRateLimit, async (req, res) => {
   const userId = requestUserId(res);
   if (userId === ANONYMOUS_USER) return res.status(401).json({ error: "Sign in required." });
   if (!(await hasProAccess(userId))) return res.status(403).json({ error: "Pro subscription required.", code: "pro_subscription_required" });

@@ -398,6 +398,24 @@ describe("POST /oracle/chart-analysis", () => {
     expect(body.error).toContain("valid chart image");
     expect(createMock).not.toHaveBeenCalled();
   });
+
+  it("limits each paid user to five chart uploads per minute without changing chat limits", async () => {
+    await startAppAs("user-pro-123", true);
+    createMock.mockResolvedValue(textReply("BIAS: Neutral."));
+    for (let i = 0; i < 5; i++) {
+      const { status } = await request("POST", "/oracle/chart-analysis", VALID_BODY);
+      expect(status).toBe(200);
+    }
+    const response = await fetch(`${baseUrl}/oracle/chart-analysis`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(VALID_BODY),
+    });
+    expect(response.status).toBe(429);
+    expect(response.headers.get("retry-after")).toBeTruthy();
+    const body = (await response.json()) as { error: string };
+    expect(body.error).toContain("5 uploads per minute");
+  });
 });
 
 describe("POST /oracle/strategy-brief — Supabase cache", () => {

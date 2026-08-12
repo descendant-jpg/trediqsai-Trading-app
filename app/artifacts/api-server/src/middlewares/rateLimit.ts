@@ -12,6 +12,8 @@ export interface RateLimitOptions {
   windowMs: number;
   /** Message returned in the 429 body's `error` field. */
   message: string;
+  /** Stable bucket key. Defaults to client IP; authenticated routes can scope by verified user. */
+  key?: (req: Request, res: Response) => string;
 }
 
 /**
@@ -41,7 +43,7 @@ export function rateLimit(options: RateLimitOptions) {
   sweep.unref?.();
 
   return (req: Request, res: Response, next: NextFunction) => {
-    const key = req.ip ?? "unknown";
+    const key = options.key?.(req, res) ?? req.ip ?? "unknown";
 
     const now = Date.now();
     let bucket = buckets.get(key);
