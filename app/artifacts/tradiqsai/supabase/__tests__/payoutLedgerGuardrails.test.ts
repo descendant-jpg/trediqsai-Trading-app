@@ -66,6 +66,16 @@ describe('migration hygiene', () => {
     );
     expect(original!.text).toContain('cashout := least(virtual_profit * split');
   });
+
+  it('adds settlement timestamps before the corrected payout index references them', () => {
+    const settled = migrations.find((m) => m.name === '015_payout_settlement_and_reservation.sql');
+    expect(settled).toBeDefined();
+
+    const closedAtColumn = settled!.text.indexOf('add column if not exists closed_at timestamptz');
+    const settledIndex = settled!.text.indexOf('create index if not exists trades_verified_settled_days_idx');
+    expect(closedAtColumn).toBeGreaterThan(-1);
+    expect(closedAtColumn).toBeLessThan(settledIndex);
+  });
 });
 
 describe('payout evaluation ledger', () => {

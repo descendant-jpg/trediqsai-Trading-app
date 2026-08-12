@@ -25,6 +25,12 @@
 --
 -- Safe to run more than once.
 
+-- Older live projects created `trades` before settlement timestamps were
+-- introduced. Add the column before the corrected index and function below
+-- reference it, so the bundle can upgrade those projects in one run.
+alter table if exists public.trades
+  add column if not exists closed_at timestamptz;
+
 -- An index matched to the corrected active-day predicate.
 create index if not exists trades_verified_settled_days_idx
   on public.trades (user_id, closed_at)
