@@ -10,6 +10,10 @@ import { logger } from "../lib/logger";
 import { rateLimit } from "../middlewares/rateLimit";
 
 const router: IRouter = Router();
+const STRATEGY_BRIEF_CACHE_TTL_MS = 15 * 60_000;
+const SUPABASE_URL =
+  process.env["SUPABASE_URL"] ?? process.env["EXPO_PUBLIC_SUPABASE_URL"] ?? "";
+const SUPABASE_SERVICE_ROLE_KEY = process.env["SUPABASE_SERVICE_ROLE_KEY"] ?? "";
 
 const oracleRateLimit = rateLimit({
   max: 20,
@@ -32,6 +36,98 @@ function getClient(): Anthropic | null {
   const apiKey = process.env["ANTHROPIC_API_KEY"];
   if (apiKey) return new Anthropic({ apiKey });
   return null;
+}
+
+type CachedStrategyBrief = { brief?: unknown };
+
+/**
+ * Strategy briefs are operational output rather than entitlement data, so a
+ * short cache reduces duplicate Anthropic charges without introducing an
+ * authorization/revocation window. Caching is deliberately fail-open: an
+ * unavailable cache must never prevent a successfully entitled trader from
+ * deploying their bot.
+ */
+function strategyBriefCacheEnabled(): boolean {
+  return (
+    process.env["SUPABASE_STRATEGY_BRIEF_CACHE_ENABLED"] !== "false" &&
+    !!SUPABASE_URL &&
+    !!SUPABASE_SERVICE_ROLE_KEY
+  );
+}
+
+function cacheHeaders(extra: Record<string, string> = {}): Headers {
+  return new Headers({
+    apikey: SUPABASE_SERVICE_ROLE_KEY,
+    authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+    ...extra,
+  });
+}
+
+async function readCachedStrategyBrief(
+  botName: string,
+  capitalPercent: number,
+): Promise<string | null> {
+  if (!strategyBriefCacheEnabled()) return null;
+  try {
+    const params = new URLSearchParams({
+      bot_name: `eq.${botName}`,
+      capital_percent: `eq.${capitalPercent}`,
+      created_at: `gte.${new Date(Date.now() - STRATEGY_BRIEF_CACHE_TTL_MS).toISOString()}`,
+      select: "brief",
+      order: "created_at.desc",
+      limit: "1",
+    });
+    const response = await fetch(
+      `${SUPABASE_URL}/rest/v1/autopilot_strategy_brief_cache?${params}`,
+      { headers: cacheHeaders() },
+    );
+    if (!response.ok) {
+      logger.warn(
+        { status: response.status },
+        "Strategy brief cache read failed; falling back to Anthropic",
+      );
+      return null;
+    }
+    const rows = (await response.json()) as CachedStrategyBrief[];
+    const brief = rows[0]?.brief;
+    return typeof brief === "string" && brief.trim() ? brief.trim() : null;
+  } catch (err) {
+    logger.warn({ err }, "Strategy brief cache read failed; falling back to Anthropic");
+    return null;
+  }
+}
+
+async function writeCachedStrategyBrief(
+  botName: string,
+  capitalPercent: number,
+  brief: string,
+): Promise<void> {
+  if (!strategyBriefCacheEnabled()) return;
+  try {
+    const response = await fetch(
+      `${SUPABASE_URL}/rest/v1/autopilot_strategy_brief_cache`,
+      {
+        method: "POST",
+        headers: cacheHeaders({
+          "content-type": "application/json",
+          prefer: "return=minimal",
+        }),
+        body: JSON.stringify({
+          bot_name: botName,
+          capital_percent: capitalPercent,
+          brief,
+        }),
+      },
+    );
+    if (!response.ok) {
+      logger.warn(
+        { status: response.status },
+        "Strategy brief cache write failed; continuing without persistence",
+      );
+    }
+  } catch (err) {
+    logger.warn({ err }, "Strategy brief cache write failed; continuing without persistence");
+  }
 }
 
 type ChatTurn = { role: "user" | "assistant"; content: string };
@@ -137,8 +233,20 @@ router.post("/oracle/strategy-brief", oracleRateLimit, async (req, res) => {
 
   const { botName, capitalPercent } = parsed.data;
   try {
+    const cachedBrief = await readCachedStrategyBrief(botName, capitalPercent);
+    if (cachedBrief) {
+      res.json(SendStrategyBriefResponse.parse({ brief: cachedBrief }));
+      return;
+    }
+
     const message = await client.messages.create({
-      model: process.env["ORACLE_MODEL"] ?? "claude-sonnet-5",
+      // This is intentionally separate from ORACLE_MODEL: a one-line
+      // deployment status does not warrant the larger conversational model.
+      // claude-3-haiku / claude-3-5-haiku are not available on this account
+      // (verified against the models API), so this is the cheapest
+      // Haiku-class model it can actually reach.
+      model:
+        process.env["STRATEGY_BRIEF_MODEL"] ?? "claude-haiku-4-5-20251001",
       max_tokens: 300,
       system:
         "You write terse, technical one-line status output for an algorithmic trading terminal. Reply with a single sentence, no preamble, no markdown, no quotes.",
@@ -161,6 +269,10 @@ router.post("/oracle/strategy-brief", oracleRateLimit, async (req, res) => {
       return;
     }
 
+    // Best-effort and intentionally awaited: the next deployment can reuse
+    // this value immediately, but a cache failure still returns the valid
+    // Anthropic response instead of failing the bot UI.
+    await writeCachedStrategyBrief(botName, capitalPercent, brief);
     res.json(SendStrategyBriefResponse.parse({ brief }));
   } catch (err) {
     logger.error({ err }, "Strategy brief generation failed");

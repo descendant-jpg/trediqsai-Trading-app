@@ -52,6 +52,9 @@ const USER_MESSAGE = { role: "user", content: "What do you think of gold?" };
 
 beforeEach(async () => {
   vi.stubEnv("ANTHROPIC_API_KEY", "test-key");
+  // Oracle tests exercise Anthropic behavior, not a real Supabase project.
+  // The cache has dedicated integration coverage once its migration is live.
+  vi.stubEnv("SUPABASE_STRATEGY_BRIEF_CACHE_ENABLED", "false");
   createMock.mockReset();
   await startFreshApp();
 });
@@ -218,5 +221,186 @@ describe("POST /oracle/chat", () => {
     expect(res.headers.get("retry-after")).toBeTruthy();
     const body = (await res.json()) as { error: string };
     expect(body.error).toContain("The Oracle needs a breather");
+  });
+});
+
+describe("POST /oracle/strategy-brief", () => {
+  it("uses the lightweight model and returns the terminal-safe brief", async () => {
+    createMock.mockResolvedValue(
+      textReply("Watching 2.1 ATR stops against VWAP deviation and order-flow skew."),
+    );
+
+    const { status, body } = await request("POST", "/oracle/strategy-brief", {
+      botName: "Swing Master",
+      capitalPercent: 40,
+    });
+
+    expect(status).toBe(200);
+    expect(body).toEqual({
+      brief: "Watching 2.1 ATR stops against VWAP deviation and order-flow skew.",
+    });
+    expect(createMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 300,
+      }),
+    );
+    expect(createMock.mock.calls[0]![0].messages[0].content).toContain(
+      "Swing Master",
+    );
+    expect(createMock.mock.calls[0]![0].messages[0].content).toContain("40%");
+  });
+
+  it("rejects malformed strategy brief input before it reaches Anthropic", async () => {
+    const { status, body } = await request("POST", "/oracle/strategy-brief", {
+      botName: "",
+      capitalPercent: 101,
+    });
+
+    expect(status).toBe(400);
+    expect(body).toEqual({ error: "Invalid request body" });
+    expect(createMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /oracle/strategy-brief — Supabase cache", () => {
+  const SUPABASE = "https://cache-test.supabase.co";
+  /** Supabase calls the route makes, in order, as [method, url] pairs. */
+  let supabaseCalls: Array<[string, string]>;
+  /** Queued responses for cache reads; each entry is one PostgREST result. */
+  let cacheReads: Array<{ ok: boolean; rows: unknown }>;
+  let cacheWriteOk: boolean;
+
+  /**
+   * Intercepts only Supabase traffic so the test's own requests to the local
+   * express server still hit the real network stack.
+   */
+  async function startAppWithCache(): Promise<void> {
+    await new Promise<void>((resolve, reject) =>
+      server.close((err) => (err ? reject(err) : resolve())),
+    );
+    vi.stubEnv("SUPABASE_STRATEGY_BRIEF_CACHE_ENABLED", "true");
+    vi.stubEnv("SUPABASE_URL", SUPABASE);
+    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "service-role-test-key");
+
+    const realFetch = globalThis.fetch;
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      async (input: any, init?: any) => {
+        const url = typeof input === "string" ? input : input.url;
+        if (!url.startsWith(SUPABASE)) return realFetch(input, init);
+
+        const method = init?.method ?? "GET";
+        supabaseCalls.push([method, url]);
+
+        if (method === "GET") {
+          const next = cacheReads.shift() ?? { ok: true, rows: [] };
+          return new Response(JSON.stringify(next.rows), {
+            status: next.ok ? 200 : 500,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        return new Response(null, { status: cacheWriteOk ? 201 : 500 });
+      },
+    );
+
+    await startFreshApp();
+  }
+
+  beforeEach(() => {
+    supabaseCalls = [];
+    cacheReads = [];
+    cacheWriteOk = true;
+  });
+
+  afterEach(() => {
+    vi.mocked(globalThis.fetch).mockRestore?.();
+  });
+
+  it("serves a cached brief without calling Anthropic", async () => {
+    cacheReads.push({ ok: true, rows: [{ brief: "Cached: monitoring VWAP bands." }] });
+    await startAppWithCache();
+
+    const { status, body } = await request("POST", "/oracle/strategy-brief", {
+      botName: "Pulse Scalper",
+      capitalPercent: 25,
+    });
+
+    expect(status).toBe(200);
+    expect(body).toEqual({ brief: "Cached: monitoring VWAP bands." });
+    // The whole point of the cache: no Anthropic call, so no repeat billing.
+    expect(createMock).not.toHaveBeenCalled();
+    expect(supabaseCalls).toHaveLength(1);
+    expect(supabaseCalls[0]![0]).toBe("GET");
+  });
+
+  it("scopes the cache lookup to the bot, allocation and a 15-minute window", async () => {
+    cacheReads.push({ ok: true, rows: [] });
+    await startAppWithCache();
+    createMock.mockResolvedValue(textReply("Fresh brief."));
+
+    const before = Date.now();
+    await request("POST", "/oracle/strategy-brief", {
+      botName: "Swing Master",
+      capitalPercent: 40,
+    });
+
+    const readUrl = new URL(supabaseCalls[0]![1]);
+    expect(readUrl.pathname).toBe("/rest/v1/autopilot_strategy_brief_cache");
+    expect(readUrl.searchParams.get("bot_name")).toBe("eq.Swing Master");
+    expect(readUrl.searchParams.get("capital_percent")).toBe("eq.40");
+
+    // A stale brief must not be reused: the floor is ~15 minutes back.
+    const floor = Date.parse(readUrl.searchParams.get("created_at")!.replace("gte.", ""));
+    const age = before - floor;
+    expect(age).toBeGreaterThan(14 * 60_000);
+    expect(age).toBeLessThanOrEqual(15 * 60_000 + 5_000);
+  });
+
+  it("stores a freshly generated brief so the next deployment reuses it", async () => {
+    cacheReads.push({ ok: true, rows: [] });
+    await startAppWithCache();
+    createMock.mockResolvedValue(textReply("Newly generated brief."));
+
+    const { status, body } = await request("POST", "/oracle/strategy-brief", {
+      botName: "News Sniper",
+      capitalPercent: 60,
+    });
+
+    expect(status).toBe(200);
+    expect(body).toEqual({ brief: "Newly generated brief." });
+    expect(createMock).toHaveBeenCalledTimes(1);
+    expect(supabaseCalls.map(([method]) => method)).toEqual(["GET", "POST"]);
+  });
+
+  it("still returns a brief when the cache is unavailable", async () => {
+    // Read fails (e.g. migration not applied) and the write fails too.
+    cacheReads.push({ ok: false, rows: { message: "relation does not exist" } });
+    cacheWriteOk = false;
+    await startAppWithCache();
+    createMock.mockResolvedValue(textReply("Brief despite a broken cache."));
+
+    const { status, body } = await request("POST", "/oracle/strategy-brief", {
+      botName: "Pulse Scalper",
+      capitalPercent: 25,
+    });
+
+    // Fail-open: a caching problem must never block a bot deployment.
+    expect(status).toBe(200);
+    expect(body).toEqual({ brief: "Brief despite a broken cache." });
+    expect(createMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not reuse a cached row that is blank", async () => {
+    cacheReads.push({ ok: true, rows: [{ brief: "   " }] });
+    await startAppWithCache();
+    createMock.mockResolvedValue(textReply("Real brief."));
+
+    const { body } = await request("POST", "/oracle/strategy-brief", {
+      botName: "Pulse Scalper",
+      capitalPercent: 25,
+    });
+
+    expect(body).toEqual({ brief: "Real brief." });
+    expect(createMock).toHaveBeenCalledTimes(1);
   });
 });

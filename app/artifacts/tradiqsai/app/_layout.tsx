@@ -58,6 +58,39 @@ setAuthFailureHandler(async () => {
 
 const queryClient = new QueryClient();
 
+type AutoPilotReadiness = { ready: boolean; missing: string[] };
+
+/**
+ * The app never probes private Supabase metadata using its public key. Instead
+ * it asks the API's read-only readiness endpoint once per app mount. A clear
+ * warning is much safer than allowing the AutoPilot deploy screen to be the
+ * first place an unapplied migration becomes a trader-facing failure.
+ */
+function useAutoPilotDependencyWarning() {
+  useEffect(() => {
+    let mounted = true;
+    void customFetch<AutoPilotReadiness>('/api/health/autopilot')
+      .then((status) => {
+        if (!mounted || status.ready) return;
+        const missing = status.missing.length
+          ? status.missing.join(', ')
+          : 'required Supabase objects';
+        Alert.alert(
+          'AutoPilot setup required',
+          `AutoPilot is unavailable until the database setup is applied: ${missing}.`,
+        );
+      })
+      .catch(() => {
+        if (!mounted) return;
+        Alert.alert(
+          'AutoPilot status unavailable',
+          'The app could not verify its AutoPilot database setup. Deployments may be unavailable.',
+        );
+      });
+    return () => { mounted = false; };
+  }, []);
+}
+
 function RootLayoutNav() {
   const { session, loading } = useAuth();
   const router = useRouter();
@@ -150,6 +183,7 @@ export default function RootLayout() {
   // Fetch the Stripe publishable key from the server so it is never baked
   // into the bundle as a hardcoded string.
   const [stripePublishableKey, setStripePublishableKey] = useState<string>('');
+  useAutoPilotDependencyWarning();
   useEffect(() => {
     customFetch<{ publishableKey: string }>('/api/payment/config')
       .then(({ publishableKey }) => {

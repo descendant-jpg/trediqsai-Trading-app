@@ -1,0 +1,33 @@
+CRITICAL FORCE WORK DIRECTIVE: YOU ARE FORCED TO IMPLEMENT FULL, COMPLETE, PRODUCTION-READY LOGIC WITH COST-OPTIMIZED BACKEND CACHING, STRICT DATABASE PERSISTENCE, AND CRITICAL SECURITY MEASURES.
+
+Review replit.md for our project rules. Execute Option 1 to apply migration 011, secure the deployment path, stop data leaks, and implement a Supabase caching layer.
+
+### 1. Database Security & Data Leak Prevention (CRITICAL)
+- Stop the app's public anon key from exposing every trader's email and account data. You MUST verify and enforce Row Level Security (RLS) on all user-related tables (like `profiles`, `active_bots`, etc.) so users can only `SELECT`, `INSERT`, or `UPDATE` their own data using `auth.uid()`.
+- Warn during startup when the database is missing setup the app depends on. Implement a health check on app mount (e.g., in `_layout.tsx` or a global provider) that verifies required tables and RPC functions exist. If missing, display a clear warning alert so development/production environments don't silently fail.
+
+### 2. Apply Migration 011 & Strict Deployment UI
+- Proceed with applying migration `011_set_active_bot.sql` to the live Supabase project.
+- Wire the frontend deployment button to call `supabase.rpc('set_active_bot', ...)`.
+- Make sure a failed bot deployment never looks like it worked. If the RPC fails, throws an error, or the network drops, the UI MUST NOT transition to the "Deployed" terminal state. It must revert to the inactive state and show an explicit error message.
+- If the RPC fails because the user does not have the required subscription tier, immediately route them: `router.push({ pathname: '/paywall', params: { defaultTier: 'ELITE' } })`.
+
+### 3. Cost-Optimized Backend Strategy (API Server + Supabase Caching)
+- Route all bot log requests through the existing API server (`api-server`) to protect the Anthropic API key.
+- Implement Supabase Caching: Check Supabase for a recent cached log for `bot_name` created within the last 15 minutes.
+- If a valid cached log exists, return it immediately without calling Anthropic.
+- If no cached log exists, execute an Anthropic API call using the lightweight `claude-3-5-haiku` (or `claude-3-haiku`) model. 
+- Prompt: "You are an institutional trading bot named [Bot_Name]. Generate 1 sentence of highly technical trading parameters you are currently monitoring based on a [Capital_Percent]% allocation."
+- Save the newly generated response to the Supabase cache and return it to the user.
+
+### 4. Build Live Terminal UI
+- Once the deployment RPC explicitly SUCCEEDS, transition the bot card into a sleek `#0A0B0E` Terminal View.
+- Render the simulated startup logs sequentially:
+  1. `> SYSTEM BOOT: [Bot_Name]`
+  2. `> ALLOCATING [Capital_Percent]% MARGIN...`
+  3. `> CONNECTING ANTHROPIC NEURAL ENGINE...`
+  4. `> [Cached_Or_Fetched_Strategy_Log]`
+  5. `> STATUS: ACTIVE AND SCANNING.`
+- Use monospace styling with neon green (`#00FF00`) text. Include a red "TERMINATE BOT" button to deactivate via a secure RPC removal call.
+
+EXECUTION REQUIREMENT: Migration 011 must be applied, RLS must be enforced to prevent data leaks, caching must prevent redundant Anthropic billing, and bot deployments MUST NOT display a fake active state upon failure.
