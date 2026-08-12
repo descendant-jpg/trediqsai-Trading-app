@@ -277,7 +277,9 @@ export default function HomeScreen() {
   const topInset = Platform.OS === 'web' ? 38 : insets.top + 10;
 
   useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 60_000);
+    const timer = setInterval(() => {
+      try { setNow(new Date()); } catch { /* keep the last valid timestamp */ }
+    }, 60_000);
     return () => clearInterval(timer);
   }, []);
 
@@ -322,19 +324,29 @@ export default function HomeScreen() {
   }, [tickerOffset, tickerTrackWidth]);
 
   const openGallery = async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) { setPickerMessage('Photo access is required to analyze a chart.'); return; }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
-    if (!result.canceled && result.assets[0]?.uri) {
-      router.push({ pathname: '/ai-analysis', params: { imageUri: result.assets[0].uri } });
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) { setPickerMessage('Photo access is required to analyze a chart.'); return; }
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
+      const uri = result.assets?.[0]?.uri;
+      if (!result.canceled && uri) {
+        router.push({ pathname: '/ai-analysis', params: { imageUri: uri } });
+      }
+    } catch {
+      setPickerMessage('Chart image access is unavailable right now.');
     }
   };
   const openCamera = async () => {
-    const permission = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permission.granted) { setPickerMessage('Camera access is required to analyze a chart.'); return; }
-    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 1 });
-    if (!result.canceled && result.assets[0]?.uri) {
-      router.push({ pathname: '/ai-analysis', params: { imageUri: result.assets[0].uri } });
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) { setPickerMessage('Camera access is required to analyze a chart.'); return; }
+      const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 1 });
+      const uri = result.assets?.[0]?.uri;
+      if (!result.canceled && uri) {
+        router.push({ pathname: '/ai-analysis', params: { imageUri: uri } });
+      }
+    } catch {
+      setPickerMessage('Camera access is unavailable right now.');
     }
   };
 
@@ -378,7 +390,7 @@ export default function HomeScreen() {
              style={[styles.tickerRow, { transform: [{ translateX: tickerOffset }] }]}
              onLayout={(event) => setTickerTrackWidth(event.nativeEvent.layout.width)}
            >
-            {[...tickers, ...tickers].map((ticker, index) => {
+            {[...(tickers ?? []), ...(tickers ?? [])].map((ticker, index) => {
              const change = Number(ticker.priceChangePercent);
               const isUp = change >= 0;
               return <View key={`${ticker.symbol}-${index}`} style={styles.tickerPill}><Text style={styles.tickerSymbol}>{ticker.symbol}</Text><Text style={styles.tickerPrice}>${Number(ticker.lastPrice).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text><Text style={[styles.tickerChange, { color: isUp ? '#00FF00' : '#FF0000' }]}>{`${isUp ? '+' : ''}${change.toFixed(2)}%`}</Text></View>;
@@ -396,7 +408,7 @@ export default function HomeScreen() {
 
         <Text style={styles.sectionLabel}>GLOBAL MARKET SESSIONS</Text>
         <View style={styles.sessionTicker}>
-          {sessionStates.map((session) => (
+          {(sessionStates ?? []).map((session) => (
             <Pressable
               key={session.city}
               style={styles.session}
@@ -430,7 +442,7 @@ export default function HomeScreen() {
           </View>
           <View style={[styles.widget, styles.biasWidget]}>
             <Text style={styles.sectionLabel}>MULTI-TF BIAS</Text>
-            {BIAS.map(([pair, bias, trend]) => (
+            {(BIAS ?? []).map(([pair, bias, trend]) => (
               <View key={pair} style={styles.biasRow}>
                 <Text style={styles.pair}>{pair}</Text>
                 <Text style={[styles.bias, { color: bias === 'BULLISH' ? c.success : c.mutedForeground }]}>{trend} {bias}</Text>
@@ -442,7 +454,7 @@ export default function HomeScreen() {
 
         <Text style={styles.sectionLabel}>QUICK ACTIONS</Text>
         <View style={styles.actionGrid}>
-          {ACTIONS.map((action) => (
+          {(ACTIONS ?? []).map((action) => (
               <Pressable
                 key={action.label}
                 style={styles.actionTile}
@@ -458,7 +470,7 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.featuredMarkets}>
-          {FEATURED_MARKETS.map(([asset, direction, entry]) => (
+          {(FEATURED_MARKETS ?? []).map(([asset, direction, entry]) => (
             <Pressable key={asset} style={styles.marketCard} onPress={() => router.push('/signals' as never)} accessibilityRole="button" accessibilityLabel={`${asset} ${direction} signal, entry ${entry}`} accessibilityHint="Open AI Signals">
               <View style={styles.marketMain}><Text style={styles.marketAsset}>{asset}</Text><Text style={[styles.direction, direction === 'SELL' && styles.sellDirection]}>{direction}</Text><Text style={styles.entry}>ENTRY {entry}</Text></View>
               <Text style={styles.live}>• LIVE  ›</Text>
