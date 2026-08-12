@@ -1,0 +1,23 @@
+CRITICAL FORCE WORK DIRECTIVE: YOU ARE FORCED TO IMPLEMENT FULL, COMPLETE, PRODUCTION-READY UI AND FIX ALL RUNTIME CRASHES. DO NOT LEAVE DUMMY CODE, HARDCODED FAKE NAVIGATIONS, OR UNPROTECTED API CALLS.
+
+Review replit.md for our project rules. Execute this master bug fix to resolve the Home screen crash and correct the Live Chart layout.
+
+### 1. Fix Home Screen Fatal Crash (`app/(tabs)/index.tsx`)
+- The Home screen is throwing a fatal render error.
+- Locate the live stock ticker API fetch logic. Wrap the entire fetch execution in a `try/catch` block.
+- Ensure the state holding the ticker data defaults to an empty array `[]` or fallback mock data so the UI never attempts to map over `undefined`.
+- Verify there are no missing imports or malformed JSX tags causing the screen to panic on mount.
+
+### 2. Fix Live Chart Symbol Chips Layout (`app/live-chart.tsx`)
+- Locate the Quick Symbol Switcher containing AAPL, TSLA, NVDA, etc.
+- Remove the `flex-1` or large height constraints on these containers that are crushing the chart.
+- Convert the container to a `<ScrollView horizontal={true} showsHorizontalScrollIndicator={false}>`.
+- Style each symbol as a compact, horizontal pill: `padding horizontal 16`, `padding vertical 8`, `borderRadius 9999` (fully rounded), and a subtle border.
+- Ensure the parent container of the TradingView `<WebView>` has `flex: 1` applied so the chart expands to fill all the newly recovered vertical space.
+
+### 3. Nuke Hallucinated Fake Navigation (`app/live-chart.tsx`)
+- The AI previously hallucinated and hardcoded a fake bottom navigation bar (Home, TradiQsAI, AI Tools, Signals, Profile) inside `live-chart.tsx`. 
+- COMPLETELY DELETE this fake navigation block from the JSX.
+- Ensure the back button (`<`) in the top header correctly triggers `router.back()` to return the user seamlessly to the Home tab.
+
+EXECUTION REQUIREMENT: The Home screen must mount without the "Something went wrong" crash. The Live Chart must display a tight, horizontally scrolling strip of symbol pills. The TradingView chart must be the dominant element on the screen, and the fake bottom navigation must be removed entirely.
