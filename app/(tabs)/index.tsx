@@ -291,13 +291,17 @@ export default function HomeScreen() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) { setPickerMessage('Photo access is required to analyze a chart.'); return; }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
-    if (!result.canceled) router.push('/live-chart' as never);
+    if (!result.canceled && result.assets[0]?.uri) {
+      router.push({ pathname: '/ai-analysis', params: { imageUri: result.assets[0].uri } });
+    }
   };
   const openCamera = async () => {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) { setPickerMessage('Camera access is required to analyze a chart.'); return; }
     const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 1 });
-    if (!result.canceled) router.push('/live-chart' as never);
+    if (!result.canceled && result.assets[0]?.uri) {
+      router.push({ pathname: '/ai-analysis', params: { imageUri: result.assets[0].uri } });
+    }
   };
 
   const localHour = now.getHours();

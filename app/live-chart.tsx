@@ -20,12 +20,10 @@ export default function LiveChartScreen() {
   const takeSnapshot = async () => {
     if (!shotRef.current?.capture) return;
     try {
-      await shotRef.current.capture();
-      setScanning(true);
-      setTimeout(() => {
-        setScanning(false);
-        if (Platform.OS === 'web') window.alert('AI Scanning Chart...'); else Alert.alert('AI Scanning Chart...', 'Your snapshot is ready for analysis.');
-      }, 600);
+      const uri = await shotRef.current.capture();
+      if (uri) {
+        router.push({ pathname: '/ai-analysis', params: { imageUri: uri } });
+      }
     } catch {
       setScanning(false);
       if (Platform.OS === 'web') window.alert('Unable to capture chart.'); else Alert.alert('Snapshot unavailable', 'Please try again.');
