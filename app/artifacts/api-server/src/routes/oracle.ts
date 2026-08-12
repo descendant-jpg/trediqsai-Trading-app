@@ -43,6 +43,15 @@ const chartRequestSchema = z.object({
   mode: z.enum(["analysis", "signal"]),
   mediaType: z.enum(["image/jpeg", "image/png", "image/webp", "image/gif"]),
 });
+const generatedSignalSchema = z.object({
+  asset: z.string().trim().min(2).max(20),
+  direction: z.enum(["BUY", "SELL"]),
+  entry: z.number().positive(),
+  takeProfit: z.number().positive(),
+  stopLoss: z.number().positive(),
+  confidence: z.number().min(0).max(100),
+  reasoning: z.string().trim().min(3).max(1_000),
+});
 
 type TradingContext = NonNullable<
   ReturnType<typeof SendOracleChatBody.parse>["tradingContext"]
@@ -231,7 +240,7 @@ router.post("/oracle/chart-analysis", identity(), chartAnalysisRateLimit, async 
   const client = getClient();
   if (!client) return res.status(503).json({ error: "Chart analysis is not configured yet." });
   const signalPrompt = parsed.data.mode === "signal"
-    ? "Return exactly five concise labeled lines: BIAS (BUY, SELL, or WAIT), ENTRY ZONE, STOP LOSS, TAKE PROFIT, and RISK NOTE. Do not guarantee outcomes; add 'Not financial advice' in RISK NOTE."
+    ? "Return only valid JSON, no markdown or code fences, matching exactly: {\"asset\":\"EURUSD\",\"direction\":\"BUY\",\"entry\":1.105,\"takeProfit\":1.11,\"stopLoss\":1.102,\"confidence\":85,\"reasoning\":\"brief technical rationale\"}. Use a real asset label, BUY or SELL, positive numbers, confidence 0-100, and include that it is not financial advice in reasoning."
     : "Return concise sections for BIAS, KEY LEVELS, and ANALYSIS. Do not guarantee outcomes and include that this is not financial advice.";
   try {
     const message = await client.messages.create({
@@ -242,6 +251,20 @@ router.post("/oracle/chart-analysis", identity(), chartAnalysisRateLimit, async 
     });
     const analysis = message.content.filter((block): block is Anthropic.TextBlock => block.type === "text").map((block) => block.text).join("").trim();
     if (!analysis) return res.status(502).json({ error: "The chart analyzer returned no result." });
+    if (parsed.data.mode === "signal") {
+      const json = analysis.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+      const signal = generatedSignalSchema.safeParse(JSON.parse(json));
+      if (!signal.success) return res.status(502).json({ error: "The signal engine returned an invalid trade plan." });
+      if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
+        const saved = await fetch(`${SUPABASE_URL}/rest/v1/trading_signals`, {
+          method: "POST",
+          headers: cacheHeaders({ "content-type": "application/json", prefer: "return=minimal" }),
+          body: JSON.stringify({ user_id: userId, asset: signal.data.asset, direction: signal.data.direction, entry_price: signal.data.entry, take_profit: signal.data.takeProfit, stop_loss: signal.data.stopLoss, confidence: signal.data.confidence }),
+        });
+        if (!saved.ok) return res.status(503).json({ error: "Signal storage is not ready. Apply the latest Supabase migration." });
+      }
+      return res.json({ signal: signal.data });
+    }
     return res.json({ analysis });
   } catch (err) {
     logger.error({ err, userId }, "Chart analysis failed");

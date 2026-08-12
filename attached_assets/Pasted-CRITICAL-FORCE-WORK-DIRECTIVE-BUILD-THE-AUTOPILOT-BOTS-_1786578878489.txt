@@ -1,0 +1,25 @@
+CRITICAL FORCE WORK DIRECTIVE: BUILD THE AUTOPILOT BOTS AND TRADE SIGNAL ENGINE.
+
+Review replit.md for our project rules. The user is an admin and has unlocked all tools. We need to wire up the functional backend and UI for the "AutoPilot Bots" and the "AI Signal Generator".
+
+### 1. Database Migrations (Supabase)
+- Inspect the schema. If they do not exist, create a new migration file (e.g., `018_bots_and_signals.sql`) to create two tables:
+  1. `public.trading_bots`: `id`, `user_id` (uuid), `pair` (text), `strategy` (text: 'GRID' or 'DCA'), `capital` (numeric), `status` (text: 'active' or 'paused'), `pnl` (numeric default 0), `created_at`.
+  2. `public.trading_signals`: `id`, `user_id` (uuid), `asset` (text), `direction` (text: 'BUY' or 'SELL'), `entry_price` (numeric), `take_profit` (numeric), `stop_loss` (numeric), `confidence` (numeric), `created_at`.
+- Ensure RLS policies are active so users can only read/update their own bots and signals.
+
+### 2. AutoPilot Bots UI & Engine (Paper Trading)
+- Update the `AutoPilot Bots` modal/screen. 
+- Create a sleek UI that fetches the user's bots from `public.trading_bots`. 
+- Include a "Create Bot" form (Select Pair, Select Strategy, Allocate Virtual Capital).
+- Include a master toggle to change a bot's status from 'paused' to 'active'.
+- Build a lightweight polling hook or backend mock service that randomly increments/decrements the `pnl` of 'active' bots by small decimal amounts every 10 seconds to simulate live cloud trading.
+
+### 3. AI Trade Signal Engine 
+- Update the `AI Signal Generator` backend endpoint. 
+- When an image is uploaded or a pair is selected, force the Anthropic AI to return a strict, parsed JSON structure, NOT a conversational string.
+  Expected JSON shape: `{ "asset": "EURUSD", "direction": "BUY", "entry": 1.1050, "takeProfit": 1.1100, "stopLoss": 1.1020, "confidence": 85, "reasoning": "Clear double bottom..." }`
+- Save this generated signal to the `public.trading_signals` table.
+- Render the output on the frontend using a premium "Signal Card" UI showing exact Entry, TP, SL, and Risk/Reward ratio.
+
+EXECUTION REQUIREMENT: Run the migrations, wire the AutoPilot UI to simulate live bot PnL, and enforce strict JSON output for the AI Signal Generator so it outputs actionable trade parameters. Verify all TypeScript types pass.
