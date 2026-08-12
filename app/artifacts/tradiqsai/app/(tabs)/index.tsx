@@ -388,9 +388,9 @@ export default function HomeScreen() {
 
          <Text style={styles.sectionLabel}>ANALYZE CHART WITH AI</Text>
          <View style={styles.visionRow}>
-           <Pressable style={styles.visionCard} onPress={() => router.push('/live-chart' as never)}><Feather name="activity" size={22} color={c.primary} /><Text style={styles.visionTitle}>Live Chart</Text><Text style={styles.visionSub}>TradingView engine</Text></Pressable>
-           <Pressable style={styles.visionCard} onPress={openCamera}><Feather name="camera" size={22} color={c.secondary} /><Text style={styles.visionTitle}>Camera</Text><Text style={styles.visionSub}>Scan a setup</Text></Pressable>
-           <Pressable style={styles.visionCard} onPress={openGallery}><Feather name="image" size={22} color={c.success} /><Text style={styles.visionTitle}>Gallery</Text><Text style={styles.visionSub}>Choose a chart</Text></Pressable>
+            <Pressable style={styles.visionCard} onPress={() => router.push('/live-chart' as never)}><Feather name="activity" size={19} color={c.primary} /><Text style={styles.visionTitle}>Live Chart</Text></Pressable>
+            <Pressable style={styles.visionCard} onPress={openCamera}><Feather name="camera" size={19} color={c.secondary} /><Text style={styles.visionTitle}>Camera</Text></Pressable>
+            <Pressable style={styles.visionCard} onPress={openGallery}><Feather name="image" size={19} color={c.success} /><Text style={styles.visionTitle}>Gallery</Text></Pressable>
          </View>
          {pickerMessage ? <Pressable onPress={() => setPickerMessage(null)}><Text style={styles.pickerMessage}>{pickerMessage}</Text></Pressable> : null}
 
@@ -557,7 +557,7 @@ const styles = StyleSheet.create({
   tickerPrice: { color: c.foreground, fontSize: 13, fontFamily: 'Inter_700Bold', marginTop: 3 },
   tickerChange: { fontSize: 10, fontFamily: 'Inter_700Bold', marginTop: 2 },
   visionRow: { flexDirection: 'row', gap: 8 },
-  visionCard: { flex: 1, minHeight: 100, backgroundColor: c.card, borderWidth: 1, borderColor: c.border, borderRadius: 12, padding: 11, justifyContent: 'space-between' },
+  visionCard: { flex: 1, minHeight: 54, backgroundColor: c.card, borderWidth: 1, borderColor: c.border, borderRadius: 12, padding: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
   visionTitle: { color: c.foreground, fontSize: 12, fontFamily: 'Inter_700Bold' },
   visionSub: { color: c.mutedForeground, fontSize: 9, fontFamily: 'Inter_400Regular' },
   pickerMessage: { color: '#FFB020', fontSize: 11, fontFamily: 'Inter_600SemiBold', marginTop: -6 },

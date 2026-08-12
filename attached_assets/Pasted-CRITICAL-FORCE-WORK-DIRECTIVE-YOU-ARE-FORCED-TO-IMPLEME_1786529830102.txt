@@ -1,0 +1,22 @@
+CRITICAL FORCE WORK DIRECTIVE: YOU ARE FORCED TO IMPLEMENT FULL, COMPLETE, PRODUCTION-READY UI AND LAYOUT INTEGRATION. DO NOT ALTER ROUTING, LEAVE EMPTY HANDLERS, OR ALLOW BOTTOM NAVIGATION OVERLAPS. WRITE ALL COMPONENT RESIZING, SAFE AREA PADDING, AND STATE HANDLERS.
+
+Review replit.md for our project rules. Execute layout optimizations on the Home screen and adjust the Live Chart layout to fit the primary bottom tab bar and new terminal features.
+
+### 1. Home Screen AI Hub Optimization (`app/(tabs)/index.tsx`)
+- Locate the 3 touchable cards under "ANALYZE CHART WITH AI" ("Live Chart", "Camera", "Gallery").
+- Refactor their internal layout from vertical stack (`flex-col`) to horizontal row (`flex-row items-center justify-center gap-2`).
+- Position the icon on the left and title text on the right.
+- Remove all subtitle descriptions ("TradingView engine", "Scan a setup", "Choose a chart").
+- Reduce padding (`p-2.5`) and card height so the "GLOBAL MARKET SESSIONS" section moves significantly higher on the screen.
+- Retain all `onPress` triggers for Camera, Gallery, and Live Chart.
+
+### 2. Live Chart Primary Navigation & Layout (`app/live-chart.tsx`)
+- Ensure the primary bottom navigation bar (Home, TradiQsAI, AI Tools, Signals, Profile) remains visible at the bottom of the screen.
+- Wrap the main screen content in a `View` with bottom padding or `useSafeAreaInsets()` so the "TAKE SNAPSHOT" button sits cleanly ABOVE the bottom tab navigation bar without any overlap.
+- Shrink the WebView container height slightly so the top search bar, quick chips, chart, and "TAKE SNAPSHOT" button all fit seamlessly within the viewport above the tab bar.
+
+### 3. Premium Live Chart Features (`app/live-chart.tsx`)
+- **Quick Symbol Switcher Chips:** Add a horizontal scrollable strip below the search bar containing hot asset chips (`AAPL`, `TSLA`, `NVDA`, `BINANCE:BTCUSD`, `FX:EURUSD`). Tapping any chip updates the active chart symbol instantly.
+- **AI Sentiment Badge:** Add a glowing status pill in the header overlay: "🟢 AI Bias: 84% Bullish".
+
+EXECUTION REQUIREMENT: Verify the Home AI cards are compact, the Global Market Sessions section slides up into view, the primary bottom tab bar remains visible under the Live Chart screen, and the "TAKE SNAPSHOT" button sits perfectly above the tab bar.
