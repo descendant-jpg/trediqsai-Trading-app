@@ -58,6 +58,18 @@ export type AffiliateStats = {
   tier_level: PartnerTier;
 };
 
+export type MarketNews = {
+  id: number;
+  external_id: string;
+  headline: string;
+  ai_summary: string;
+  category: 'crypto' | 'forex' | 'stocks';
+  sentiment: 'Bullish' | 'Bearish' | 'Neutral';
+  url: string;
+  published_at: string;
+  created_at: string;
+};
+
 async function query<T>(request: PromiseLike<{ data: T | null; error: { message: string } | null }>): Promise<T> {
   const { data, error } = await request;
   if (error) throw new Error(error.message);
@@ -93,4 +105,11 @@ export async function fetchAiSignals(isVip: boolean) {
 
 export async function getAffiliateStats(partnerId: string) {
   return query<AffiliateStats>(supabase.from('affiliates').select('*').eq('partner_id', partnerId).single());
+}
+
+/** Reads only the server-curated Supabase cache; no provider or AI calls run in Expo. */
+export async function fetchMarketNews() {
+  return query<MarketNews[]>(
+    supabase.from('market_news').select('*').order('published_at', { ascending: false }).limit(30),
+  );
 }
