@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { EncodingType, getInfoAsync, readAsStringAsync } from 'expo-file-system/legacy';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { customFetch, ApiError } from '@workspace/api-client-react';
@@ -168,6 +169,11 @@ export default function AIAnalysisScreen() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
+          <View style={styles.navbar}>
+            <TouchableOpacity accessibilityLabel="Go back" style={styles.navButton} onPress={() => router.back()}><Feather name="chevron-left" size={25} color="#FFF" /></TouchableOpacity>
+            <Text style={styles.navTitle}>CHART INTELLIGENCE</Text>
+            <TouchableOpacity accessibilityLabel="Close chart analysis" style={styles.navButton} onPress={() => router.back()}><Feather name="x" size={22} color="#FFF" /></TouchableOpacity>
+          </View>
           <Text style={styles.eyebrow}>TRADIQS VISION ENGINE</Text>
           <Text style={styles.title}>Chart intelligence.</Text>
           {imageUri ? (
@@ -197,7 +203,10 @@ export default function AIAnalysisScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0A0B0E' },
-  content: { padding: 20, paddingTop: 58, paddingBottom: 44 },
+  content: { padding: 20, paddingTop: 24, paddingBottom: 44 },
+  navbar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 },
+  navButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#16181D', alignItems: 'center', justifyContent: 'center' },
+  navTitle: { color: '#AEB6C2', fontSize: 10, fontWeight: '900', letterSpacing: 1.4 },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   eyebrow: { color: '#00F0FF', fontSize: 10, fontWeight: '800', letterSpacing: 1.7 },
   title: { color: '#FFF', fontSize: 28, fontWeight: '800', marginTop: 8, marginBottom: 20 },

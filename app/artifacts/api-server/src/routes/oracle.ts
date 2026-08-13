@@ -52,6 +52,15 @@ const generatedSignalSchema = z.object({
   confidence: z.number().min(0).max(100),
   reasoning: z.string().trim().min(3).max(1_000),
 });
+const visionFallback = {
+  asset: "UNSPECIFIED",
+  direction: "NEUTRAL",
+  entry: 0,
+  takeProfit: 0,
+  stopLoss: 0,
+  confidence: 0,
+  reasoning: "The AI Vision engine could not identify clear candlestick patterns or price action in this screenshot. Please ensure your chart includes visible timeframes, price axes, and clear candles.",
+};
 const chartDataUrlPattern =
   /^data:(image\/(?:jpeg|png|webp|gif));base64,([a-z0-9+/=\s]+)$/i;
 
@@ -262,11 +271,13 @@ router.post("/oracle/chart-analysis", identity(), chartAnalysisRateLimit, async 
       messages: [{ role: "user", content: [{ type: "image", source: { type: "base64", media_type: chartImage.mediaType, data: chartImage.data } }, { type: "text", text: "Analyze this uploaded trading chart." }] }],
     });
     const analysis = message.content.filter((block): block is Anthropic.TextBlock => block.type === "text").map((block) => block.text).join("").trim();
-    if (!analysis) return res.status(502).json({ error: "The chart analyzer returned no result." });
+    if (!analysis) return res.json({ analysis: visionFallback.reasoning, signal: visionFallback, fallback: true });
     if (parsed.data.mode === "signal") {
       const json = analysis.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
-      const signal = generatedSignalSchema.safeParse(JSON.parse(json));
-      if (!signal.success) return res.status(502).json({ error: "The signal engine returned an invalid trade plan." });
+      let candidate: unknown;
+      try { candidate = JSON.parse(json); } catch { return res.json({ analysis: visionFallback.reasoning, signal: visionFallback, fallback: true }); }
+      const signal = generatedSignalSchema.safeParse(candidate);
+      if (!signal.success) return res.json({ analysis: visionFallback.reasoning, signal: visionFallback, fallback: true });
       if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
         const saved = await fetch(`${SUPABASE_URL}/rest/v1/trading_signals`, {
           method: "POST",
