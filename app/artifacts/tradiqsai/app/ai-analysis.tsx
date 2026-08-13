@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import * as FileSystem from 'expo-file-system';
+import { EncodingType, getInfoAsync, readAsStringAsync } from 'expo-file-system/legacy';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { customFetch, ApiError } from '@workspace/api-client-react';
 import { useAuth } from '@/context/AuthContext';
@@ -48,9 +48,16 @@ export default function AIAnalysisScreen() {
         return;
       }
       try {
-        const base64 = await FileSystem.readAsStringAsync(imageUri, {
-          encoding: FileSystem.EncodingType.Base64,
+        const file = await getInfoAsync(imageUri);
+        // Base64 expands a file by roughly a third. Keep the payload within
+        // the API's deliberately bounded chart-analysis parser limit.
+        if (!file.exists || (typeof file.size === 'number' && file.size > 6_000_000)) {
+          throw new Error('This chart image is too large. Please choose an image smaller than 6 MB.');
+        }
+        const base64 = await readAsStringAsync(imageUri, {
+          encoding: EncodingType.Base64,
         });
+        if (!base64) throw new Error('The selected chart image could not be read.');
         const response = await customFetch<{ analysis: string }>('/api/oracle/chart-analysis', {
           method: 'POST',
           headers: {
