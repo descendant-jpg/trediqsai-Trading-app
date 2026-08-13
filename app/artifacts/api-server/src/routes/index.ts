@@ -8,6 +8,7 @@ import { createArcadeRouter } from "./arcade";
 import paymentRouter from "./payment";
 import multiTimeframeRouter from "./multiTimeframe";
 import marketNewsRouter from "./marketNews";
+import botsRouter from "./bots";
 
 const router: IRouter = Router();
 
@@ -20,5 +21,6 @@ router.use(createArcadeRouter());
 router.use(paymentRouter);
 router.use(multiTimeframeRouter);
 router.use(marketNewsRouter);
+router.use(botsRouter);
 
 export default router;
