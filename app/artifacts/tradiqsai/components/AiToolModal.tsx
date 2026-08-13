@@ -72,7 +72,8 @@ export function AiToolModal({ tool, onClose }: { tool: AiToolModalTool; onClose:
       const payload = await customFetch<unknown>('/api/market-news');
       setNews(normalizeNews(payload));
       setNewsState('ready');
-    } catch {
+    } catch (error) {
+      console.error('Market News Fetch Failed:', error instanceof Error ? error.message : error);
       setNews([]);
       setNewsState('error');
     }

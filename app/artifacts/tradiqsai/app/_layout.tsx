@@ -24,12 +24,21 @@ import {
   setAuthFailureHandler,
   setAuthSessionRefresher,
   setAuthTokenGetter,
+  setBaseUrl,
   customFetch,
 } from '@workspace/api-client-react';
 import { isSupabaseConfigured, supabase } from '@/utils/supabase';
 import { initializeRevenueCat, SubscriptionProvider } from '@/lib/revenuecat';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { getNotificationRoute } from '@/services/NotificationService';
+
+// React Native has no browser origin, so relative `/api/*` URLs do not reach
+// the Express workflow. Web intentionally keeps relative same-origin paths.
+if (Platform.OS !== 'web') {
+  const configuredApi = process.env.EXPO_PUBLIC_API_URL;
+  const developmentDomain = process.env.EXPO_PUBLIC_DOMAIN;
+  setBaseUrl(configuredApi ?? (developmentDomain ? `https://${developmentDomain}` : null));
+}
 
 // Attach the Supabase access token to every API call so server-side state
 // (e.g. AutoPilot bot settings) is scoped to the signed-in trader.
