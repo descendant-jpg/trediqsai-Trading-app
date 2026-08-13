@@ -4,6 +4,7 @@ export {
   customFetch,
   ApiError,
   setBaseUrl,
+  getBaseUrl,
   setAuthTokenGetter,
   setAuthSessionRefresher,
   setAuthFailureHandler,

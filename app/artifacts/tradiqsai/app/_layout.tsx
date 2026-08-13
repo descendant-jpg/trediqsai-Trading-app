@@ -17,6 +17,7 @@ import {
 } from '@expo-google-fonts/inter';
 import * as Font from 'expo-font';
 import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
 import { Stack, useRouter } from 'expo-router';
 import { usePendingRouteRedirect } from '@/lib/usePendingRouteRedirect';
 import * as SplashScreen from 'expo-splash-screen';
@@ -37,7 +38,9 @@ import { getNotificationRoute } from '@/services/NotificationService';
 if (Platform.OS !== 'web') {
   const configuredApi = process.env.EXPO_PUBLIC_API_URL;
   const developmentDomain = process.env.EXPO_PUBLIC_DOMAIN;
-  setBaseUrl(configuredApi ?? (developmentDomain ? `https://${developmentDomain}` : null));
+  const hostUri = Constants.expoConfig?.hostUri ?? '';
+  const host = hostUri.replace(/^https?:\/\//, '').split(':')[0];
+  setBaseUrl(configuredApi ?? (developmentDomain ? `https://${developmentDomain}` : host ? `https://${host}` : null));
 }
 
 // Attach the Supabase access token to every API call so server-side state

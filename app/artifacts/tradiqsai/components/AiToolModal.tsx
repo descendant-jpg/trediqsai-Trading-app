@@ -34,6 +34,7 @@ export type AiToolModalTool = {
 const CYAN = '#00F0FF';
 const GREEN = '#00E676';
 const RED = '#FF6174';
+const marketNewsUrl = `${process.env.EXPO_PUBLIC_API_URL ?? (process.env.EXPO_PUBLIC_DOMAIN ? `https://${process.env.EXPO_PUBLIC_DOMAIN}` : '(no API base URL)')}/api/market-news`;
 type LiveNews = { headline: string; summary: string; url: string; image: string; datetime: number };
 function normalizeNews(value: unknown): LiveNews[] {
   if (!Array.isArray(value)) return [];
@@ -62,19 +63,23 @@ export function AiToolModal({ tool, onClose }: { tool: AiToolModalTool; onClose:
   const [symbol, setSymbol] = useState('EURUSD');
   const [news, setNews] = useState<LiveNews[]>([]);
   const [newsState, setNewsState] = useState<'idle' | 'loading' | 'error' | 'ready'>('idle');
+  const [newsError, setNewsError] = useState('');
   const [selectedArticle, setSelectedArticle] = useState<LiveNews | null>(null);
   const [sentiment, setSentiment] = useState('');
   const [sentimentState, setSentimentState] = useState<'idle' | 'loading' | 'error' | 'ready'>('idle');
 
   const loadNews = async () => {
     setNewsState('loading');
+    setNewsError('');
     try {
       const payload = await customFetch<unknown>('/api/market-news');
       setNews(normalizeNews(payload));
       setNewsState('ready');
     } catch (error) {
-      console.error('Market News Fetch Failed:', error instanceof Error ? error.message : error);
+      const message = error instanceof Error ? error.message : String(error);
+      console.error('Market News Fetch Failed:', message);
       setNews([]);
+      setNewsError(message);
       setNewsState('error');
     }
   };
@@ -141,7 +146,7 @@ export function AiToolModal({ tool, onClose }: { tool: AiToolModalTool; onClose:
             {tool.kind === 'broker' && <><Text style={styles.hint}>Compare execution characteristics before connecting an account.</Text>{[['Oanda', 'Forex focus · transparent pricing'], ['Exness', 'High leverage · global CFDs'], ['Binance', 'Crypto liquidity · spot and derivatives']].map(([broker, detail]) => <View style={styles.broker} key={broker}><Text style={styles.item}>{broker}</Text><Text style={styles.hint}>{detail}</Text></View>)}</>}
             {tool.kind === 'news' && (selectedArticle
               ? <NewsAnalysis article={selectedArticle} state={sentimentState} analysis={sentiment} onBack={() => setSelectedArticle(null)} />
-              : <NewsWorkspace state={newsState} news={news} onRetry={() => void loadNews()} onArticle={(article) => void analyzeArticle(article)} />)}
+              : <NewsWorkspace state={newsState} news={news} error={newsError} onRetry={() => void loadNews()} onArticle={(article) => void analyzeArticle(article)} />)}
           </ScrollView>
         </View>
       </View>
@@ -155,9 +160,9 @@ function Field({ label, value, onChange }: { label: string; value: string; onCha
 function Matrix({ title, rows }: { title: string; rows: string[][] }) {
   return <><Text style={styles.hint}>{title}</Text>{rows.map(([left, right, value]) => <View style={styles.row} key={`${left}-${right}`}><Text style={styles.item}>{left}</Text><Text style={styles.hint}>vs {right}</Text><Text style={[styles.value, { color: value.startsWith('-') ? RED : GREEN }]}>{value}</Text></View>)}</>;
 }
-function NewsWorkspace({ state, news, onRetry, onArticle }: { state: string; news: LiveNews[]; onRetry: () => void; onArticle: (article: LiveNews) => void }) {
+function NewsWorkspace({ state, news, error, onRetry, onArticle }: { state: string; news: LiveNews[]; error: string; onRetry: () => void; onArticle: (article: LiveNews) => void }) {
   if (state === 'loading' || state === 'idle') return <View style={styles.loading}><ActivityIndicator color={CYAN} /><View style={styles.skeleton} /><View style={styles.skeleton} /><Text style={styles.hint}>Loading live market headlines…</Text></View>;
-  if (state === 'error') return <TouchableOpacity style={styles.retry} onPress={onRetry}><Text style={styles.primaryText}>REFRESH LIVE NEWS</Text></TouchableOpacity>;
+  if (state === 'error') return <View style={styles.errorBox}><Text style={styles.errorText}>Connection Failed</Text><Text style={styles.errorDetail}>Tried fetching: {marketNewsUrl}</Text><Text style={styles.errorDetail}>Error: {error || 'Unknown network error'}</Text><TouchableOpacity style={styles.retry} onPress={onRetry}><Text style={styles.primaryText}>REFRESH LIVE NEWS</Text></TouchableOpacity></View>;
   if (!Array.isArray(news) || !news.length) return <Text style={styles.hint}>No market headlines are available yet. Pull to refresh later.</Text>;
   return <>{news.map((article, index) => {
     const headline = article?.headline || 'No title available';
@@ -186,5 +191,5 @@ const styles = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 9 }, heat: { width: '23%', minHeight: 70, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#293441', borderRadius: 10, backgroundColor: '#151A21' }, heatName: { color: '#FFF', fontWeight: '800' }, heatValue: { marginTop: 5, fontWeight: '800', fontSize: 12 },
   result: { borderRadius: 12, borderWidth: 1, borderColor: '#284A55', backgroundColor: '#101B20', padding: 14, gap: 8 }, resultValue: { color: GREEN, fontSize: 23, fontWeight: '900' }, item: { color: '#EDF2F7', fontSize: 13, fontWeight: '700', lineHeight: 19 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 13, borderRadius: 10, backgroundColor: '#171B22' }, value: { marginLeft: 'auto', fontWeight: '900' },
-  broker: { borderRadius: 11, borderWidth: 1, borderColor: '#303844', backgroundColor: '#15191F', padding: 14, gap: 4 }, loading: { alignItems: 'center', gap: 12, paddingVertical: 34 }, retry: { backgroundColor: '#20363D', borderRadius: 10, padding: 15, alignItems: 'center' }, news: { borderRadius: 11, borderWidth: 1, borderColor: '#303844', backgroundColor: '#15191F', padding: 14, gap: 7 }, newsTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, newsImage: { width: 42, height: 30, borderRadius: 5, backgroundColor: '#202834' }, openAnalysis: { color: CYAN, fontSize: 10, fontWeight: '900', letterSpacing: .7, marginTop: 3 }, sentiment: { borderRadius: 12, borderWidth: 1, borderColor: '#275160', backgroundColor: '#0B171B', padding: 16, gap: 10 }, analysis: { color: '#EAF8FA', fontSize: 14, lineHeight: 22 }, skeleton: { width: '100%', height: 76, borderRadius: 10, backgroundColor: '#1B222B' },
+  broker: { borderRadius: 11, borderWidth: 1, borderColor: '#303844', backgroundColor: '#15191F', padding: 14, gap: 4 }, loading: { alignItems: 'center', gap: 12, paddingVertical: 34 }, retry: { backgroundColor: '#20363D', borderRadius: 10, padding: 15, alignItems: 'center', marginTop: 10 }, errorBox: { borderRadius: 10, borderWidth: 1, borderColor: '#7B3844', backgroundColor: '#241217', padding: 14 }, errorText: { color: '#FF8A98', fontWeight: '900', marginBottom: 8 }, errorDetail: { color: '#F1C8CD', fontSize: 11, lineHeight: 17 }, news: { borderRadius: 11, borderWidth: 1, borderColor: '#303844', backgroundColor: '#15191F', padding: 14, gap: 7 }, newsTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, newsImage: { width: 42, height: 30, borderRadius: 5, backgroundColor: '#202834' }, openAnalysis: { color: CYAN, fontSize: 10, fontWeight: '900', letterSpacing: .7, marginTop: 3 }, sentiment: { borderRadius: 12, borderWidth: 1, borderColor: '#275160', backgroundColor: '#0B171B', padding: 16, gap: 10 }, analysis: { color: '#EAF8FA', fontSize: 14, lineHeight: 22 }, skeleton: { width: '100%', height: 76, borderRadius: 10, backgroundColor: '#1B222B' },
 });
