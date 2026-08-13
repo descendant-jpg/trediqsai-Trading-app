@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { z } from "zod";
 import { identity, requestUserId, ANONYMOUS_USER } from "../middlewares/identity";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 const url = process.env["SUPABASE_URL"] ?? process.env["EXPO_PUBLIC_SUPABASE_URL"] ?? "";
@@ -13,9 +14,18 @@ async function admin(userId: string) {
 }
 router.get("/signals/broadcast", async (_req, res) => {
   if (!url || !key) return res.status(503).json({ error: "Signal feed is not configured." });
-  const r = await fetch(`${url}/rest/v1/broadcast_signals?select=*&order=created_at.desc`, { headers: headers() });
-  if (!r.ok) return res.status(503).json({ error: "Signal feed is not ready. Apply the latest Supabase migration." });
-  return res.json(await r.json());
+  try {
+    const r = await fetch(`${url}/rest/v1/broadcast_signals?select=*&order=created_at.desc`, { headers: headers() });
+    if (!r.ok) {
+      logger.error({ status: r.status, body: await r.text() }, "Broadcast signal feed query failed");
+      return res.status(503).json({ error: "Signal feed is not ready. Apply the latest Supabase migration." });
+    }
+    const rows: unknown = await r.json();
+    return res.json(Array.isArray(rows) ? rows : []);
+  } catch (err) {
+    logger.error({ err }, "Broadcast signal feed request failed");
+    return res.status(503).json({ error: "Signal feed is temporarily unavailable." });
+  }
 });
 router.post("/signals/broadcast", identity(), async (req, res) => {
   const userId = requestUserId(res); if (userId === ANONYMOUS_USER) return res.status(401).json({ error: "Sign in required." });
