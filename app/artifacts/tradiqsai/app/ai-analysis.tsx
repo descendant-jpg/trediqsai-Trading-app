@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,6 +16,35 @@ import { useAuth } from '@/context/AuthContext';
 import { useSubscription } from '@/lib/revenuecat';
 
 type ErrorKind = 'unauthenticated' | 'pro_required' | 'generic' | null;
+const MAX_CHART_BYTES = 6 * 1024 * 1024;
+
+async function readChartBase64(imageUri: string): Promise<string> {
+  if (Platform.OS === 'web') {
+    const response = await fetch(imageUri);
+    if (!response.ok) throw new Error('The selected chart image could not be loaded.');
+    const blob = await response.blob();
+    if (blob.size > MAX_CHART_BYTES) throw new Error('This chart image is too large. Please choose an image smaller than 6 MB.');
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('The selected chart image could not be read.'));
+      reader.onload = () => typeof reader.result === 'string'
+        ? resolve(reader.result)
+        : reject(new Error('The selected chart image could not be read.'));
+      reader.readAsDataURL(blob);
+    });
+    const base64 = dataUrl.split(',', 2)[1];
+    if (!base64) throw new Error('The selected chart image could not be converted.');
+    return base64;
+  }
+
+  const file = await getInfoAsync(imageUri);
+  if (!file.exists || (typeof file.size === 'number' && file.size > MAX_CHART_BYTES)) {
+    throw new Error('This chart image is too large. Please choose an image smaller than 6 MB.');
+  }
+  const base64 = await readAsStringAsync(imageUri, { encoding: EncodingType.Base64 });
+  if (!base64) throw new Error('The selected chart image could not be read.');
+  return base64;
+}
 
 export default function AIAnalysisScreen() {
   const router = useRouter();
@@ -48,16 +78,7 @@ export default function AIAnalysisScreen() {
         return;
       }
       try {
-        const file = await getInfoAsync(imageUri);
-        // Base64 expands a file by roughly a third. Keep the payload within
-        // the API's deliberately bounded chart-analysis parser limit.
-        if (!file.exists || (typeof file.size === 'number' && file.size > 6_000_000)) {
-          throw new Error('This chart image is too large. Please choose an image smaller than 6 MB.');
-        }
-        const base64 = await readAsStringAsync(imageUri, {
-          encoding: EncodingType.Base64,
-        });
-        if (!base64) throw new Error('The selected chart image could not be read.');
+        const base64 = await readChartBase64(imageUri);
         const response = await customFetch<{ analysis: string }>('/api/oracle/chart-analysis', {
           method: 'POST',
           headers: {
