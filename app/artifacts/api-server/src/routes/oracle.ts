@@ -52,6 +52,17 @@ const generatedSignalSchema = z.object({
   confidence: z.number().min(0).max(100),
   reasoning: z.string().trim().min(3).max(1_000),
 });
+const chartDataUrlPattern =
+  /^data:(image\/(?:jpeg|png|webp|gif));base64,([a-z0-9+/=\s]+)$/i;
+
+function normalizeChartImage(imageBase64: string, fallbackMediaType: "image/jpeg" | "image/png" | "image/webp" | "image/gif") {
+  const dataUrl = imageBase64.match(chartDataUrlPattern);
+  if (!dataUrl) return { mediaType: fallbackMediaType, data: imageBase64.replace(/\s/g, "") };
+  return {
+    mediaType: dataUrl[1]!.toLowerCase() as typeof fallbackMediaType,
+    data: dataUrl[2]!.replace(/\s/g, ""),
+  };
+}
 
 type TradingContext = NonNullable<
   ReturnType<typeof SendOracleChatBody.parse>["tradingContext"]
@@ -239,6 +250,7 @@ router.post("/oracle/chart-analysis", identity(), chartAnalysisRateLimit, async 
   if (!parsed.success) return res.status(400).json({ error: "A valid chart image is required." });
   const client = getClient();
   if (!client) return res.status(503).json({ error: "Chart analysis is not configured yet." });
+  const chartImage = normalizeChartImage(parsed.data.imageBase64, parsed.data.mediaType);
   const signalPrompt = parsed.data.mode === "signal"
     ? "Return only valid JSON, no markdown or code fences, matching exactly: {\"asset\":\"EURUSD\",\"direction\":\"BUY\",\"entry\":1.105,\"takeProfit\":1.11,\"stopLoss\":1.102,\"confidence\":85,\"reasoning\":\"brief technical rationale\"}. Use a real asset label, BUY or SELL, positive numbers, confidence 0-100, and include that it is not financial advice in reasoning."
     : "Return concise sections for BIAS, KEY LEVELS, and ANALYSIS. Do not guarantee outcomes and include that this is not financial advice.";
@@ -247,7 +259,7 @@ router.post("/oracle/chart-analysis", identity(), chartAnalysisRateLimit, async 
       model: process.env["CHART_ANALYSIS_MODEL"] ?? "claude-haiku-4-5-20251001",
       max_tokens: 600,
       system: `You are a cautious institutional chart analyst. ${signalPrompt}`,
-      messages: [{ role: "user", content: [{ type: "image", source: { type: "base64", media_type: parsed.data.mediaType, data: parsed.data.imageBase64 } }, { type: "text", text: "Analyze this uploaded trading chart." }] }],
+      messages: [{ role: "user", content: [{ type: "image", source: { type: "base64", media_type: chartImage.mediaType, data: chartImage.data } }, { type: "text", text: "Analyze this uploaded trading chart." }] }],
     });
     const analysis = message.content.filter((block): block is Anthropic.TextBlock => block.type === "text").map((block) => block.text).join("").trim();
     if (!analysis) return res.status(502).json({ error: "The chart analyzer returned no result." });
