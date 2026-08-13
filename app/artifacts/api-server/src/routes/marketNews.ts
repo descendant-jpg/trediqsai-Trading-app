@@ -8,7 +8,6 @@ import { rateLimit } from "../middlewares/rateLimit";
 
 const router: IRouter = Router();
 const CACHE_MS = 5 * 60_000;
-const FINNHUB_URL = "https://finnhub.io/api/v1/news?category=general";
 let cache: { expiresAt: number; articles: MarketArticle[] } | null = null;
 
 export type MarketArticle = {
@@ -34,12 +33,22 @@ const sentimentRateLimit = rateLimit({
 export async function fetchMarketNews(fetchImpl: typeof fetch = fetch): Promise<MarketArticle[]> {
   if (cache && cache.expiresAt > Date.now()) return cache.articles;
   const key = process.env["FINNHUB_API_KEY"];
+  console.log("Finnhub Key Exists:", !!key);
   if (!key) throw new Error("FINNHUB_API_KEY is not configured");
-  const response = await fetchImpl(`${FINNHUB_URL}&token=${encodeURIComponent(key)}`);
-  if (!response.ok) throw new Error(`Finnhub news request failed: ${response.status}`);
-  const raw = (await response.json()) as Array<Partial<MarketArticle>>;
+  const response = await fetchImpl(`https://finnhub.io/api/v1/news?category=general&token=${key}`);
+  const raw: unknown = await response.json();
+  console.log("Finnhub Raw Response:", raw);
+  if (!response.ok) {
+    logger.error({ status: response.status, raw }, "Finnhub news request failed");
+    throw new Error(`Finnhub news request failed: ${response.status}`);
+  }
+  if (!Array.isArray(raw)) {
+    logger.error({ raw }, "Finnhub returned a non-array news response");
+    throw new Error("Finnhub returned an unexpected news response");
+  }
   const articles = raw
-    .filter((article) => article.headline && article.url && typeof article.datetime === "number")
+    .filter((article): article is Partial<MarketArticle> => !!article && typeof article === "object")
+    .filter((article) => typeof article.headline === "string" && typeof article.url === "string" && typeof article.datetime === "number")
     .slice(0, 30)
     .map((article) => ({
       headline: article.headline!.trim(),
@@ -48,7 +57,9 @@ export async function fetchMarketNews(fetchImpl: typeof fetch = fetch): Promise<
       image: article.image ?? "",
       datetime: article.datetime!,
     }));
-  cache = { articles, expiresAt: Date.now() + CACHE_MS };
+  // Do not cache an empty provider response: a transient Finnhub anomaly
+  // should recover on the next UI refresh rather than blanking Radar for 5m.
+  if (articles.length > 0) cache = { articles, expiresAt: Date.now() + CACHE_MS };
   return articles;
 }
 

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -13,14 +13,14 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-} from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Feather } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import TimezonePickerModal from '@/components/TimezonePickerModal';
-import { useTrading } from '@/context/TradingContext';
-import { useAuth } from '@/context/AuthContext';
-import { usePayoutEvaluation } from '@/hooks/usePayoutEvaluation';
+} from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Feather } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import TimezonePickerModal from "@/components/TimezonePickerModal";
+import { useTrading } from "@/context/TradingContext";
+import { useAuth } from "@/context/AuthContext";
+import { usePayoutEvaluation } from "@/hooks/usePayoutEvaluation";
 import {
   DAILY_DRAWDOWN_LIMIT,
   DEMO_STARTING_BALANCE,
@@ -28,18 +28,18 @@ import {
   TOTAL_EQUITY_FLOOR,
   formatMoney,
   type PayoutRequest,
-} from '@/lib/payoutEvaluation';
-import { useSubscription } from '@/lib/revenuecat';
-import { PRIVACY_POLICY, TERMS_AND_CONDITIONS } from '@/lib/legalContent';
-import { supabase } from '@/utils/supabase';
-import colors from '@/constants/colors';
-import { AcademyModal } from '../../components/AcademyModal';
-import { SocialMediaModal } from '@/components/SocialMediaModal';
-import { ChangePasswordModal } from '@/components/ChangePasswordModal';
-import { DeleteAccountModal } from '@/components/DeleteAccountModal';
+} from "@/lib/payoutEvaluation";
+import { useSubscription } from "@/lib/revenuecat";
+import { PRIVACY_POLICY, TERMS_AND_CONDITIONS } from "@/lib/legalContent";
+import { supabase } from "@/utils/supabase";
+import colors from "@/constants/colors";
+import { AcademyModal } from "../../components/AcademyModal";
+import { SocialMediaModal } from "@/components/SocialMediaModal";
+import { ChangePasswordModal } from "@/components/ChangePasswordModal";
+import { DeleteAccountModal } from "@/components/DeleteAccountModal";
 
 function showAlert(title: string, message: string) {
-  if (Platform.OS === 'web') {
+  if (Platform.OS === "web") {
     // eslint-disable-next-line no-alert
     window.alert(`${title}\n\n${message}`);
   } else {
@@ -49,35 +49,35 @@ function showAlert(title: string, message: string) {
 
 /** Confirm dialog that actually works on web (Alert buttons are a no-op there). */
 function showConfirm(title: string, message: string, onConfirm: () => void) {
-  if (Platform.OS === 'web') {
+  if (Platform.OS === "web") {
     // eslint-disable-next-line no-alert
     if (window.confirm(`${title}\n\n${message}`)) onConfirm();
   } else {
     Alert.alert(title, message, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: onConfirm },
+      { text: "Cancel", style: "cancel" },
+      { text: "Delete", style: "destructive", onPress: onConfirm },
     ]);
   }
 }
 
-const LANGUAGE_KEY = 'tradiqs.language.v1';
+const LANGUAGE_KEY = "tradiqs.language.v1";
 
-const LANGUAGES = ['English', 'Spanish', 'French'] as const;
+const LANGUAGES = ["English", "Spanish", "French"] as const;
 type Language = (typeof LANGUAGES)[number];
 
-const TELEGRAM_CHANNEL_URL = 'https://t.me/tradiqsai';
-const TELEGRAM_GROUP_URL = 'https://t.me/tradiqsai_chat';
+const TELEGRAM_CHANNEL_URL = "https://t.me/tradiqsai";
+const TELEGRAM_GROUP_URL = "https://t.me/tradiqs_ai";
 
 const PARTNER_PROGRAM_COPY: Record<string, string> = {
-  'Crypto Brokers':
-    'Our crypto affiliate program connects you with vetted crypto broker partners. When you open a live account through a TradiQs partner link, you support the platform at no extra cost — and unlock partner-exclusive signal streams as they launch.',
-  'Forex Partners':
-    'The forex partner program links your TradiQs progress to real forex brokers. Graduates of the simulated challenge get priority referrals to our partner brokers, plus reduced-spread promotions negotiated for the TradiQs community.',
-  'Stock Partners':
-    'Our stock brokerage partners offer commission-free equity trading for TradiQs members. Referral rewards from partner signups help keep the simulated terminal free — full partner integrations are rolling out soon.',
+  "Crypto Brokers":
+    "Our crypto affiliate program connects you with vetted crypto broker partners. When you open a live account through a TradiQs partner link, you support the platform at no extra cost — and unlock partner-exclusive signal streams as they launch.",
+  "Forex Partners":
+    "The forex partner program links your TradiQs progress to real forex brokers. Graduates of the simulated challenge get priority referrals to our partner brokers, plus reduced-spread promotions negotiated for the TradiQs community.",
+  "Stock Partners":
+    "Our stock brokerage partners offer commission-free equity trading for TradiQs members. Referral rewards from partner signups help keep the simulated terminal free — full partner integrations are rolling out soon.",
 };
 
-type IconName = React.ComponentProps<typeof Feather>['name'];
+type IconName = React.ComponentProps<typeof Feather>["name"];
 
 function ListItem({
   icon,
@@ -85,14 +85,14 @@ function ListItem({
   detail,
   onPress,
   testID,
-    danger = false,
+  danger = false,
 }: {
   icon: IconName;
   label: string;
   detail?: string;
   onPress?: () => void;
   testID?: string;
-    danger?: boolean;
+  danger?: boolean;
 }) {
   return (
     <TouchableOpacity
@@ -101,15 +101,23 @@ function ListItem({
       activeOpacity={0.8}
       testID={testID}
     >
-      <Feather name={icon} size={18} color={danger ? '#FF5252' : '#8A8D93'} />
-      <Text style={[styles.listItemLabel, danger && styles.dangerLabel]}>{label}</Text>
+      <Feather name={icon} size={18} color={danger ? "#FF5252" : "#8A8D93"} />
+      <Text style={[styles.listItemLabel, danger && styles.dangerLabel]}>
+        {label}
+      </Text>
       {!!detail && <Text style={styles.listItemDetail}>{detail}</Text>}
       <Feather name="chevron-right" size={18} color="#8A8D93" />
     </TouchableOpacity>
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -133,7 +141,12 @@ function SheetModal({
   scroll?: boolean;
 }) {
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent
+      onRequestClose={onClose}
+    >
       <View style={styles.modalBackdrop}>
         <View style={[styles.modalCard, scroll && styles.modalCardTall]}>
           <View style={styles.modalHeader}>
@@ -159,11 +172,11 @@ function SheetModal({
 
 type ActiveModal =
   | null
-  | 'password'
-  | 'language'
-  | 'terms'
-  | 'privacy'
-  | 'partner';
+  | "password"
+  | "language"
+  | "terms"
+  | "privacy"
+  | "partner";
 
 /** Profile — account, wallet, settings, partners, support, and legal. */
 export default function ProfileScreen() {
@@ -191,20 +204,20 @@ export default function ProfileScreen() {
   const [socialOpen, setSocialOpen] = useState(false);
 
   // Change password
-  const [newPassword, setNewPassword] = useState('');
+  const [newPassword, setNewPassword] = useState("");
   const [savingPassword, setSavingPassword] = useState(false);
 
   // Language (persisted in AsyncStorage)
-  const [language, setLanguage] = useState<Language>('English');
+  const [language, setLanguage] = useState<Language>("English");
 
   // Partner program modal content
-  const [partnerTopic, setPartnerTopic] = useState<string>('Crypto Brokers');
+  const [partnerTopic, setPartnerTopic] = useState<string>("Crypto Brokers");
 
   // Delete account
   const [deleting, setDeleting] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
-  const email = session?.user?.email ?? '';
+  const email = session?.user?.email ?? "";
 
   useEffect(() => {
     let cancelled = false;
@@ -212,14 +225,14 @@ export default function ProfileScreen() {
       if (!session) return;
       const [{ data }, { data: refRows, count }] = await Promise.all([
         supabase
-          .from('profiles')
-          .select('username, referral_code')
-          .eq('id', session.user.id)
+          .from("profiles")
+          .select("username, referral_code")
+          .eq("id", session.user.id)
           .single(),
         supabase
-          .from('referrals')
-          .select('reward_amount', { count: 'exact' })
-          .eq('referrer_id', session.user.id),
+          .from("referrals")
+          .select("reward_amount", { count: "exact" })
+          .eq("referrer_id", session.user.id),
       ]);
       if (!cancelled) {
         setUsername(data?.username ?? null);
@@ -257,23 +270,26 @@ export default function ProfileScreen() {
     setLanguage(lang);
     AsyncStorage.setItem(LANGUAGE_KEY, lang).catch(() => {});
     setActiveModal(null);
-    showAlert('Language', `Language set to ${lang}.`);
+    showAlert("Language", `Language set to ${lang}.`);
   };
 
   const handleSavePassword = async (password = newPassword) => {
     if (password.length < 8) {
-      showAlert('Change Password', 'Password must be at least 8 characters.');
+      showAlert("Change Password", "Password must be at least 8 characters.");
       return;
     }
     setSavingPassword(true);
     try {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
-      setNewPassword('');
+      setNewPassword("");
       setActiveModal(null);
-      showAlert('Change Password', 'Your password has been updated.');
+      showAlert("Change Password", "Your password has been updated.");
     } catch (err: any) {
-      showAlert('Change Password', err?.message ?? 'Failed to update password.');
+      showAlert(
+        "Change Password",
+        err?.message ?? "Failed to update password.",
+      );
     } finally {
       setSavingPassword(false);
     }
@@ -281,8 +297,8 @@ export default function ProfileScreen() {
 
   const handleDeleteAccount = () => {
     showConfirm(
-      'Delete Account',
-      'Are you sure? This cannot be undone.',
+      "Delete Account",
+      "Are you sure? This cannot be undone.",
       async () => {
         setDeleting(true);
         // Flag the profile for deletion; auth users can't be hard-deleted from
@@ -290,21 +306,21 @@ export default function ProfileScreen() {
         // honest about whether the flag was actually recorded.
         let flagged = false;
         try {
-          const { error } = await supabase.rpc('request_account_deletion');
+          const { error } = await supabase.rpc("request_account_deletion");
           flagged = !error;
         } catch {
           flagged = false;
         }
         try {
           showAlert(
-            'Account Deletion',
+            "Account Deletion",
             flagged
-              ? 'Your account has been flagged for deletion. You will now be signed out.'
-              : 'We could not record the deletion request right now. You will be signed out — please contact support@tradiqsai.com to complete deletion.',
+              ? "Your account has been flagged for deletion. You will now be signed out."
+              : "We could not record the deletion request right now. You will be signed out — please contact support@tradiqsai.com to complete deletion.",
           );
           await signOut();
         } catch (err: any) {
-          showAlert('Delete Account', err?.message ?? 'Failed to sign out.');
+          showAlert("Delete Account", err?.message ?? "Failed to sign out.");
         } finally {
           setDeleting(false);
         }
@@ -318,14 +334,14 @@ export default function ProfileScreen() {
 
   const openPartner = (topic: string) => {
     setPartnerTopic(topic);
-    setActiveModal('partner');
+    setActiveModal("partner");
   };
 
   const handleSignOut = async () => {
     try {
       await signOut();
     } catch (err: any) {
-      showAlert('Sign out failed', err?.message ?? 'Unknown error');
+      showAlert("Sign out failed", err?.message ?? "Unknown error");
     }
   };
 
@@ -339,12 +355,12 @@ export default function ProfileScreen() {
     !requestingPayout;
 
   const payoutLockReason = evaluation
-    ? evaluation.violationReason ??
+    ? (evaluation.violationReason ??
       evaluation.lockReason ??
       (evaluation.cashoutValue <= 0
-        ? 'You have reached your monthly payout cap for this cycle.'
-        : 'Evaluation requirements are not met yet.')
-    : evaluationError ?? 'Evaluation data is unavailable.';
+        ? "You have reached your monthly payout cap for this cycle."
+        : "Evaluation requirements are not met yet."))
+    : (evaluationError ?? "Evaluation data is unavailable.");
 
   /**
    * The button is only ever enabled from a validated server result, so this
@@ -360,14 +376,15 @@ export default function ProfileScreen() {
     try {
       await requestPayout();
       showAlert(
-        'Payout Requested',
+        "Payout Requested",
         `Your payout request for ${formatMoney(requestedAmount)} has been recorded. ` +
-          'Our team reviews requests before funds are released.',
+          "Our team reviews requests before funds are released.",
       );
     } catch (err: any) {
       showAlert(
-        'Payout Not Available',
-        err?.message ?? 'We could not verify your payout eligibility right now.',
+        "Payout Not Available",
+        err?.message ??
+          "We could not verify your payout eligibility right now.",
       );
     } finally {
       setRequestingPayout(false);
@@ -382,21 +399,23 @@ export default function ProfileScreen() {
     if (!referralLink) return;
     const message = `Join me on TradiQs AI — use my invite link: ${referralLink}`;
     try {
-      if (Platform.OS === 'web') {
+      if (Platform.OS === "web") {
         // Native share sheet where supported; clipboard fallback elsewhere.
-        if (typeof navigator !== 'undefined' && (navigator as any).share) {
-          await (navigator as any).share({ title: 'TradiQs AI', text: message, url: referralLink });
-        } else if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        if (typeof navigator !== "undefined" && (navigator as any).share) {
+          await (navigator as any).share({
+            title: "TradiQs AI",
+            text: message,
+            url: referralLink,
+          });
+        } else if (typeof navigator !== "undefined" && navigator.clipboard) {
           await navigator.clipboard.writeText(referralLink);
-          showAlert('Copied', 'Referral link copied to clipboard.');
+          showAlert("Copied", "Referral link copied to clipboard.");
         } else {
-          showAlert('Your referral link', referralLink);
+          showAlert("Your referral link", referralLink);
         }
       } else {
         await Share.share(
-          Platform.OS === 'ios'
-            ? { message, url: referralLink }
-            : { message },
+          Platform.OS === "ios" ? { message, url: referralLink } : { message },
         );
       }
     } catch {
@@ -406,19 +425,29 @@ export default function ProfileScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.identityHeader}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>
-              {(username ?? email ?? 'T').charAt(0).toUpperCase()}
+              {(username ?? email ?? "T").charAt(0).toUpperCase()}
             </Text>
           </View>
           <View style={styles.userInfo}>
-            <View style={styles.nameRow}><Text style={styles.username}>{username ?? 'Trader'}</Text><Text style={styles.verified}>✓ Verified</Text></View>
+            <View style={styles.nameRow}>
+              <Text style={styles.username}>{username ?? "Trader"}</Text>
+              <Text style={styles.verified}>✓ Verified</Text>
+            </View>
             {!!email && <Text style={styles.email}>{email}</Text>}
             <View style={styles.planBadge}>
               <Text style={styles.planText}>
-                {isAdmin ? 'ADMIN · PRO PLAN' : isSubscribed ? 'PRO PLAN' : 'FREE PLAN'}
+                {isAdmin
+                  ? "ADMIN · PRO PLAN"
+                  : isSubscribed
+                    ? "PRO PLAN"
+                    : "FREE PLAN"}
               </Text>
             </View>
           </View>
@@ -426,7 +455,7 @@ export default function ProfileScreen() {
         {!isSubscribed && (
           <TouchableOpacity
             style={styles.upgradeButton}
-            onPress={() => router.push('/signals')}
+            onPress={() => router.push("/signals")}
             activeOpacity={0.85}
             testID="profile-upgrade"
           >
@@ -439,11 +468,11 @@ export default function ProfileScreen() {
             <View style={styles.walletColumn}>
               <Text style={styles.walletLabel}>DEMO ACCOUNT EQUITY</Text>
               <Text style={styles.walletBalance} testID="profile-demo-equity">
-                {evaluation ? formatMoney(evaluation.totalEquity) : '—'}
+                {evaluation ? formatMoney(evaluation.totalEquity) : "—"}
               </Text>
               <Text style={styles.walletHint}>
-                Simulated funds from a {formatMoney(DEMO_STARTING_BALANCE)} evaluation account.
-                Not withdrawable.
+                Simulated funds from a {formatMoney(DEMO_STARTING_BALANCE)}{" "}
+                evaluation account. Not withdrawable.
               </Text>
             </View>
           </View>
@@ -452,7 +481,7 @@ export default function ProfileScreen() {
             <View style={styles.walletColumn}>
               <Text style={styles.walletLabel}>REAL CASHOUT VALUE</Text>
               <Text style={styles.cashBalance} testID="profile-cashout-value">
-                {evaluation ? formatMoney(evaluation.cashoutValue) : '—'}
+                {evaluation ? formatMoney(evaluation.cashoutValue) : "—"}
               </Text>
               <Text style={styles.walletHint}>
                 {evaluation
@@ -460,7 +489,7 @@ export default function ProfileScreen() {
                     `${formatMoney(evaluation.monthlyPaid)} of ${formatMoney(
                       evaluation.monthlyCap,
                     )} monthly cap used`
-                  : 'Payout locked until your evaluation data loads.'}
+                  : "Payout locked until your evaluation data loads."}
               </Text>
             </View>
             <TouchableOpacity
@@ -468,7 +497,10 @@ export default function ProfileScreen() {
               onPress={handleRequestPayout}
               disabled={!payoutEnabled}
               accessibilityRole="button"
-              accessibilityState={{ disabled: !payoutEnabled, busy: requestingPayout }}
+              accessibilityState={{
+                disabled: !payoutEnabled,
+                busy: requestingPayout,
+              }}
               accessibilityLabel={
                 payoutEnabled
                   ? `Request payout of ${formatMoney(evaluation?.cashoutValue ?? 0)}`
@@ -479,7 +511,12 @@ export default function ProfileScreen() {
               {requestingPayout ? (
                 <ActivityIndicator size="small" color={c.primary} />
               ) : (
-                <Text style={[styles.payoutText, !payoutEnabled && styles.payoutTextDisabled]}>
+                <Text
+                  style={[
+                    styles.payoutText,
+                    !payoutEnabled && styles.payoutTextDisabled,
+                  ]}
+                >
                   Request Payout
                 </Text>
               )}
@@ -489,9 +526,18 @@ export default function ProfileScreen() {
           <View style={styles.walletBottom}>
             <View>
               <Text style={styles.walletLabel}>CASHBACK & REFERRALS</Text>
-              <Text style={styles.cashBalance}>${(referralEarned ?? 0).toFixed(2)}</Text>
+              <Text style={styles.cashBalance}>
+                ${(referralEarned ?? 0).toFixed(2)}
+              </Text>
             </View>
-            <TouchableOpacity onPress={() => showAlert('Withdraw', 'Referral withdrawals will be available soon.')}>
+            <TouchableOpacity
+              onPress={() =>
+                showAlert(
+                  "Withdraw",
+                  "Referral withdrawals will be available soon.",
+                )
+              }
+            >
               <Text style={styles.withdrawText}>Withdraw →</Text>
             </TouchableOpacity>
           </View>
@@ -505,10 +551,12 @@ export default function ProfileScreen() {
               <Text
                 style={[
                   styles.evalBadge,
-                  evaluation?.eligible ? styles.evalBadgePass : styles.evalBadgeLocked,
+                  evaluation?.eligible
+                    ? styles.evalBadgePass
+                    : styles.evalBadgeLocked,
                 ]}
               >
-                {evaluation?.eligible ? 'PAYOUT UNLOCKED' : 'PAYOUT LOCKED'}
+                {evaluation?.eligible ? "PAYOUT UNLOCKED" : "PAYOUT LOCKED"}
               </Text>
             )}
           </View>
@@ -530,26 +578,36 @@ export default function ProfileScreen() {
                 ok={evaluation.activeDays >= MINIMUM_ACTIVE_DAYS}
               />
               {evaluation.violated && (
-                <Text style={styles.evalViolation} testID="profile-evaluation-violation">
+                <Text
+                  style={styles.evalViolation}
+                  testID="profile-evaluation-violation"
+                >
                   {evaluation.violationReason ??
-                    'A drawdown rule was breached. Payouts stay disabled for the rest of this billing cycle.'}
+                    "A drawdown rule was breached. Payouts stay disabled for the rest of this billing cycle."}
                 </Text>
               )}
-              {!evaluation.eligible && !evaluation.violated && evaluation.lockReason && (
-                <Text style={styles.evalLock}>{evaluation.lockReason}</Text>
-              )}
+              {!evaluation.eligible &&
+                !evaluation.violated &&
+                evaluation.lockReason && (
+                  <Text style={styles.evalLock}>{evaluation.lockReason}</Text>
+                )}
             </>
           ) : (
-            <Text style={styles.evalLock} testID="profile-evaluation-unavailable">
+            <Text
+              style={styles.evalLock}
+              testID="profile-evaluation-unavailable"
+            >
               {evaluationError ??
-                'Evaluation data is unavailable, so payouts stay locked until it loads.'}
+                "Evaluation data is unavailable, so payouts stay locked until it loads."}
             </Text>
           )}
         </View>
         <View style={styles.payoutHistoryCard} testID="profile-payout-history">
           <View style={styles.evalHeader}>
             <Text style={styles.walletLabel}>PAYOUT HISTORY</Text>
-            {historyLoading && <ActivityIndicator size="small" color={c.mutedForeground} />}
+            {historyLoading && (
+              <ActivityIndicator size="small" color={c.mutedForeground} />
+            )}
           </View>
           {payoutHistory ? (
             payoutHistory.length > 0 ? (
@@ -557,31 +615,169 @@ export default function ProfileScreen() {
                 <PayoutHistoryRow key={request.id} request={request} />
               ))
             ) : (
-              <Text style={styles.historyEmpty} testID="profile-payout-history-empty">
+              <Text
+                style={styles.historyEmpty}
+                testID="profile-payout-history-empty"
+              >
                 No payout requests yet. Eligible requests will appear here.
               </Text>
             )
           ) : (
-            <Text style={styles.evalLock} testID="profile-payout-history-unavailable">
+            <Text
+              style={styles.evalLock}
+              testID="profile-payout-history-unavailable"
+            >
               {historyError ??
-                'Payout history is unavailable, so no request status can be shown right now.'}
+                "Payout history is unavailable, so no request status can be shown right now."}
             </Text>
           )}
         </View>
-        <TouchableOpacity style={styles.partnerCard} onPress={() => router.push('/partner-program')} activeOpacity={0.86} testID="profile-partner-program">
-          <View style={styles.partnerIcon}><Feather name="dollar-sign" size={21} color="#FFD700" /></View>
-          <View style={styles.partnerCopy}><View style={styles.partnerTitleRow}><Text style={styles.partnerTitle}>Partner Program</Text><Text style={styles.partnerBadge}>EARN PASSIVE INCOME</Text></View><Text style={styles.partnerSubtitle}>Build your network. Scale your revenue.</Text></View>
+        <TouchableOpacity
+          style={styles.partnerCard}
+          onPress={() => router.push("/partner-program")}
+          activeOpacity={0.86}
+          testID="profile-partner-program"
+        >
+          <View style={styles.partnerIcon}>
+            <Feather name="dollar-sign" size={21} color="#FFD700" />
+          </View>
+          <View style={styles.partnerCopy}>
+            <View style={styles.partnerTitleRow}>
+              <Text style={styles.partnerTitle}>Partner Program</Text>
+              <Text style={styles.partnerBadge}>EARN PASSIVE INCOME</Text>
+            </View>
+            <Text style={styles.partnerSubtitle}>
+              Build your network. Scale your revenue.
+            </Text>
+          </View>
           <Feather name="chevron-right" size={21} color={c.primary} />
         </TouchableOpacity>
-        <View style={styles.metrics}><Metric label="WIN RATE" value="68%" color={c.success} /><Metric label="PROFIT FACTOR" value="1.8" /><Metric label="TOTAL TRADES" value="142" /></View>
-        <Banner icon="book-open" title="TradiQs Academy" subtitle="Masterclasses, Guides & Risk Tools" onPress={() => setAcademyOpen(true)} testID="profile-academy" />
-        <Banner icon="briefcase" title="Portfolio & History" subtitle="View open positions and trade journal" onPress={() => router.push('/portfolio')} testID="profile-portfolio" />
+        <View style={styles.metrics}>
+          <Metric label="WIN RATE" value="68%" color={c.success} />
+          <Metric label="PROFIT FACTOR" value="1.8" />
+          <Metric label="TOTAL TRADES" value="142" />
+        </View>
+        <Banner
+          icon="book-open"
+          title="TradiQs Academy"
+          subtitle="Masterclasses, Guides & Risk Tools"
+          onPress={() => setAcademyOpen(true)}
+          testID="profile-academy"
+        />
+        <Banner
+          icon="briefcase"
+          title="Portfolio & History"
+          subtitle="View open positions and trade journal"
+          onPress={() => router.push("/portfolio")}
+          testID="profile-portfolio"
+        />
         <Text style={styles.sectionTitle}>QUICK TOOLS</Text>
-        <View style={styles.toolsGrid}><Tool icon="cpu" label="AutoPilot Bots" onPress={() => router.push('/profile/autopilot')} /><Tool icon="link" label="BrokerSync" onPress={() => router.push({ pathname: '/paywall', params: { defaultTier: 'ELITE' } })} /><Tool icon="gift" label="Refer & Earn" badge="+$0.50" onPress={() => router.push('/refer-and-earn' as never)} /><Tool icon="star" label="Manage Plan" gold onPress={() => router.push('/signals')} /></View>
-        <SettingsGroup title="SECURITY"><ListItem icon="lock" label="Biometrics / FaceID" detail="OFF" /><ListItem icon="shield" label="Two-Factor Auth (2FA)" /><ListItem icon="key" label="Change Password" onPress={() => setActiveModal('password')} testID="profile-change-password" /><ListItem icon="trash-2" label="Delete Account" danger onPress={() => setDeleteModalOpen(true)} testID="profile-delete-account" /></SettingsGroup>
-        <SettingsGroup title="PREFERENCES"><ListItem icon="bell" label="Notifications" onPress={() => router.push('/notification-settings')} testID="profile-notifications" /><ListItem icon="sliders" label="Chart Settings" onPress={() => router.push('/profile/chart-settings')} testID="profile-chart-settings" /><ListItem icon="globe" label="Language" detail={language} onPress={() => setActiveModal('language')} /><ListItem icon="clock" label="Trading Day Timezone" detail={tradingDayTz.replace(/_/g, ' ')} onPress={() => setTzPickerOpen(true)} /></SettingsGroup>
-        <SettingsGroup title="SUPPORT"><ListItem icon="help-circle" label="Help Center" onPress={() => router.push('/profile/help-center')} testID="profile-help-center" /><ListItem icon="share-2" label="Social Media" onPress={() => setSocialOpen(true)} testID="profile-social-media" /><ListItem icon="book-open" label="App Guide" onPress={() => router.push('/profile/app-guide')} testID="profile-app-guide" /><ListItem icon="file-text" label="Terms & Privacy" onPress={() => setActiveModal('terms')} /></SettingsGroup>
-        <TouchableOpacity style={styles.community} onPress={() => openLink(TELEGRAM_GROUP_URL, 'Elite Community')}><Feather name="send" size={17} color={c.primaryForeground} /><Text style={styles.communityText}>Join the TradiQs Elite Community</Text></TouchableOpacity>
+        <View style={styles.toolsGrid}>
+          <Tool
+            icon="cpu"
+            label="AutoPilot Bots"
+            onPress={() => router.push("/profile/autopilot")}
+          />
+          <Tool
+            icon="link"
+            label="BrokerSync"
+            onPress={() =>
+              router.push({
+                pathname: "/paywall",
+                params: { defaultTier: "ELITE" },
+              })
+            }
+          />
+          <Tool
+            icon="gift"
+            label="Refer & Earn"
+            badge="+$0.50"
+            onPress={() => router.push("/refer-and-earn" as never)}
+          />
+          <Tool
+            icon="star"
+            label="Manage Plan"
+            gold
+            onPress={() => router.push("/signals")}
+          />
+        </View>
+        <SettingsGroup title="SECURITY">
+          <ListItem icon="lock" label="Biometrics / FaceID" detail="OFF" />
+          <ListItem icon="shield" label="Two-Factor Auth (2FA)" />
+          <ListItem
+            icon="key"
+            label="Change Password"
+            onPress={() => setActiveModal("password")}
+            testID="profile-change-password"
+          />
+          <ListItem
+            icon="trash-2"
+            label="Delete Account"
+            danger
+            onPress={() => setDeleteModalOpen(true)}
+            testID="profile-delete-account"
+          />
+        </SettingsGroup>
+        <SettingsGroup title="PREFERENCES">
+          <ListItem
+            icon="bell"
+            label="Notifications"
+            onPress={() => router.push("/notification-settings")}
+            testID="profile-notifications"
+          />
+          <ListItem
+            icon="sliders"
+            label="Chart Settings"
+            onPress={() => router.push("/profile/chart-settings")}
+            testID="profile-chart-settings"
+          />
+          <ListItem
+            icon="globe"
+            label="Language"
+            detail={language}
+            onPress={() => setActiveModal("language")}
+          />
+          <ListItem
+            icon="clock"
+            label="Trading Day Timezone"
+            detail={tradingDayTz.replace(/_/g, " ")}
+            onPress={() => setTzPickerOpen(true)}
+          />
+        </SettingsGroup>
+        <SettingsGroup title="SUPPORT">
+          <ListItem
+            icon="help-circle"
+            label="Help Center"
+            onPress={() => router.push("/profile/help-center")}
+            testID="profile-help-center"
+          />
+          <ListItem
+            icon="share-2"
+            label="Social Media"
+            onPress={() => setSocialOpen(true)}
+            testID="profile-social-media"
+          />
+          <ListItem
+            icon="book-open"
+            label="App Guide"
+            onPress={() => router.push("/profile/app-guide")}
+            testID="profile-app-guide"
+          />
+          <ListItem
+            icon="file-text"
+            label="Terms & Privacy"
+            onPress={() => setActiveModal("terms")}
+          />
+        </SettingsGroup>
+        <TouchableOpacity
+          style={styles.community}
+          onPress={() => openLink(TELEGRAM_GROUP_URL, "Elite Community")}
+        >
+          <Feather name="send" size={17} color={c.primaryForeground} />
+          <Text style={styles.communityText}>
+            Join the TradiQs Elite Community
+          </Text>
+        </TouchableOpacity>
         <TouchableOpacity
           style={styles.signOutButton}
           onPress={handleSignOut}
@@ -600,20 +796,42 @@ export default function ProfileScreen() {
         onClose={() => setTzPickerOpen(false)}
         onSelect={(tz) => {
           const ok = setTradingDayTz(tz);
-          if (!ok) showAlert('Timezone', `"${tz}" is not a valid timezone.`);
+          if (!ok) showAlert("Timezone", `"${tz}" is not a valid timezone.`);
           else setTzPickerOpen(false);
           return ok;
         }}
       />
 
-      <ChangePasswordModal visible={activeModal === 'password'} saving={savingPassword} onClose={() => setActiveModal(null)} onSubmit={(_, password) => { setNewPassword(password); void handleSavePassword(password); }} />
-      <DeleteAccountModal visible={deleteModalOpen} deleting={deleting} onClose={() => setDeleteModalOpen(false)} onConfirm={() => { setDeleteModalOpen(false); handleDeleteAccount(); }} />
-      <AcademyModal visible={academyOpen} onClose={() => setAcademyOpen(false)} />
-      <SocialMediaModal visible={socialOpen} onClose={() => setSocialOpen(false)} />
+      <ChangePasswordModal
+        visible={activeModal === "password"}
+        saving={savingPassword}
+        onClose={() => setActiveModal(null)}
+        onSubmit={(_, password) => {
+          setNewPassword(password);
+          void handleSavePassword(password);
+        }}
+      />
+      <DeleteAccountModal
+        visible={deleteModalOpen}
+        deleting={deleting}
+        onClose={() => setDeleteModalOpen(false)}
+        onConfirm={() => {
+          setDeleteModalOpen(false);
+          handleDeleteAccount();
+        }}
+      />
+      <AcademyModal
+        visible={academyOpen}
+        onClose={() => setAcademyOpen(false)}
+      />
+      <SocialMediaModal
+        visible={socialOpen}
+        onClose={() => setSocialOpen(false)}
+      />
 
       {/* Language */}
       <SheetModal
-        visible={activeModal === 'language'}
+        visible={activeModal === "language"}
         title="Language"
         onClose={() => setActiveModal(null)}
       >
@@ -633,18 +851,22 @@ export default function ProfileScreen() {
             >
               {lang}
             </Text>
-            {language === lang && <Feather name="check" size={18} color="#00F0FF" />}
+            {language === lang && (
+              <Feather name="check" size={18} color="#00F0FF" />
+            )}
           </TouchableOpacity>
         ))}
       </SheetModal>
 
       {/* Partner Program */}
       <SheetModal
-        visible={activeModal === 'partner'}
+        visible={activeModal === "partner"}
         title={partnerTopic}
         onClose={() => setActiveModal(null)}
       >
-        <Text style={styles.partnerBody}>{PARTNER_PROGRAM_COPY[partnerTopic]}</Text>
+        <Text style={styles.partnerBody}>
+          {PARTNER_PROGRAM_COPY[partnerTopic]}
+        </Text>
         <TouchableOpacity
           style={styles.primaryButton}
           onPress={() => setActiveModal(null)}
@@ -656,13 +878,15 @@ export default function ProfileScreen() {
 
       {/* Legal documents */}
       <SheetModal
-        visible={activeModal === 'terms' || activeModal === 'privacy'}
-        title={activeModal === 'terms' ? 'Terms and Conditions' : 'Privacy Policy'}
+        visible={activeModal === "terms" || activeModal === "privacy"}
+        title={
+          activeModal === "terms" ? "Terms and Conditions" : "Privacy Policy"
+        }
         onClose={() => setActiveModal(null)}
         scroll
       >
         <Text style={styles.legalBody}>
-          {activeModal === 'terms' ? TERMS_AND_CONDITIONS : PRIVACY_POLICY}
+          {activeModal === "terms" ? TERMS_AND_CONDITIONS : PRIVACY_POLICY}
         </Text>
       </SheetModal>
     </View>
@@ -671,43 +895,71 @@ export default function ProfileScreen() {
 
 const c = colors.light;
 
-function Metric({ label, value, color = c.foreground }: { label: string; value: string; color?: string }) {
-  return <View style={styles.metric}><Text style={styles.metricLabel}>{label}</Text><Text style={[styles.metricValue, { color }]}>{value}</Text></View>;
+function Metric({
+  label,
+  value,
+  color = c.foreground,
+}: {
+  label: string;
+  value: string;
+  color?: string;
+}) {
+  return (
+    <View style={styles.metric}>
+      <Text style={styles.metricLabel}>{label}</Text>
+      <Text style={[styles.metricValue, { color }]}>{value}</Text>
+    </View>
+  );
 }
 
-function EvalRow({ label, value, ok }: { label: string; value: string; ok: boolean }) {
+function EvalRow({
+  label,
+  value,
+  ok,
+}: {
+  label: string;
+  value: string;
+  ok: boolean;
+}) {
   return (
     <View
       style={styles.evalRow}
       accessibilityRole="text"
-      accessibilityLabel={`${label}: ${value}. ${ok ? 'Requirement met' : 'Requirement not met'}`}
+      accessibilityLabel={`${label}: ${value}. ${ok ? "Requirement met" : "Requirement not met"}`}
     >
       <View style={styles.evalRowLeft}>
         <Feather
-          name={ok ? 'check-circle' : 'alert-circle'}
+          name={ok ? "check-circle" : "alert-circle"}
           size={13}
           color={ok ? c.success : c.destructive}
         />
         <Text style={styles.evalRowLabel}>{label}</Text>
       </View>
-      <Text style={[styles.evalRowValue, { color: ok ? c.success : c.destructive }]}>{value}</Text>
+      <Text
+        style={[styles.evalRowValue, { color: ok ? c.success : c.destructive }]}
+      >
+        {value}
+      </Text>
     </View>
   );
 }
 
-const PAYOUT_STATUS: Record<PayoutRequest['status'], { label: string; color: string; icon: IconName }> = {
-  REQUESTED: { label: 'Pending', color: '#E6C65C', icon: 'clock' },
-  APPROVED: { label: 'Approved', color: c.primary, icon: 'check-circle' },
-  PAID: { label: 'Paid', color: c.success, icon: 'check-circle' },
-  REJECTED: { label: 'Rejected', color: c.destructive, icon: 'x-circle' },
+const PAYOUT_STATUS: Record<
+  PayoutRequest["status"],
+  { label: string; color: string; icon: IconName }
+> = {
+  REQUESTED: { label: "Pending", color: "#E6C65C", icon: "clock" },
+  APPROVED: { label: "Approved", color: c.primary, icon: "check-circle" },
+  PAID: { label: "Paid", color: c.success, icon: "check-circle" },
+  REJECTED: { label: "Rejected", color: c.destructive, icon: "x-circle" },
 };
 
 function PayoutHistoryRow({ request }: { request: PayoutRequest }) {
   const status = PAYOUT_STATUS[request.status];
-  const date = new Date(request.createdAt).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
+  const date = new Date(request.createdAt).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
   });
   return (
     <View
@@ -721,96 +973,387 @@ function PayoutHistoryRow({ request }: { request: PayoutRequest }) {
       </View>
       <View style={[styles.historyStatus, { borderColor: status.color }]}>
         <Feather name={status.icon} size={12} color={status.color} />
-        <Text style={[styles.historyStatusText, { color: status.color }]}>{status.label}</Text>
+        <Text style={[styles.historyStatusText, { color: status.color }]}>
+          {status.label}
+        </Text>
       </View>
     </View>
   );
 }
 
-function Banner({ icon, title, subtitle, onPress, testID }: { icon: IconName; title: string; subtitle: string; onPress: () => void; testID?: string }) {
-  return <TouchableOpacity style={styles.banner} onPress={onPress} testID={testID}><View style={styles.bannerIcon}><Feather name={icon} size={22} color={c.primary} /></View><View style={styles.bannerCopy}><Text style={styles.bannerTitle}>{title}</Text><Text style={styles.bannerSubtitle}>{subtitle}</Text></View><Feather name="arrow-up-right" size={18} color={c.primary} /></TouchableOpacity>;
+function Banner({
+  icon,
+  title,
+  subtitle,
+  onPress,
+  testID,
+}: {
+  icon: IconName;
+  title: string;
+  subtitle: string;
+  onPress: () => void;
+  testID?: string;
+}) {
+  return (
+    <TouchableOpacity style={styles.banner} onPress={onPress} testID={testID}>
+      <View style={styles.bannerIcon}>
+        <Feather name={icon} size={22} color={c.primary} />
+      </View>
+      <View style={styles.bannerCopy}>
+        <Text style={styles.bannerTitle}>{title}</Text>
+        <Text style={styles.bannerSubtitle}>{subtitle}</Text>
+      </View>
+      <Feather name="arrow-up-right" size={18} color={c.primary} />
+    </TouchableOpacity>
+  );
 }
 
-function Tool({ icon, label, badge, gold, onPress }: { icon: IconName; label: string; badge?: string; gold?: boolean; onPress?: () => void }) {
-  return <TouchableOpacity style={styles.tool} onPress={onPress}><View style={[styles.toolIcon, gold && styles.goldIcon]}><Feather name={icon} size={19} color={gold ? '#E6C65C' : c.primary} /></View><Text style={styles.toolLabel}>{label}</Text>{badge && <Text style={styles.toolBadge}>{badge}</Text>}</TouchableOpacity>;
+function Tool({
+  icon,
+  label,
+  badge,
+  gold,
+  onPress,
+}: {
+  icon: IconName;
+  label: string;
+  badge?: string;
+  gold?: boolean;
+  onPress?: () => void;
+}) {
+  return (
+    <TouchableOpacity style={styles.tool} onPress={onPress}>
+      <View style={[styles.toolIcon, gold && styles.goldIcon]}>
+        <Feather name={icon} size={19} color={gold ? "#E6C65C" : c.primary} />
+      </View>
+      <Text style={styles.toolLabel}>{label}</Text>
+      {badge && <Text style={styles.toolBadge}>{badge}</Text>}
+    </TouchableOpacity>
+  );
 }
 
-function SettingsGroup({ title, children }: { title: string; children: React.ReactNode }) {
-  return <View style={styles.settingsGroup}><Text style={styles.sectionTitle}>{title}</Text><View style={styles.sectionCard}>{children}</View></View>;
+function SettingsGroup({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <View style={styles.settingsGroup}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      <View style={styles.sectionCard}>{children}</View>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A0B0E',
+    backgroundColor: "#0A0B0E",
   },
   content: {
     paddingTop: 64,
     paddingHorizontal: 20,
     paddingBottom: 40,
   },
-  identityHeader: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingBottom: 18 },
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  verified: { color: c.success, fontSize: 10, fontFamily: 'Inter_700Bold' },
-  walletCard: { backgroundColor: c.card, borderColor: c.border, borderWidth: 1, borderRadius: 14, padding: 16, marginBottom: 16 },
-  walletTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  walletBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 14 },
-  walletLabel: { color: c.mutedForeground, fontSize: 9, letterSpacing: 1, fontFamily: 'Inter_700Bold' },
-  walletBalance: { color: c.foreground, fontSize: 26, fontFamily: 'Inter_700Bold', marginTop: 5 },
-  cashBalance: { color: c.success, fontSize: 20, fontFamily: 'Inter_700Bold', marginTop: 5 },
+  identityHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    paddingBottom: 18,
+  },
+  nameRow: { flexDirection: "row", alignItems: "center", gap: 7 },
+  verified: { color: c.success, fontSize: 10, fontFamily: "Inter_700Bold" },
+  walletCard: {
+    backgroundColor: c.card,
+    borderColor: c.border,
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 16,
+  },
+  walletTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  walletBottom: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingTop: 14,
+  },
+  walletLabel: {
+    color: c.mutedForeground,
+    fontSize: 9,
+    letterSpacing: 1,
+    fontFamily: "Inter_700Bold",
+  },
+  walletBalance: {
+    color: c.foreground,
+    fontSize: 26,
+    fontFamily: "Inter_700Bold",
+    marginTop: 5,
+  },
+  cashBalance: {
+    color: c.success,
+    fontSize: 20,
+    fontFamily: "Inter_700Bold",
+    marginTop: 5,
+  },
   walletColumn: { flex: 1, paddingRight: 12 },
-  walletHint: { color: c.mutedForeground, fontSize: 10, marginTop: 6, lineHeight: 14 },
-  payout: { borderColor: c.primary, borderWidth: 1, borderRadius: 16, paddingHorizontal: 11, paddingVertical: 7, minWidth: 104, alignItems: 'center' },
+  walletHint: {
+    color: c.mutedForeground,
+    fontSize: 10,
+    marginTop: 6,
+    lineHeight: 14,
+  },
+  payout: {
+    borderColor: c.primary,
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    minWidth: 104,
+    alignItems: "center",
+  },
   payoutDisabled: { borderColor: c.border, opacity: 0.55 },
-  payoutText: { color: c.primary, fontSize: 10, fontFamily: 'Inter_700Bold' },
+  payoutText: { color: c.primary, fontSize: 10, fontFamily: "Inter_700Bold" },
   payoutTextDisabled: { color: c.mutedForeground },
-  evalCard: { backgroundColor: c.card, borderColor: c.border, borderWidth: 1, borderRadius: 14, padding: 16, marginBottom: 16 },
-  evalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  evalBadge: { fontSize: 9, letterSpacing: .8, fontFamily: 'Inter_700Bold', borderWidth: 1, borderRadius: 10, paddingHorizontal: 7, paddingVertical: 3 },
+  evalCard: {
+    backgroundColor: c.card,
+    borderColor: c.border,
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 16,
+  },
+  evalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  evalBadge: {
+    fontSize: 9,
+    letterSpacing: 0.8,
+    fontFamily: "Inter_700Bold",
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
   evalBadgePass: { color: c.success, borderColor: c.success },
   evalBadgeLocked: { color: c.mutedForeground, borderColor: c.border },
-  evalRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 6 },
-  evalRowLeft: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  evalRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 6,
+  },
+  evalRowLeft: { flexDirection: "row", alignItems: "center", gap: 7 },
   evalRowLabel: { color: c.foreground, fontSize: 12 },
-  evalRowValue: { fontSize: 12, fontFamily: 'Inter_700Bold' },
-  evalViolation: { color: c.destructive, fontSize: 11, lineHeight: 16, marginTop: 10 },
-  evalLock: { color: c.mutedForeground, fontSize: 11, lineHeight: 16, marginTop: 4 },
-  payoutHistoryCard: { backgroundColor: c.card, borderColor: c.border, borderWidth: 1, borderRadius: 14, padding: 16, marginBottom: 16 },
-  historyRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10, borderTopColor: c.border, borderTopWidth: 1 },
-  historyAmount: { color: c.foreground, fontSize: 14, fontFamily: 'Inter_700Bold' },
-  historyDate: { color: c.mutedForeground, fontSize: 10, marginTop: 3 },
-  historyStatus: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4 },
-  historyStatusText: { fontSize: 10, fontFamily: 'Inter_700Bold' },
-  historyEmpty: { color: c.mutedForeground, fontSize: 11, lineHeight: 16 },
-  withdrawText: { color: c.primary, fontSize: 11, fontFamily: 'Inter_700Bold' },
-  walletDivider: { height: 1, backgroundColor: c.border, marginTop: 16 },
-  partnerCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: c.card, borderColor: '#8B7125', borderWidth: 1, borderRadius: 13, padding: 14, marginBottom: 18 },
-  partnerIcon: { width: 42, height: 42, borderRadius: 11, backgroundColor: '#2A2410', borderColor: '#FFD700', borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  partnerCopy: { flex: 1 },
-  partnerTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7, flexWrap: 'wrap' },
-  partnerTitle: { color: c.foreground, fontSize: 14, fontFamily: 'Inter_700Bold' },
-  partnerBadge: { color: '#FFD700', backgroundColor: '#2A2410', borderColor: '#8B7125', borderWidth: 1, borderRadius: 10, paddingHorizontal: 6, paddingVertical: 3, fontSize: 8, letterSpacing: .5, fontFamily: 'Inter_700Bold' },
-  partnerSubtitle: { color: c.mutedForeground, fontSize: 10, marginTop: 5 },
-  metrics: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 18 },
-  metric: { alignItems: 'center', gap: 4 }, metricLabel: { color: c.mutedForeground, fontSize: 8, letterSpacing: .8, fontFamily: 'Inter_700Bold' }, metricValue: { fontSize: 18, fontFamily: 'Inter_700Bold' },
-  banner: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: c.card, borderColor: c.border, borderWidth: 1, borderRadius: 12, padding: 14, marginBottom: 10 },
-  bannerIcon: { width: 42, height: 42, borderRadius: 10, backgroundColor: c.background, alignItems: 'center', justifyContent: 'center' },
-  bannerCopy: { flex: 1 }, bannerTitle: { color: c.foreground, fontSize: 14, fontFamily: 'Inter_700Bold' }, bannerSubtitle: { color: c.mutedForeground, fontSize: 11, marginTop: 4 },
-  toolsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 },
-  tool: { width: '48%', minHeight: 96, backgroundColor: c.card, borderColor: c.border, borderWidth: 1, borderRadius: 11, padding: 12, justifyContent: 'space-between' },
-  toolIcon: { width: 32, height: 32, borderRadius: 8, backgroundColor: c.background, alignItems: 'center', justifyContent: 'center' }, goldIcon: { borderColor: '#80691F', borderWidth: 1 },
-  toolLabel: { color: c.foreground, fontSize: 11, fontFamily: 'Inter_600SemiBold' }, toolBadge: { position: 'absolute', right: 8, top: 8, color: c.success, fontSize: 9, fontFamily: 'Inter_700Bold' },
-  settingsGroup: { marginBottom: 18 },
-  community: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9, backgroundColor: c.primary, borderRadius: 10, paddingVertical: 15, marginTop: 2 },
-  communityText: { color: c.primaryForeground, fontSize: 12, fontFamily: 'Inter_700Bold' },
-  version: { color: '#3E4249', fontSize: 9, textAlign: 'center', marginTop: 22 },
-  userCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    backgroundColor: '#16181D',
+  evalRowValue: { fontSize: 12, fontFamily: "Inter_700Bold" },
+  evalViolation: {
+    color: c.destructive,
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 10,
+  },
+  evalLock: {
+    color: c.mutedForeground,
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 4,
+  },
+  payoutHistoryCard: {
+    backgroundColor: c.card,
+    borderColor: c.border,
     borderWidth: 1,
-    borderColor: '#22252A',
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 16,
+  },
+  historyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 10,
+    borderTopColor: c.border,
+    borderTopWidth: 1,
+  },
+  historyAmount: {
+    color: c.foreground,
+    fontSize: 14,
+    fontFamily: "Inter_700Bold",
+  },
+  historyDate: { color: c.mutedForeground, fontSize: 10, marginTop: 3 },
+  historyStatus: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  historyStatusText: { fontSize: 10, fontFamily: "Inter_700Bold" },
+  historyEmpty: { color: c.mutedForeground, fontSize: 11, lineHeight: 16 },
+  withdrawText: { color: c.primary, fontSize: 11, fontFamily: "Inter_700Bold" },
+  walletDivider: { height: 1, backgroundColor: c.border, marginTop: 16 },
+  partnerCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: c.card,
+    borderColor: "#8B7125",
+    borderWidth: 1,
+    borderRadius: 13,
+    padding: 14,
+    marginBottom: 18,
+  },
+  partnerIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 11,
+    backgroundColor: "#2A2410",
+    borderColor: "#FFD700",
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  partnerCopy: { flex: 1 },
+  partnerTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    flexWrap: "wrap",
+  },
+  partnerTitle: {
+    color: c.foreground,
+    fontSize: 14,
+    fontFamily: "Inter_700Bold",
+  },
+  partnerBadge: {
+    color: "#FFD700",
+    backgroundColor: "#2A2410",
+    borderColor: "#8B7125",
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    fontSize: 8,
+    letterSpacing: 0.5,
+    fontFamily: "Inter_700Bold",
+  },
+  partnerSubtitle: { color: c.mutedForeground, fontSize: 10, marginTop: 5 },
+  metrics: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    marginBottom: 18,
+  },
+  metric: { alignItems: "center", gap: 4 },
+  metricLabel: {
+    color: c.mutedForeground,
+    fontSize: 8,
+    letterSpacing: 0.8,
+    fontFamily: "Inter_700Bold",
+  },
+  metricValue: { fontSize: 18, fontFamily: "Inter_700Bold" },
+  banner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: c.card,
+    borderColor: c.border,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+  },
+  bannerIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 10,
+    backgroundColor: c.background,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  bannerCopy: { flex: 1 },
+  bannerTitle: {
+    color: c.foreground,
+    fontSize: 14,
+    fontFamily: "Inter_700Bold",
+  },
+  bannerSubtitle: { color: c.mutedForeground, fontSize: 11, marginTop: 4 },
+  toolsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginBottom: 20,
+  },
+  tool: {
+    width: "48%",
+    minHeight: 96,
+    backgroundColor: c.card,
+    borderColor: c.border,
+    borderWidth: 1,
+    borderRadius: 11,
+    padding: 12,
+    justifyContent: "space-between",
+  },
+  toolIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: c.background,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  goldIcon: { borderColor: "#80691F", borderWidth: 1 },
+  toolLabel: {
+    color: c.foreground,
+    fontSize: 11,
+    fontFamily: "Inter_600SemiBold",
+  },
+  toolBadge: {
+    position: "absolute",
+    right: 8,
+    top: 8,
+    color: c.success,
+    fontSize: 9,
+    fontFamily: "Inter_700Bold",
+  },
+  settingsGroup: { marginBottom: 18 },
+  community: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 9,
+    backgroundColor: c.primary,
+    borderRadius: 10,
+    paddingVertical: 15,
+    marginTop: 2,
+  },
+  communityText: {
+    color: c.primaryForeground,
+    fontSize: 12,
+    fontFamily: "Inter_700Bold",
+  },
+  version: {
+    color: "#3E4249",
+    fontSize: 9,
+    textAlign: "center",
+    marginTop: 22,
+  },
+  userCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    backgroundColor: "#16181D",
+    borderWidth: 1,
+    borderColor: "#22252A",
     borderRadius: colors.radius,
     padding: 16,
   },
@@ -818,192 +1361,192 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#0A0B0E',
+    backgroundColor: "#0A0B0E",
     borderWidth: 1.5,
-    borderColor: '#00F0FF',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: "#00F0FF",
+    alignItems: "center",
+    justifyContent: "center",
   },
   avatarText: {
-    color: '#00F0FF',
+    color: "#00F0FF",
     fontSize: 22,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: "Inter_700Bold",
   },
   userInfo: {
     flex: 1,
     gap: 3,
   },
   username: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 17,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: "Inter_700Bold",
   },
   email: {
-    color: '#8A8D93',
+    color: "#8A8D93",
     fontSize: 13,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: "Inter_400Regular",
   },
   planBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#0A0B0E',
+    alignSelf: "flex-start",
+    backgroundColor: "#0A0B0E",
     borderWidth: 1,
-    borderColor: '#B026FF',
+    borderColor: "#B026FF",
     borderRadius: 4,
     paddingHorizontal: 7,
     paddingVertical: 2,
     marginTop: 4,
   },
   planText: {
-    color: '#B026FF',
+    color: "#B026FF",
     fontSize: 10,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: "Inter_700Bold",
     letterSpacing: 1,
   },
   upgradeButton: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 8,
     height: 50,
     borderRadius: colors.radius,
-    backgroundColor: '#00F0FF',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#00F0FF",
+    alignItems: "center",
+    justifyContent: "center",
     marginTop: 12,
   },
   upgradeText: {
-    color: '#0A0B0E',
+    color: "#0A0B0E",
     fontSize: 15,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: "Inter_700Bold",
   },
   section: {
     marginTop: 24,
   },
   sectionTitle: {
-    color: '#8A8D93',
+    color: "#8A8D93",
     fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: "Inter_600SemiBold",
     letterSpacing: 1.2,
     marginBottom: 8,
     marginLeft: 4,
   },
   sectionCard: {
-    backgroundColor: '#16181D',
+    backgroundColor: "#16181D",
     borderWidth: 1,
-    borderColor: '#22252A',
+    borderColor: "#22252A",
     borderRadius: colors.radius,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   listItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
     paddingHorizontal: 16,
     height: 52,
     borderBottomWidth: 1,
-    borderBottomColor: '#22252A',
+    borderBottomColor: "#22252A",
   },
   listItemLabel: {
     flex: 1,
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 14.5,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: "Inter_500Medium",
   },
   dangerLabel: {
-    color: '#FF5252',
+    color: "#FF5252",
   },
   listItemDetail: {
-    color: '#8A8D93',
+    color: "#8A8D93",
     fontSize: 13,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: "Inter_500Medium",
   },
   referralBlock: {
     padding: 16,
     gap: 4,
   },
   referralLabel: {
-    color: '#8A8D93',
+    color: "#8A8D93",
     fontSize: 12,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: "Inter_400Regular",
   },
   referralLink: {
-    color: '#00F0FF',
+    color: "#00F0FF",
     fontSize: 13.5,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: "Inter_600SemiBold",
   },
   referralCount: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 13,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: "Inter_500Medium",
     marginTop: 4,
   },
   referralEarned: {
-    color: '#22C55E',
+    color: "#22C55E",
     fontSize: 12,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: "Inter_500Medium",
     marginTop: 2,
   },
   referralRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginTop: 4,
   },
   shareButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
-    backgroundColor: '#00F0FF',
+    backgroundColor: "#00F0FF",
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 7,
   },
   shareButtonText: {
-    color: '#0A0B0E',
+    color: "#0A0B0E",
     fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: "Inter_600SemiBold",
   },
   signOutButton: {
     height: 54,
     borderRadius: colors.radius,
     borderWidth: 1,
-    borderColor: '#E54B4B',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: "#E54B4B",
+    alignItems: "center",
+    justifyContent: "center",
     marginTop: 32,
   },
   signOutText: {
-    color: '#E54B4B',
+    color: "#E54B4B",
     fontSize: 16,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: "Inter_700Bold",
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'flex-end',
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    justifyContent: "flex-end",
   },
   modalCard: {
-    backgroundColor: '#0A0B0E',
+    backgroundColor: "#0A0B0E",
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     borderWidth: 1,
-    borderColor: '#22252A',
+    borderColor: "#22252A",
     paddingBottom: 24,
   },
   modalCardTall: {
-    height: '85%',
+    height: "85%",
     paddingBottom: 0,
   },
   modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     padding: 18,
     borderBottomWidth: 1,
-    borderBottomColor: '#22252A',
+    borderBottomColor: "#22252A",
   },
   modalTitle: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 16,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: "Inter_700Bold",
   },
   modalScroll: {
     paddingHorizontal: 18,
@@ -1013,69 +1556,69 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   legalBody: {
-    color: '#C7C9CE',
+    color: "#C7C9CE",
     fontSize: 13,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: "Inter_400Regular",
     lineHeight: 21,
     paddingVertical: 16,
   },
   fieldLabel: {
-    color: '#8A8D93',
+    color: "#8A8D93",
     fontSize: 12,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: "Inter_600SemiBold",
     letterSpacing: 0.5,
   },
   input: {
     height: 50,
-    backgroundColor: '#16181D',
+    backgroundColor: "#16181D",
     borderWidth: 1,
-    borderColor: '#22252A',
+    borderColor: "#22252A",
     borderRadius: colors.radius,
     paddingHorizontal: 14,
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 15,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: "Inter_500Medium",
   },
   primaryButton: {
     height: 50,
     borderRadius: colors.radius,
-    backgroundColor: '#00F0FF',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#00F0FF",
+    alignItems: "center",
+    justifyContent: "center",
     marginTop: 6,
   },
   primaryButtonText: {
-    color: '#0A0B0E',
+    color: "#0A0B0E",
     fontSize: 15,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: "Inter_700Bold",
   },
   disabled: {
     opacity: 0.7,
   },
   languageRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#16181D',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#16181D",
     borderWidth: 1,
-    borderColor: '#22252A',
+    borderColor: "#22252A",
     borderRadius: colors.radius,
     paddingHorizontal: 14,
     height: 54,
   },
   languageLabel: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 14.5,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: "Inter_500Medium",
   },
   languageLabelActive: {
-    color: '#00F0FF',
-    fontFamily: 'Inter_700Bold',
+    color: "#00F0FF",
+    fontFamily: "Inter_700Bold",
   },
   partnerBody: {
-    color: '#C7C9CE',
+    color: "#C7C9CE",
     fontSize: 14,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: "Inter_400Regular",
     lineHeight: 22,
   },
 });
