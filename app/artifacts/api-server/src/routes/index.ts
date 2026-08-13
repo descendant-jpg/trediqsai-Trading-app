@@ -9,6 +9,7 @@ import paymentRouter from "./payment";
 import multiTimeframeRouter from "./multiTimeframe";
 import marketNewsRouter from "./marketNews";
 import botsRouter from "./bots";
+import broadcastSignalsRouter from "./broadcastSignals";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use(paymentRouter);
 router.use(multiTimeframeRouter);
 router.use(marketNewsRouter);
 router.use(botsRouter);
+router.use(broadcastSignalsRouter);
 
 export default router;
