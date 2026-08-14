@@ -19,6 +19,19 @@ const listeners = new Set<PreferenceListener>();
 /** Returns null when encrypted storage cannot be read; callers must fail closed. */
 export const getBiometricsEnabled = () => readPreference().catch(() => null);
 
+export const biometricCapability = async () => {
+  if (Platform.OS === 'web') return false;
+  try {
+    const [hardware, enrolled] = await Promise.all([
+      LocalAuthentication.hasHardwareAsync(),
+      LocalAuthentication.isEnrolledAsync(),
+    ]);
+    return hardware && enrolled;
+  } catch {
+    return false;
+  }
+};
+
 export const setBiometricsEnabled = async (enabled: boolean) => {
   if (Platform.OS === 'web') {
     await AsyncStorage.setItem(BIOMETRICS_KEY, String(enabled));

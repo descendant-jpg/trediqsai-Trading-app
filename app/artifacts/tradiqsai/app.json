@@ -16,11 +16,15 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.tradiqsai.app",
-      "googleServicesFile": "./GoogleService-Info.plist"
+      "googleServicesFile": "./GoogleService-Info.plist",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "TradiQs AI requires FaceID to secure your trading account and simulated capital."
+      }
     },
     "android": {
       "package": "com.tradiqsai.app",
-      "googleServicesFile": "./google-services.json"
+      "googleServicesFile": "./google-services.json",
+      "permissions": ["USE_BIOMETRIC", "USE_FINGERPRINT"]
     },
     "web": {
       "favicon": "./assets/images/icon.png"
@@ -35,7 +39,12 @@
       "expo-font",
       "expo-web-browser",
       "expo-sqlite",
-       "expo-local-authentication",
+       [
+         "expo-local-authentication",
+         {
+           "faceIDPermission": "TradiQs AI requires FaceID to secure your trading account and simulated capital."
+         }
+       ],
        "expo-secure-store",
       "expo-apple-authentication",
       [

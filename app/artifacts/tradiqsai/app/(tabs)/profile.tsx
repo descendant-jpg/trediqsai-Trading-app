@@ -38,7 +38,7 @@ import { SocialMediaModal } from "@/components/SocialMediaModal";
 import { ChangePasswordModal } from "@/components/ChangePasswordModal";
 import { DeleteAccountModal } from "@/components/DeleteAccountModal";
 import { TwoFactorAuthModal } from "@/components/TwoFactorAuthModal";
-import { authenticateBiometrics, getBiometricsEnabled, setBiometricsEnabled, unsupportedBiometricsMessage } from "@/lib/biometricSecurity";
+import { authenticateBiometrics, biometricCapability, getBiometricsEnabled, setBiometricsEnabled, unsupportedBiometricsMessage } from "@/lib/biometricSecurity";
 
 function showAlert(title: string, message: string) {
   if (Platform.OS === "web") {
@@ -205,6 +205,7 @@ export default function ProfileScreen() {
   const [academyOpen, setAcademyOpen] = useState(false);
   const [socialOpen, setSocialOpen] = useState(false);
   const [biometricsEnabled, setBiometricsEnabledState] = useState(false);
+  const [biometricsAvailable, setBiometricsAvailable] = useState(Platform.OS !== "web");
   const [twoFactorOpen, setTwoFactorOpen] = useState(false);
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
 
@@ -273,6 +274,7 @@ export default function ProfileScreen() {
 
   useEffect(() => {
     void getBiometricsEnabled().then((enabled) => setBiometricsEnabledState(enabled === true));
+    void biometricCapability().then(setBiometricsAvailable);
     if (!session) return;
     supabase.auth.mfa.listFactors().then(({ data }) => setTwoFactorEnabled(Boolean(data?.totp?.some((factor: any) => factor.status === "verified")))).catch(() => {});
   }, [session]);
@@ -725,7 +727,7 @@ export default function ProfileScreen() {
           />
         </View>
         <SettingsGroup title="SECURITY">
-          <ListItem icon="lock" label="Biometrics / FaceID" detail={biometricsEnabled ? "ON" : "OFF"} onPress={() => void toggleBiometrics()} testID="profile-biometrics" />
+          <ListItem icon="lock" label="Biometrics / FaceID" detail={!biometricsAvailable ? "UNAVAILABLE" : biometricsEnabled ? "ON" : "OFF"} onPress={() => void toggleBiometrics()} testID="profile-biometrics" />
           <ListItem icon="shield" label="Two-Factor Auth (2FA)" detail={twoFactorEnabled ? "ENABLED" : "DISABLED"} onPress={() => setTwoFactorOpen(true)} testID="profile-two-factor" />
           <ListItem
             icon="key"

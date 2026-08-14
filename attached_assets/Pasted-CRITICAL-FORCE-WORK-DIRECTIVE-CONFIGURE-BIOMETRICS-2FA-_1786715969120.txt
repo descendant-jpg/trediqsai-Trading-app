@@ -1,0 +1,23 @@
+CRITICAL FORCE WORK DIRECTIVE: CONFIGURE BIOMETRICS & 2FA FOR REAL NATIVE DEVICES.
+
+Review replit.md for our project rules. To ensure the Biometric Lock and 2FA setup work flawlessly on real iOS and Android hardware, we must configure native permissions, lifecycle guards, and scannable QR codes.
+
+### 1. Native App Permissions (`app.json` / `app.config.js`)
+- Ensure the `expo-local-authentication` plugin is properly configured.
+- Inject the iOS FaceID privacy string: `"NSFaceIDUsageDescription": "TradiQs AI requires FaceID to secure your trading account and simulated capital."`
+- Inject the Android permissions: `USE_BIOMETRIC` and `USE_FINGERPRINT`.
+
+### 2. App State Lifecycle Lock (Background to Foreground)
+- In the root `_layout.tsx` (or your Auth Guard component), implement an `AppState` listener.
+- If the user has `tradiqs_biometrics_enabled === true` in secure storage, the app must immediately trigger `LocalAuthentication.authenticateAsync()` when the `AppState` changes from `background` (or `inactive`) to `active`.
+- The user must not be able to view protected screens until this authentication passes.
+- Use a blur overlay or a blank loading screen while the biometric prompt is active to prevent data flashing.
+
+### 3. Real-Device Scannable 2FA QR Code
+- In the 2FA Setup Modal, the TOTP URI returned by Supabase must be rendered as a real, scannable QR Code (using a library like `react-native-qrcode-svg` or a secure remote QR rendering fallback).
+- Ensure there is a "Copy Manual Code" fallback button that uses `expo-clipboard` to copy the raw TOTP secret so users can paste it into Google Authenticator/Authy if they are setting it up on the same device.
+
+### 4. Hardware Fallback & Error Handling
+- If `LocalAuthentication.hasHardwareAsync()` returns false on a real device, cleanly disable the Biometrics toggle in the Profile screen and display a subtitle explaining that the hardware is missing or disabled in OS settings.
+
+EXECUTION REQUIREMENT: Update the native app configuration for permissions, implement the AppState lock guard to secure the app when returning from the background, and ensure the 2FA modal renders a scannable QR code and uses the native clipboard.
