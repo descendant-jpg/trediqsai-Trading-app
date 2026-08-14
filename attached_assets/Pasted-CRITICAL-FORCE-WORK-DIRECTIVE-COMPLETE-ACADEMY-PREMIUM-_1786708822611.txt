@@ -1,0 +1,27 @@
+CRITICAL FORCE WORK DIRECTIVE: COMPLETE ACADEMY PREMIUM UI, BACK BUTTON, AND IN-DEPTH CURRICULUM.
+
+Review replit.md for our project rules. The current TradiQs Academy screen (`app/academy.tsx`) needs a structural and content overhaul to match an institutional-grade platform. 
+
+### 1. Fix Top Navigation & Add Back Button
+- The Academy screen is missing a back button and the text clips near the notch. 
+- Implement a sticky top navigation bar (using `useSafeAreaInsets` for top padding).
+- Add a prominent Back Button (using Ionicons `arrow-back`) in the top left corner that safely triggers `router.back()`.
+- Move the "TRADIQS ACADEMY" badge and "Build your institutional edge" text into this clean, safe-area-aware header.
+
+### 2. Inject the 25-Module Master Curriculum
+- Replace the current basic 15-lesson placeholder data with a comprehensive 25-module data structure.
+- **Track 1 (Market Mechanics):** Liquidity Providers, Order Types, Depth of Market, Leverage Math, Candlestick Psychology.
+- **Track 2 (SMC & Flow):** Order Blocks, Fair Value Gaps (FVG), Internal/External Liquidity, Inducement, CHoCH, Premium/Discount Arrays.
+- **Track 3 (Price Action):** Power of 3 (AMD), Multi-Timeframe Alignment, Wyckoff Schematics, Killzone Timing, Volume Profile.
+- **Track 4 (Risk & Psychology):** Risk-of-Ruin Math, Asymmetric R:R, Trade Journaling, Drawdown Rules, Cognitive Biases.
+- **Track 5 (Macro):** Interest Rates, NFP/CPI Playbooks, DXY Correlation, Treasury Yields, Intermarket Analysis.
+
+### 3. Build the In-Depth Lesson Reader Modal
+- When a user taps a lesson in the accordion, open a full-screen `LessonViewerModal`.
+- The modal must contain deep educational content layout: Institutional Theory, Step-by-Step Execution Rules, and a "Mark as Completed" button that updates the global bootcamp progress state.
+
+### 4. Wire Functional Toolkit Calculators
+- The "Lot Size Calculator" and "Risk/Reward Simulator" cards at the bottom must not be static.
+- Wire them to open functioning bottom-sheet modals (`CalculatorModal`) where users can input Account Balance, Risk %, and Stop Loss Pips to dynamically calculate their exact position size.
+
+EXECUTION REQUIREMENT: Fix the missing back navigation immediately, inject the expanded 25-module curriculum data, build the interactive lesson reader, and wire the calculator modals. Ensure the UI feels premium, dark-themed, and bug-free on native mobile.
