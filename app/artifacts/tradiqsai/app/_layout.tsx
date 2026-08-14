@@ -39,10 +39,9 @@ import { MfaGate } from '@/components/MfaGate';
 // the Express workflow. Web intentionally keeps relative same-origin paths.
 if (Platform.OS !== 'web') {
   const configuredApi = process.env.EXPO_PUBLIC_API_URL;
-  const developmentDomain = process.env.EXPO_PUBLIC_DOMAIN;
-  const hostUri = Constants.expoConfig?.hostUri ?? '';
-  const host = hostUri.replace(/^https?:\/\//, '').split(':')[0];
-  setBaseUrl(configuredApi ?? (developmentDomain ? `https://${developmentDomain}` : host ? `https://${host}` : null));
+  // The Expo/Metro domain only serves the JavaScript bundle. It is not the
+  // Express API artifact, so native must use its explicit public API origin.
+  setBaseUrl(configuredApi ?? null);
 }
 
 // Attach the Supabase access token to every API call so server-side state

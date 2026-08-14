@@ -28,10 +28,18 @@ function user(res: any) {
 
 router.get("/bots", identity(), requireAal2IfMfaEnrolled, async (_req, res) => {
   const userId = user(res); if (!userId || !ready(res)) return;
-  const query = new URLSearchParams({ user_id: `eq.${userId}`, select: "id,pair,strategy,capital,status,pnl,created_at", order: "created_at.desc" });
-  const response = await fetch(`${SUPABASE_URL}/rest/v1/trading_bots?${query}`, { headers: headers() });
-  if (!response.ok) return res.status(503).json({ error: "Bot storage is not ready. Apply the latest Supabase migration." });
-  return res.json(await response.json());
+  console.log("Fetching bots for user:", userId);
+  try {
+    const query = new URLSearchParams({ user_id: `eq.${userId}`, select: "id,pair,strategy,capital,status,pnl,created_at", order: "created_at.desc" });
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/trading_bots?${query}`, { headers: headers() });
+    const result = response.ok ? await response.json() : await response.text();
+    console.log("Bots query result:", result);
+    if (!response.ok) return res.status(503).json({ error: "Bot storage is not ready. Apply the latest Supabase migration." });
+    return res.status(200).json(Array.isArray(result) ? result : []);
+  } catch (error) {
+    console.error("Bots query failed:", error);
+    return res.status(503).json({ error: "Bot storage is unavailable. Please try again." });
+  }
 });
 router.post("/bots", identity(), requireAal2IfMfaEnrolled, async (req, res) => {
   const userId = user(res); if (!userId || !ready(res)) return;
