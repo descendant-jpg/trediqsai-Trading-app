@@ -39,12 +39,17 @@ const SOCIALS = [
     url: "https://x.com/tradiqsai",
   },
   {
-    label: "Telegram Group",
-    icon: "message-circle" as const,
+    label: "Telegram Channel Forex",
+    icon: "send" as const,
     url: "https://t.me/tradiqs_ai",
   },
   {
-    label: "Telegram Channel",
+    label: "Telegram Channel Crypto",
+    icon: "send" as const,
+    url: "https://t.me/tradiqsai",
+  },
+  {
+    label: "Telegram Channel Stock",
     icon: "send" as const,
     url: "https://t.me/tradiqsai",
   },
