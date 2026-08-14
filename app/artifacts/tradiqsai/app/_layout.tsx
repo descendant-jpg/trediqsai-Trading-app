@@ -35,13 +35,11 @@ import { getNotificationRoute } from '@/services/NotificationService';
 import { BiometricLock } from '@/components/BiometricLock';
 import { MfaGate } from '@/components/MfaGate';
 
-// React Native has no browser origin, so relative `/api/*` URLs do not reach
-// the Express workflow. Web intentionally keeps relative same-origin paths.
-if (Platform.OS !== 'web') {
-  const configuredApi = process.env.EXPO_PUBLIC_API_URL;
-  console.log('[API Base URL]', configuredApi ?? '(not configured)');
-  setBaseUrl(configuredApi ?? null);
-}
+// Expo web is served by Metro and native has no browser origin; neither is
+// the Express API service. Always use the explicit API origin when supplied.
+const configuredApi = process.env.EXPO_PUBLIC_API_URL;
+console.log('[API Base URL]', configuredApi ?? '(not configured)');
+setBaseUrl(configuredApi ?? null);
 
 // Attach the Supabase access token to every API call so server-side state
 // (e.g. AutoPilot bot settings) is scoped to the signed-in trader.
