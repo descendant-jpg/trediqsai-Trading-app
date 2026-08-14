@@ -17,6 +17,8 @@ export type MarketArticle = {
   image: string;
   datetime: number;
 };
+export type UnifiedArticle = { id: string; title: string; summary: string; source: string; url: string; category: string; timestamp: number; imageUrl: string };
+type ProprietaryArticle = { id:string; title:string; summary:string; category:string; author:string; image_url?:string; created_at:string };
 
 const sentimentRequest = z.object({
   headline: z.string().trim().min(3).max(500),
@@ -63,9 +65,25 @@ export async function fetchMarketNews(fetchImpl: typeof fetch = fetch): Promise<
   return articles;
 }
 
-router.get("/market-news", async (_req, res) => {
+router.get("/market-news", async (req, res) => {
   try {
-    res.json(await fetchMarketNews());
+    const category = ['all','crypto','forex','stocks'].includes(String(req.query.category)) ? String(req.query.category) : 'all';
+    const [live, proprietary] = await Promise.all([
+      fetchMarketNews(),
+      (async () => {
+        const url = process.env["SUPABASE_URL"] ?? process.env["EXPO_PUBLIC_SUPABASE_URL"];
+        const key = process.env["SUPABASE_SERVICE_ROLE_KEY"];
+        if (!url || !key) return [] as ProprietaryArticle[];
+        const filter = category === 'all' ? '' : `&or=(category.eq.${category},category.eq.all)`;
+        const response = await fetch(`${url}/rest/v1/tradiqs_articles?select=id,title,summary,category,author,image_url,created_at${filter}`, { headers: { apikey:key, authorization:`Bearer ${key}` } });
+        return response.ok ? await response.json() as ProprietaryArticle[] : [] as ProprietaryArticle[];
+      })(),
+    ]);
+    const normalized: UnifiedArticle[] = [
+      ...live.map((a, i) => ({ id:`finnhub-${a.datetime}-${i}`, title:a.headline, summary:a.summary, source:'Finnhub', url:a.url, category, timestamp:a.datetime * 1000, imageUrl:a.image })),
+      ...proprietary.map(a => ({ id:a.id, title:a.title, summary:a.summary, source:'TradiQs AI Insights', url:`https://tradiqsai.com/insights/${a.id}`, category:a.category, timestamp:Date.parse(a.created_at), imageUrl:a.image_url ?? '' })),
+    ].sort((a,b) => b.timestamp - a.timestamp);
+    res.json(normalized);
   } catch (err) {
     logger.warn({ err }, "Live market news request failed");
     res.status(503).json({ error: "Live market news is temporarily unavailable." });
