@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { z } from "zod";
 import { identity, requestUserId, ANONYMOUS_USER } from "../middlewares/identity";
+import { requireAal2IfMfaEnrolled } from "../middlewares/aal2";
 
 const router: IRouter = Router();
 const SUPABASE_URL = process.env["SUPABASE_URL"] ?? process.env["EXPO_PUBLIC_SUPABASE_URL"] ?? "";
@@ -25,14 +26,14 @@ function user(res: any) {
   return id;
 }
 
-router.get("/bots", identity(), async (_req, res) => {
+router.get("/bots", identity(), requireAal2IfMfaEnrolled, async (_req, res) => {
   const userId = user(res); if (!userId || !ready(res)) return;
   const query = new URLSearchParams({ user_id: `eq.${userId}`, select: "id,pair,strategy,capital,status,pnl,created_at", order: "created_at.desc" });
   const response = await fetch(`${SUPABASE_URL}/rest/v1/trading_bots?${query}`, { headers: headers() });
   if (!response.ok) return res.status(503).json({ error: "Bot storage is not ready. Apply the latest Supabase migration." });
   return res.json(await response.json());
 });
-router.post("/bots", identity(), async (req, res) => {
+router.post("/bots", identity(), requireAal2IfMfaEnrolled, async (req, res) => {
   const userId = user(res); if (!userId || !ready(res)) return;
   const data = createSchema.safeParse(req.body); if (!data.success) return res.status(400).json({ error: "Choose a pair, strategy, and valid capital amount." });
   const response = await fetch(`${SUPABASE_URL}/rest/v1/trading_bots`, { method: "POST", headers: { ...headers(), prefer: "return=representation" }, body: JSON.stringify({ user_id: userId, ...data.data, status: "active" }) });
@@ -40,7 +41,7 @@ router.post("/bots", identity(), async (req, res) => {
   const rows = await response.json() as unknown[];
   return res.status(201).json(rows[0]);
 });
-router.patch("/bots/:id/status", identity(), async (req, res) => {
+router.patch("/bots/:id/status", identity(), requireAal2IfMfaEnrolled, async (req, res) => {
   const userId = user(res); if (!userId || !ready(res)) return;
   const data = statusSchema.safeParse(req.body); if (!data.success) return res.status(400).json({ error: "Invalid bot status." });
   const query = new URLSearchParams({ id: `eq.${req.params["id"]}`, user_id: `eq.${userId}` });

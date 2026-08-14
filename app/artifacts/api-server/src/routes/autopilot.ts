@@ -1,4 +1,4 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type RequestHandler } from "express";
 import {
   GetAutopilotResponse,
   GetAutopilotHistoryResponse,
@@ -14,6 +14,7 @@ import {
 import { eq } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { identity, requestUserId, type TokenVerifier } from "../middlewares/identity";
+import { requireAal2IfMfaEnrolled } from "../middlewares/aal2";
 import { hasProAccess, type TierLookup } from "../lib/entitlement";
 
 type BotState = {
@@ -450,8 +451,11 @@ async function persistStoppedPro(
 export function createAutopilotRouter(
   verifier?: TokenVerifier,
   tierLookup?: TierLookup,
+  assurance?: RequestHandler,
 ): IRouter {
   const router: IRouter = Router();
+  const requireAssurance: RequestHandler =
+    assurance ?? (verifier ? (_req, _res, next) => next() : requireAal2IfMfaEnrolled);
   router.use("/autopilot", identity(verifier));
 
   router.get("/autopilot", async (_req, res, next) => {
@@ -467,7 +471,7 @@ export function createAutopilotRouter(
     }
   });
 
-  router.get("/autopilot/history", async (_req, res, next) => {
+  router.get("/autopilot/history", requireAssurance, async (_req, res, next) => {
     try {
       const userId = requestUserId(res);
       const state = await stateFor(userId);
@@ -487,7 +491,7 @@ export function createAutopilotRouter(
     }
   });
 
-  router.put("/autopilot/master", async (req, res, next) => {
+  router.put("/autopilot/master", requireAssurance, async (req, res, next) => {
     const parsed = SetAutopilotMasterBody.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: "Invalid request body" });
@@ -514,7 +518,7 @@ export function createAutopilotRouter(
     }
   });
 
-  router.put("/autopilot/bots/:botId", async (req, res, next) => {
+  router.put("/autopilot/bots/:botId", requireAssurance, async (req, res, next) => {
     const parsed = UpdateAutopilotBotBody.safeParse(req.body);
     try {
       const userId = requestUserId(res);
@@ -580,7 +584,7 @@ export function createAutopilotRouter(
     }
   });
 
-  router.delete("/autopilot/logs", async (_req, res, next) => {
+  router.delete("/autopilot/logs", requireAssurance, async (_req, res, next) => {
     try {
       const userId = requestUserId(res);
       const state = await stateFor(userId);

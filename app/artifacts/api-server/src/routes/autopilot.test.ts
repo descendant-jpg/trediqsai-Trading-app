@@ -83,10 +83,10 @@ async function startFreshApp(): Promise<void> {
     };
     return { db, autopilotBotsTable, autopilotStateTable, autopilotPnlHistoryTable };
   });
-  const { default: autopilotRouter } = await import("./autopilot");
+  const { createAutopilotRouter } = await import("./autopilot");
   const app: Express = express();
   app.use(express.json());
-  app.use(autopilotRouter);
+  app.use(createAutopilotRouter(undefined, undefined, (_req, _res, next) => next()));
   await new Promise<void>((resolve) => {
     server = app.listen(0, "127.0.0.1", () => resolve());
   });
@@ -234,10 +234,10 @@ describe("GET /autopilot/history", () => {
     // Fresh module instance = simulated server restart; the mocked db rows
     // survive because they live in the enclosing test scope.
     vi.resetModules();
-    const { default: freshRouter } = await import("./autopilot");
+    const { createAutopilotRouter } = await import("./autopilot");
     const app = express();
     app.use(express.json());
-    app.use(freshRouter);
+    app.use(createAutopilotRouter(undefined, undefined, (_req, _res, next) => next()));
     const restarted = await new Promise<Server>((resolve) => {
       const s = app.listen(0, "127.0.0.1", () => resolve(s));
     });
