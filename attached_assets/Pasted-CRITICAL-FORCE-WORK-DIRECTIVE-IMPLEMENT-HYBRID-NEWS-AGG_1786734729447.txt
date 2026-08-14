@@ -1,0 +1,24 @@
+CRITICAL FORCE WORK DIRECTIVE: IMPLEMENT HYBRID NEWS AGGREGATOR (SUPABASE + FINNHUB).
+
+Review replit.md for our project rules. We need to upgrade the Express `/api/news` route to serve a hybrid feed: it must combine live Finnhub market news with proprietary "TradiQs AI" articles stored in a new Supabase PostgreSQL table.
+
+### 1. Database Schema (Supabase)
+- Write the SQL snippet (as a comment or executable migration) to create a `tradiqs_articles` table.
+- Required columns: `id` (UUID), `title` (text), `summary` (text), `content` (text), `category` (crypto|forex|stocks|all), `author` (text, default 'TradiQs AI'), `image_url` (text), `created_at` (timestamp).
+- Create a mock row insertion script so we have test data.
+
+### 2. Express Backend Aggregation (/api/news)
+- Update the existing news endpoint. It must now accept a `category` query parameter.
+- Implement `Promise.all()` to execute two simultaneous fetches:
+  1. Fetch live news from the Finnhub API (filtered by category if applicable).
+  2. Fetch proprietary articles from the `tradiqs_articles` Supabase table (filtered by category).
+- **Data Normalization:** Map both datasets into a unified array of objects matching this exact signature:
+  `{ id, title, summary, source, url, category, timestamp, imageUrl }`
+- For Supabase articles, hardcode the `source` as "TradiQs AI Insights". Set the `url` to `https://tradiqsai.com/insights/{id}`.
+- Sort the combined array chronologically by `timestamp` (newest first).
+
+### 3. Frontend Integration Validation
+- Ensure the Expo frontend's "Latest Insights" modal properly receives this combined array.
+- Confirm that the `WebBrowser.openBrowserAsync(url)` implementation works seamlessly for both external Finnhub URLs and the generated `tradiqsai.com` URLs.
+
+EXECUTION REQUIREMENT: Do not just build the Finnhub route. You MUST implement the Supabase table query and the normalization logic so the mobile app receives one seamless, chronologically sorted feed of both data sources. Ensure strict TypeScript typing for the unified Article interface.
