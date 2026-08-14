@@ -1,0 +1,29 @@
+CRITICAL FORCE WORK DIRECTIVE: IMPLEMENT MULTI-TIER MONETIZATION & PAYWALL UI FOR BROKERSYNC.
+
+Review replit.md for our project rules. We are implementing a strict monetization funnel (Free, Pro, Elite) for the BrokerSync / Exchange Integration feature. Existing broker connection logic and secure storage must remain intact, but access must now be gated based on the user's subscription tier.
+
+### 1. Mock Subscription State
+- In the existing authentication context or global state, add a mock `userTier` variable (default it to `'FREE'` for testing, with types `'FREE' | 'PRO' | 'ELITE'`). 
+- This will later be wired to our Supabase user profiles.
+
+### 2. The Free Tier Paywall Interceptor
+- When a `'FREE'` user taps any broker card, DO NOT open the credential input modal.
+- Instead, build and open a new `PaywallModal` component.
+- The modal must display a premium design with the text: "Unlock TradiQs Pro to connect your real portfolio."
+- List the Pro benefits: "Track live balances across Crypto, Forex, and Stocks in one unified dashboard."
+- Add a highly visible Security Shield section with the text: "Bank-Grade Privacy: We never see or store your API keys on our servers. Your funds are secured directly by your device's hardware encryption."
+- Include a bold "Upgrade to Pro" call-to-action button.
+
+### 3. The Pro Tier & Elite Upsell
+- If the `userTier` is `'PRO'` or `'ELITE'`, allow them to open the credential input modal as normal.
+- Inside the connection modal, add a new settings section for "Automation".
+- Add a toggle switch labeled: "Auto-Mirror AI Signals".
+- If the user is `'PRO'`, disable this toggle and add a small lock icon or badge saying "Requires Elite Tier". Tapping it should prompt them to upgrade to Elite for automated execution.
+- If the user is `'ELITE'`, the toggle should be interactive.
+
+### 4. QA and Verification
+- Set the mock tier to `'FREE'` and verify the Paywall Modal correctly blocks the connection wizard.
+- Set the mock tier to `'PRO'` and verify the connection wizard opens, but the Auto-Mirror toggle is locked.
+- Set the mock tier to `'ELITE'` and verify full access.
+
+EXECUTION REQUIREMENT: Do not delete the existing secure storage logic. Wrap the access points in this tier logic, build the Paywall UI with the exact security copywriting provided, and ensure the UI elegantly handles the upsells.
