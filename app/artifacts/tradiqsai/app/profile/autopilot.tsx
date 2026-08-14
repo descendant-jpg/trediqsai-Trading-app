@@ -2,14 +2,14 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Modal, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Stack } from 'expo-router';
-import { customFetch } from '@workspace/api-client-react';
+import { ApiError, customFetch } from '@workspace/api-client-react';
 
 type Bot = { id: string; pair: string; strategy: 'GRID' | 'DCA'; capital: number; status: 'active' | 'paused'; pnl: number; created_at: string };
 const fresh = { pair: 'BTC/USD', strategy: 'GRID' as Bot['strategy'], capital: '' };
 export default function AutoPilotScreen() {
   const [bots, setBots] = useState<Bot[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [open, setOpen] = useState(false); const [form, setForm] = useState(fresh); const [saving, setSaving] = useState(false);
-  const apiUrl = process.env.EXPO_PUBLIC_API_URL ?? (process.env.EXPO_PUBLIC_DOMAIN ? `https://${process.env.EXPO_PUBLIC_DOMAIN}:8080` : '(no API URL configured)');
-  const load = useCallback(async () => { setLoading(true); setError(''); try { const data = await customFetch<unknown>('/api/bots'); setBots(Array.isArray(data) ? data as Bot[] : []); if (!Array.isArray(data)) setError('Unexpected bots response.'); } catch (caught) { console.error('[AutoPilot Fetch Error]:', caught); const detail = caught instanceof Error ? `${caught.name}: ${caught.message}` : String(caught); setBots([]); setError(detail); } finally { setLoading(false); } }, []);
+  const apiUrl = process.env.EXPO_PUBLIC_API_URL ?? '(no API URL configured)';
+  const load = useCallback(async () => { setLoading(true); setError(''); try { const data = await customFetch<unknown>('/api/bots'); setBots(Array.isArray(data) ? data as Bot[] : []); if (!Array.isArray(data)) setError('HTTP 200: Failed to parse JSON.'); } catch (caught) { console.error('[AutoPilot Fetch Error]:', caught); const detail = caught instanceof ApiError ? `HTTP ${caught.status}: ${caught.message || 'Failed to parse JSON.'}` : caught instanceof Error ? `${caught.name}: ${caught.message}` : String(caught); setBots([]); setError(detail); } finally { setLoading(false); } }, []);
   useEffect(() => { void load(); }, [load]);
   const active = bots.filter(b => b.status === 'active'); const capital = bots.reduce((sum,b) => sum + Number(b.capital || 0), 0); const pnl = bots.reduce((sum,b) => sum + Number(b.pnl || 0), 0);
   const deploy = async () => { const capitalValue = Number(form.capital); if (!capitalValue || capitalValue <= 0) return setError('Enter a valid virtual capital amount.'); setSaving(true); try { await customFetch('/api/bots', { method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pair:form.pair,strategy:form.strategy,capital:capitalValue}) }); setOpen(false); setForm(fresh); await load(); } catch { setError('Unable to deploy bot. Check that the latest Supabase migration is applied.'); } finally { setSaving(false); } };

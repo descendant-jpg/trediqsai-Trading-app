@@ -39,10 +39,7 @@ import { MfaGate } from '@/components/MfaGate';
 // the Express workflow. Web intentionally keeps relative same-origin paths.
 if (Platform.OS !== 'web') {
   const configuredApi = process.env.EXPO_PUBLIC_API_URL;
-  const developmentDomain = process.env.EXPO_PUBLIC_DOMAIN;
-  // The Expo/Metro domain only serves the JavaScript bundle. In development,
-  // the API artifact is exposed on the same Replit domain at port 8080.
-  setBaseUrl(configuredApi ?? (developmentDomain ? `https://${developmentDomain}:8080` : null));
+  setBaseUrl(configuredApi ?? null);
 }
 
 // Attach the Supabase access token to every API call so server-side state
