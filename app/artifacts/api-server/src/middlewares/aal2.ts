@@ -7,6 +7,7 @@ const SUPABASE_KEY = process.env["SUPABASE_PUBLISHABLE_KEY"] ?? process.env["EXP
 export async function requireAal2IfMfaEnrolled(req: Request, res: Response, next: NextFunction) {
   const authorization = req.headers.authorization;
   if (!authorization?.startsWith("Bearer ") || !SUPABASE_URL || !SUPABASE_KEY) {
+    console.warn("AAL assurance rejected", { reason: !authorization?.startsWith("Bearer ") ? "missing_bearer_token" : "supabase_configuration_missing", path: req.path });
     res.status(401).json({ error: "Sign in required." });
     return;
   }
@@ -17,9 +18,11 @@ export async function requireAal2IfMfaEnrolled(req: Request, res: Response, next
     });
     if (response.ok) return next();
     if (response.status === 401 || response.status === 403) {
+      console.warn("AAL assurance rejected", { reason: "mfa_assurance_required", status: response.status, path: req.path });
       res.status(403).json({ error: "Two-factor verification is required for this action." });
       return;
     }
+    console.error("AAL assurance unavailable", { status: response.status, path: req.path });
     res.status(503).json({ error: "Unable to verify account security." });
   } catch (error) {
     next(error);

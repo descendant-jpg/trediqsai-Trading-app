@@ -39,9 +39,8 @@ import { MfaGate } from '@/components/MfaGate';
 // the Express workflow. Web intentionally keeps relative same-origin paths.
 if (Platform.OS !== 'web') {
   const configuredApi = process.env.EXPO_PUBLIC_API_URL;
-  const sanitizedApi = configuredApi?.replace(/:8080\/?$/, '');
-  console.log('[API Base URL]', sanitizedApi ?? '(not configured)');
-  setBaseUrl(sanitizedApi ?? null);
+  console.log('[API Base URL]', configuredApi ?? '(not configured)');
+  setBaseUrl(configuredApi ?? null);
 }
 
 // Attach the Supabase access token to every API call so server-side state

@@ -75,6 +75,10 @@ export function identity(verifier?: TokenVerifier) {
     const token = header?.startsWith("Bearer ") ? header.slice(7) : null;
 
     if (!token || !configured) {
+      console.warn("API authentication not established", {
+        reason: !token ? "missing_bearer_token" : "supabase_verifier_not_configured",
+        path: req.path,
+      });
       res.locals["userId"] = ANONYMOUS_USER;
       next();
       return;
@@ -83,12 +87,14 @@ export function identity(verifier?: TokenVerifier) {
     try {
       const userId = await verify(token);
       if (!userId) {
+        console.warn("API authentication rejected", { reason: "invalid_or_expired_supabase_token", path: req.path });
         res.status(401).json({ error: "Invalid or expired auth token" });
         return;
       }
       res.locals["userId"] = userId;
       next();
     } catch (err) {
+      console.error("API authentication verification failed", { path: req.path, error: err instanceof Error ? err.message : String(err) });
       next(err);
     }
   };
