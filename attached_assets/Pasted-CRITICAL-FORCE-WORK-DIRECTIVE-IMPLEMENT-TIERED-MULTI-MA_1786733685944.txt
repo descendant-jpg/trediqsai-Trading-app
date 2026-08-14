@@ -1,0 +1,27 @@
+CRITICAL FORCE WORK DIRECTIVE: IMPLEMENT TIERED MULTI-MARKET SIGNAL PIPELINE & AUTO-EXECUTION UI.
+
+Review replit.md for our project rules. We are building the core "AI Trading Signals" pipeline. It must support Crypto, Forex, and Stocks, gate visibility based on the user's `accessTier` (FREE, PRO, ELITE), and provide an execution pathway using the existing BrokerSync secure storage.
+
+### 1. Define the Signal Schema & Mock Data
+- Create a TypeScript interface for `TradeSignal`: `{ id, assetClass (crypto|forex|stock), pair (e.g., BTC/USDT, EUR/USD), action (LONG|SHORT), entryZone, takeProfits[], stopLoss, timestamp }`.
+- Create a mock data store or Supabase query fetching 3 active signals (one for each asset class).
+
+### 2. Build the Tiered Signal Feed UI
+- Create a new `SignalsScreen` (or update the existing one).
+- **FREE Tier:** Render the signals, but blur or redact the `entryZone`, `takeProfits`, and `stopLoss` numbers. Add a padlock icon and a "Upgrade to Pro to view exact parameters" CTA that triggers the PaywallModal.
+- **PRO Tier:** Reveal all exact parameters. Provide a "Copy to Clipboard" button for manual entry.
+- **ELITE Tier:** Reveal all parameters AND add a primary "Execute Trade via BrokerSync" button on the signal card.
+
+### 3. Implement the Elite Execution Handler (Mock)
+- When an ELITE user taps "Execute Trade", verify if they have a connected broker for that `assetClass` in `expo-secure-store`.
+- If NO: Prompt them to "Connect a Broker in Account Tracker".
+- If YES: Show a loading state (e.g., "Authenticating with MetaTrader..."), simulate an API execution delay, and show a success toast ("Trade Executed Successfully").
+
+### 4. Push Notification & API Architecture Readiness
+- Write a placeholder utility function `registerForPushNotificationsAsync` using `expo-notifications` to capture the device token. (Do not force native modules that crash the web preview; wrap in platform checks).
+- Add clear architectural comments in the codebase explaining where the Supabase Database Webhook payload will be parsed and where the external broker API logic (e.g., CCXT, MetaAPI, Alpaca) will be integrated for the Elite auto-execution.
+
+### 5. QA and Verification
+- The AI MUST self-verify: Set the mock `userTier` to FREE, verify blur/paywall. Change to PRO, verify clear text. Change to ELITE, verify the "Execute Trade" button appears and triggers the secure-store validation.
+
+EXECUTION REQUIREMENT: Execute all steps sequentially. Ensure the Signal Feed correctly filters based on the monetization tiers we built previously, and ensure the Elite execution button safely attempts to read from the BrokerSync storage.
