@@ -41,7 +41,7 @@ const SOCIALS = [
   {
     label: "Telegram Channel Forex",
     icon: "send" as const,
-    url: "https://t.me/tradiqs_ai",
+    url: "https://t.me/tradiqsai_forex",
   },
   {
     label: "Telegram Channel Crypto",
@@ -51,7 +51,7 @@ const SOCIALS = [
   {
     label: "Telegram Channel Stock",
     icon: "send" as const,
-    url: "https://t.me/tradiqsai",
+    url: "https://t.me/tradiqsai_stock",
   },
 ];
 
