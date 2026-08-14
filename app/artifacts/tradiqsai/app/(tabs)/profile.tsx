@@ -37,6 +37,8 @@ import { AcademyModal } from "../../components/AcademyModal";
 import { SocialMediaModal } from "@/components/SocialMediaModal";
 import { ChangePasswordModal } from "@/components/ChangePasswordModal";
 import { DeleteAccountModal } from "@/components/DeleteAccountModal";
+import { TwoFactorAuthModal } from "@/components/TwoFactorAuthModal";
+import { authenticateBiometrics, getBiometricsEnabled, setBiometricsEnabled, unsupportedBiometricsMessage } from "@/lib/biometricSecurity";
 
 function showAlert(title: string, message: string) {
   if (Platform.OS === "web") {
@@ -202,6 +204,9 @@ export default function ProfileScreen() {
   const [activeModal, setActiveModal] = useState<ActiveModal>(null);
   const [academyOpen, setAcademyOpen] = useState(false);
   const [socialOpen, setSocialOpen] = useState(false);
+  const [biometricsEnabled, setBiometricsEnabledState] = useState(false);
+  const [twoFactorOpen, setTwoFactorOpen] = useState(false);
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
 
   // Change password
   const [newPassword, setNewPassword] = useState("");
@@ -265,6 +270,24 @@ export default function ProfileScreen() {
       }
     })();
   }, []);
+
+  useEffect(() => {
+    void getBiometricsEnabled().then((enabled) => setBiometricsEnabledState(enabled === true));
+    if (!session) return;
+    supabase.auth.mfa.listFactors().then(({ data }) => setTwoFactorEnabled(Boolean(data?.totp?.some((factor: any) => factor.status === "verified")))).catch(() => {});
+  }, [session]);
+
+  const toggleBiometrics = async () => {
+    const result = await authenticateBiometrics(biometricsEnabled ? "Authenticate to disable FaceID / Biometrics" : "Authenticate to enable FaceID / Biometrics");
+    if (!result.ok) {
+      showAlert(Platform.OS === "web" ? "Biometrics unavailable" : "Authentication required", result.reason || unsupportedBiometricsMessage);
+      return;
+    }
+    const next = !biometricsEnabled;
+    await setBiometricsEnabled(next);
+    setBiometricsEnabledState(next);
+    showAlert("Biometrics", next ? "FaceID / biometric unlock is enabled." : "Biometric unlock is disabled.");
+  };
 
   const selectLanguage = (lang: Language) => {
     setLanguage(lang);
@@ -702,8 +725,8 @@ export default function ProfileScreen() {
           />
         </View>
         <SettingsGroup title="SECURITY">
-          <ListItem icon="lock" label="Biometrics / FaceID" detail="OFF" />
-          <ListItem icon="shield" label="Two-Factor Auth (2FA)" />
+          <ListItem icon="lock" label="Biometrics / FaceID" detail={biometricsEnabled ? "ON" : "OFF"} onPress={() => void toggleBiometrics()} testID="profile-biometrics" />
+          <ListItem icon="shield" label="Two-Factor Auth (2FA)" detail={twoFactorEnabled ? "ENABLED" : "DISABLED"} onPress={() => setTwoFactorOpen(true)} testID="profile-two-factor" />
           <ListItem
             icon="key"
             label="Change Password"
@@ -828,6 +851,7 @@ export default function ProfileScreen() {
         visible={socialOpen}
         onClose={() => setSocialOpen(false)}
       />
+      <TwoFactorAuthModal visible={twoFactorOpen} onClose={() => setTwoFactorOpen(false)} onStatusChange={setTwoFactorEnabled} />
 
       {/* Language */}
       <SheetModal

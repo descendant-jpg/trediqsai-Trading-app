@@ -35,6 +35,8 @@
       "expo-font",
       "expo-web-browser",
       "expo-sqlite",
+       "expo-local-authentication",
+       "expo-secure-store",
       "expo-apple-authentication",
       [
         "expo-notifications",

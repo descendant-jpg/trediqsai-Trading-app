@@ -32,6 +32,8 @@ import { isSupabaseConfigured, supabase } from '@/utils/supabase';
 import { initializeRevenueCat, SubscriptionProvider } from '@/lib/revenuecat';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { getNotificationRoute } from '@/services/NotificationService';
+import { BiometricLock } from '@/components/BiometricLock';
+import { MfaGate } from '@/components/MfaGate';
 
 // React Native has no browser origin, so relative `/api/*` URLs do not reach
 // the Express workflow. Web intentionally keeps relative same-origin paths.
@@ -276,9 +278,9 @@ export default function RootLayout() {
                       useSubscriptionContext can call useAuth() to read the
                       Supabase subscription_tier for Stripe Elite buyers. */}
                   <SubscriptionProvider>
-                    <TradingProvider>
-                      <RootLayoutNav />
-                    </TradingProvider>
+                      <TradingProvider>
+                        <BiometricLock><MfaGate><RootLayoutNav /></MfaGate></BiometricLock>
+                      </TradingProvider>
                   </SubscriptionProvider>
                 </AuthProvider>
               </KeyboardProvider>
