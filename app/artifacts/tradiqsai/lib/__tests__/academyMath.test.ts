@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { calculateExpectancy, calculateLotSize, calculateMargin, calculatePricePnL, parseCompletedLessons } from '../academyMath';
+import { calculateExpectancy, calculateLotSize, calculateMargin, calculatePricePnL, keepAvailableLessons, parseCompletedLessons } from '../academyMath';
 
 describe('Academy learning progress', () => {
   it('restores unique completed lesson IDs and rejects malformed persistence', () => {
     expect(parseCompletedLessons('["pips-spreads","pips-spreads","bos-choch"]')).toEqual(['pips-spreads', 'bos-choch']);
     expect(parseCompletedLessons('not-json')).toEqual([]);
     expect(parseCompletedLessons('{"lesson":"pips-spreads"}')).toEqual([]);
+  });
+  it('removes legacy IDs that are no longer available in the curriculum', () => {
+    const saved = parseCompletedLessons('["candlestick-psychology","pips-spreads","order-blocks"]');
+    expect(keepAvailableLessons(saved, new Set(['candlestick-psychology', 'order-blocks']))).toEqual(['candlestick-psychology', 'order-blocks']);
   });
 });
 

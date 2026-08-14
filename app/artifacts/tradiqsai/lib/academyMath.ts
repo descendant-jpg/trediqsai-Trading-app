@@ -10,6 +10,9 @@ export const parseCompletedLessons = (raw: string | null): string[] => {
   }
 };
 
+export const keepAvailableLessons = (completedIds: string[], availableIds: ReadonlySet<string>) =>
+  completedIds.filter((id) => availableIds.has(id));
+
 export const calculateLotSize = (balance: number, riskPercent: number, stopLossPips: number) => {
   if (![balance, riskPercent, stopLossPips].every(Number.isFinite) || balance <= 0 || riskPercent <= 0 || stopLossPips <= 0) return null;
   const riskAmount = balance * riskPercent / 100;
