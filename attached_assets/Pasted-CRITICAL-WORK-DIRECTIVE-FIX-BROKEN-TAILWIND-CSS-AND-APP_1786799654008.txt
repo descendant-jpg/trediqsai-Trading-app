@@ -1,0 +1,25 @@
+CRITICAL WORK DIRECTIVE: FIX BROKEN TAILWIND CSS AND APPLY PREMIUM STYLING.
+
+Review our project rules. The landing page structure was pushed to `page.tsx`, but the Tailwind CSS is either not compiling, not imported, or the utility classes were severely underutilized. The site currently looks like unstyled HTML with default blue links and raw borders. 
+
+### 1. Fix Tailwind Configuration & Imports
+- Verify that `globals.css` (or equivalent) contains `@tailwind base; @tailwind components; @tailwind utilities;`.
+- Ensure `globals.css` is strictly imported at the top of `layout.tsx` (e.g., `import './globals.css';`).
+- Ensure `tailwind.config.ts` (or `.js`) is properly configured to scan the `app` directory for classes.
+
+### 2. Overhaul `page.tsx` Layouts (Flex & Grid)
+- **Containerization:** Wrap all major page sections in a centered container: `max-w-7xl mx-auto px-4 py-20`.
+- **Hero Section:** Use `flex flex-col items-center text-center justify-center min-h-[70vh]`. 
+- **Features & Comparison:** Convert the features list into a CSS grid: `grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6`.
+- **Pricing:** Convert pricing tiers into a side-by-side grid: `grid grid-cols-1 md:grid-cols-3 gap-8`.
+
+### 3. Apply Premium Dark Mode Styling
+- **Backgrounds & Cards:** Remove ALL hardcoded `<div style="border: 1px solid white">` or default borders. Use `bg-[#111111] border border-gray-800 rounded-2xl p-8` for all feature cards, pricing cards, and stat blocks.
+- **Buttons:** Remove default link styling. Style primary buttons as: `inline-block bg-[#FFD700] text-black font-bold py-3 px-8 rounded-full hover:bg-yellow-400 transition-colors`. Style secondary/store buttons with `border border-gray-600 bg-black text-white py-3 px-6 rounded-full flex items-center gap-2`.
+- **Typography:** Ensure global text is white/off-white (`text-gray-200`). Fix the footer and navbar so links are NOT default blue (use `text-gray-400 hover:text-white transition-colors`).
+- **Accent Colors:** Use text-cyan-400 for highlights and text-yellow-400 for the premium/elite pricing tier borders.
+
+### 4. Validation
+- Run the Next.js dev server locally in the workspace. Verify that the page is no longer unstyled stacking HTML, but a properly styled, responsive grid layout. 
+
+EXECUTION REQUIREMENT: Do not just append a few classes. Systematically go through `page.tsx` and apply robust Tailwind CSS grids, flexboxes, padding, margins, and colors to match a premium institutional fintech design. Commit and push the fix to the `main` branch once verified.
