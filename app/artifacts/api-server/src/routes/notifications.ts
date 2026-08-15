@@ -7,10 +7,11 @@ export interface LiveNotification {
   message: string;
   type: "AI_ALERT";
   timestamp: number;
+  assetClass: "crypto" | "forex" | "stocks";
   referenceId: string;
 }
 
-type SignalNotificationRow = { id: string; pair: string; action: string; timestamp: string };
+type SignalNotificationRow = { id: string; pair: string; action: string; timestamp: string | number; asset_class: string | null };
 const router: IRouter = Router();
 
 router.get("/notifications", async (_req, res) => {
@@ -19,13 +20,20 @@ router.get("/notifications", async (_req, res) => {
   if (!url || !key) return res.status(500).json({ error: "Live notifications database is not configured." });
   try {
     const supabase = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
-    const { data, error } = await supabase.from("tradiqs_signals").select("id,pair,action,timestamp").order("timestamp", { ascending: false }).limit(10);
+    const { data, error } = await supabase.from("tradiqs_signals").select("id,pair,action,asset_class,timestamp").order("timestamp", { ascending: false }).limit(10);
     if (error) throw error;
-    const notifications: LiveNotification[] = ((data ?? []) as SignalNotificationRow[]).map((signal) => ({
-      id: `signal-${signal.id}`, title: "New Trade Setup",
-      message: `New ${signal.action} signal for ${signal.pair} is forming.`,
-      type: "AI_ALERT", timestamp: Date.parse(signal.timestamp), referenceId: signal.id,
-    }));
+    const notifications: LiveNotification[] = ((data ?? []) as SignalNotificationRow[]).map((signal) => {
+      const rawTs = signal.timestamp;
+      const numTs = typeof rawTs === "string" ? parseInt(rawTs, 10) : Number(rawTs);
+      const safeTimestamp = Number.isFinite(numTs) ? (numTs < 1e11 ? numTs * 1000 : numTs) : Date.parse(String(rawTs));
+      const rawAssetClass = String(signal.asset_class ?? "").toLowerCase();
+      const assetClass = rawAssetClass === "crypto" || rawAssetClass === "stocks" ? rawAssetClass : "forex";
+      return {
+        id: `signal-${signal.id}`, title: "New Trade Setup",
+        message: `New ${signal.action} signal for ${signal.pair} is forming.`,
+        type: "AI_ALERT", timestamp: safeTimestamp, assetClass, referenceId: signal.id,
+      };
+    });
     return res.json(notifications);
   } catch (error) {
     console.error("Live notifications query failed:", error);
