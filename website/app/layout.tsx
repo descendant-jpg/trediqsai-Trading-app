@@ -1,6 +1,7 @@
 import './globals.css';
 import { Inter } from 'next/font/google';
 import Link from 'next/link';
+import MarketTicker from './components/market-ticker';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -46,6 +47,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             </Link>
           </div>
         </header>
+        <MarketTicker />
         {children}
       </body>
     </html>
