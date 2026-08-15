@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import {
   Activity,
-  Apple,
   ArrowRight,
   BellRing,
   BrainCircuit,
@@ -10,7 +9,6 @@ import {
   GraduationCap,
   HelpCircle,
   LineChart,
-  Play,
   Radar,
   ShieldCheck,
   Sparkles,
@@ -57,7 +55,7 @@ const plans = [
   },
   {
     name: 'Pro',
-    price: '$19.99',
+    price: '$29.99',
     detail: 'For active traders',
     features: ['Daily AI signals', 'All market coverage', 'Volatility Radar'],
     cta: 'Choose Pro',
@@ -86,21 +84,6 @@ const faqs = [
   ['Can I connect my broker?', 'Elite members can configure supported broker and exchange connections including MetaTrader, crypto exchanges, equities brokers, and prop firms.'],
   ['Is TradiQs AI financial advice?', 'No. TradiQs AI provides market intelligence and educational tools. Trading involves substantial risk and you make every final decision.'],
 ];
-
-function StoreButton({
-  icon: Icon,
-  label,
-}: {
-  icon: typeof Apple;
-  label: string;
-}) {
-  return (
-    <button className="flex cursor-pointer items-center gap-3 rounded-lg border border-white/15 bg-black px-4 py-3 text-left transition-colors hover:border-[#00F0FF]">
-      <Icon className="h-5 w-5 text-white" />
-      <span className="text-xs font-semibold text-white">{label}</span>
-    </button>
-  );
-}
 
 function SignalPhone() {
   return (
@@ -164,10 +147,8 @@ export default function Home() {
           <p className="mb-8 max-w-xl text-lg leading-8 text-gray-400">
             AI-driven signals for Forex, Crypto, and Stocks — built for disciplined traders who want institutional context without the noise.
           </p>
-          <WaitlistForm />
-          <div className="flex flex-wrap gap-3">
-            <StoreButton icon={Apple} label="Download on the App Store" />
-            <StoreButton icon={Play} label="Get it on Google Play" />
+          <div className="max-w-2xl">
+            <WaitlistForm />
           </div>
         </div>
         <div className="flex justify-center py-6 lg:py-0">
@@ -308,6 +289,17 @@ export default function Home() {
       <section className="mx-auto max-w-4xl px-6 py-24">
         <div className="mb-12 text-center"><p className="mb-3 text-sm font-semibold uppercase tracking-[0.18em] text-[#00FFFF]">Questions, answered</p><h2 className="text-4xl font-extrabold tracking-tight text-white">Frequently asked questions.</h2></div>
         <div className="grid gap-3">{faqs.map(([question, answer])=><details key={question} className="group rounded-xl border border-white/10 bg-[#111111] p-5"><summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-bold text-white">{question}<HelpCircle className="h-5 w-5 shrink-0 text-[#00FFFF] transition-transform group-open:rotate-180" /></summary><p className="max-w-2xl pt-4 text-sm leading-7 text-gray-400">{answer}</p></details>)}</div>
+      </section>
+
+      <section id="waitlist" className="border-y border-[#FFD700]/20 bg-[#111111] px-6 py-16">
+        <div className="mx-auto max-w-4xl text-center">
+          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#00FFFF]">Early access</p>
+          <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-white md:text-4xl">Don&apos;t miss the launch.</h2>
+          <p className="mx-auto mt-4 max-w-2xl text-gray-400">Join the waitlist for launch updates and early access to TradiQs AI.</p>
+          <div className="mx-auto mt-8 max-w-3xl text-left">
+            <WaitlistForm />
+          </div>
+        </div>
       </section>
 
       <footer className="border-t border-white/5 bg-[#0A0A0A]">

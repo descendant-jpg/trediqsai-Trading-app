@@ -1,0 +1,31 @@
+CRITICAL WORK DIRECTIVE: UPDATE PRICING, ADD WAITLIST UI, AND BUILD MARKET TICKER.
+
+Review our project rules. We are working strictly inside the `website/` directory. Vercel deploys from this folder.
+
+### 1. Pricing Correction
+- Open `website/app/page.tsx`.
+- Locate the "Pro" pricing tier. Update the price from `$19.99` to `$29.99`.
+
+### 2. Premium Addition: Scrolling Market Ticker
+- Just below the Navbar, implement an infinitely scrolling CSS marquee (Ticker Tape).
+- It should display a continuous row of asset prices (e.g., "XAU/USD 2,420.50 ▲", "BTC/USD 64,230.00 ▲", "EUR/USD 1.0945 ▼", "NVDA 128.40 ▲").
+- Style it with `bg-black border-y border-gray-800 py-2`, using `text-green-400` for up-ticks and `text-red-400` for down-ticks. Use standard Tailwind animations to make it scroll smoothly from right to left.
+
+### 3. Hero Waitlist Capture Form
+- In the Hero section, remove the static "Download on the App Store" / "Get it on Google Play" buttons for now.
+- Replace them with a React client component Waitlist Form. 
+- Use local state (`useState`) to manage form submission (`isSubmitted`).
+- **Form UI:** A horizontal layout on desktop (stacking on mobile). 
+  - Input 1: "Full Name" (bg-transparent, border-gray-700, text-white, rounded-lg).
+  - Input 2: "Email Address" (bg-transparent, border-gray-700, text-white, rounded-lg).
+  - Button: "Join Waitlist" (bg-[#FFD700] text-black font-bold rounded-lg hover:bg-yellow-400 transition).
+- **Success State:** If `isSubmitted` is true, hide the inputs and show: `✓ You're on the list! We'll notify you when TradiQs AI goes live.` in neon cyan (`#00FFFF`).
+
+### 4. Bottom Catch-All Waitlist
+- Add a dedicated banner section just above the Footer: "Don't miss the launch." 
+- Re-use the Waitlist Capture Form here so users don't have to scroll back up to join.
+
+### 5. Validation & Deployment
+- Ensure all file modifications occur inside `website/app/` (do NOT touch the root `/app/` folder).
+- Run `npm run build` inside the `website` directory to ensure the new state hooks and ticker animations compile perfectly.
+- Commit the changes and push to `main` so Vercel auto-deploys.
