@@ -1,182 +1,72 @@
+import { createClient } from "@supabase/supabase-js";
 import { Router, type IRouter } from "express";
-import { GetSignalsResponse } from "@workspace/api-zod";
+
+/*
+  Apply manually in the Supabase SQL editor:
+  create table public.tradiqs_signals (
+    id uuid primary key default gen_random_uuid(),
+    pair text not null,
+    asset_class text not null,
+    action text not null,
+    status text not null check (status in ('Active', 'Won', 'Lost', 'Pending')),
+    risk_reward numeric not null,
+    entry numeric not null,
+    stop_loss numeric not null,
+    take_profits jsonb not null default '[]'::jsonb,
+    timestamp timestamptz not null default now(),
+    pips numeric not null
+  );
+  alter table public.tradiqs_signals enable row level security;
+*/
+
+export interface ProductionSignal {
+  id: string;
+  pair: string;
+  assetClass: string;
+  action: string;
+  status: "Active" | "Won" | "Lost" | "Pending";
+  riskReward: number;
+  entry: number;
+  stopLoss: number;
+  takeProfits: { price: number; hit: boolean }[];
+  timestamp: number;
+  pips: number;
+}
+
+type SignalRow = {
+  id: string; pair: string; asset_class: string; action: string;
+  status: ProductionSignal["status"]; risk_reward: number; entry: number;
+  stop_loss: number; take_profits: ProductionSignal["takeProfits"]; timestamp: string; pips: number;
+};
 
 const router: IRouter = Router();
 
-const SIGNALS = [
-  {
-    id: "s1",
-    asset: "XAUUSD",
-    name: "Gold",
-    direction: "BUY",
-    timeframe: "H1",
-    status: "Active",
-    rr: "1:5.0",
-    confidence: "92%",
-    risk: "Medium",
-    potentialPips: "+400p",
-    entry: { price: 2412.5 },
-    stopLoss: { price: 2404.5, pips: 80, isBreakeven: false },
-    takeProfits: [
-      { id: 1, price: 2420.5, pips: 80, percentage: "50%", isHit: true },
-      { id: 2, price: 2432.5, pips: 200, percentage: "30%", isHit: false },
-      { id: 3, price: 2452.5, pips: 400, percentage: "20%", isHit: false },
-    ],
-    timeline: { created: "2026-08-05 08:15 UTC" },
-    isPremium: true,
-    time: "2m ago",
-    rationale:
-      "Liquidity sweep below Asian session lows into H1 order block; DXY weakness supports upside continuation.",
-    confluenceFactors: ["4H Order Block Retest", "Bullish RSI Divergence", "Institutional Volume Spike"],
-  },
-  {
-    id: "s2",
-    asset: "BTCUSD",
-    name: "Bitcoin",
-    direction: "BUY",
-    timeframe: "H4",
-    status: "Active",
-    rr: "1:3.2",
-    confidence: "87%",
-    risk: "Low",
-    potentialPips: "+8300p",
-    entry: { price: 96210 },
-    stopLoss: { price: 92800, pips: 3410, isBreakeven: false },
-    takeProfits: [
-      { id: 1, price: 99400, pips: 3190, percentage: "40%", isHit: false },
-      { id: 2, price: 101900, pips: 5690, percentage: "35%", isHit: false },
-      { id: 3, price: 104500, pips: 8290, percentage: "25%", isHit: false },
-    ],
-    timeline: { created: "2026-08-05 07:40 UTC" },
-    isPremium: false,
-    time: "9m ago",
-    rationale:
-      "Funding reset with spot bid returning; reclaim of key level flips structure bullish.",
-  },
-  {
-    id: "s3",
-    asset: "EURUSD",
-    name: "Euro / US Dollar",
-    direction: "SELL",
-    timeframe: "M30",
-    status: "Won",
-    rr: "1:4.1",
-    confidence: "82%",
-    risk: "Low",
-    potentialPips: "+120p",
-    entry: { price: 1.0842 },
-    stopLoss: { price: 1.0872, pips: 30, isBreakeven: true },
-    takeProfits: [
-      { id: 1, price: 1.0812, pips: 30, percentage: "50%", isHit: true },
-      { id: 2, price: 1.0782, pips: 60, percentage: "30%", isHit: true },
-      { id: 3, price: 1.0722, pips: 120, percentage: "20%", isHit: true },
-    ],
-    timeline: { created: "2026-08-04 13:05 UTC", closed: "2026-08-05 02:44 UTC" },
-    isPremium: true,
-    time: "18m ago",
-    rationale:
-      "Rejection at weekly supply with bearish divergence; ECB dovish repricing pressured the pair lower.",
-  },
-  {
-    id: "s4",
-    asset: "ETHUSD",
-    name: "Ethereum",
-    direction: "BUY",
-    timeframe: "H4",
-    status: "Pending",
-    rr: "1:3.8",
-    confidence: "81%",
-    risk: "Medium",
-    potentialPips: "+3680p",
-    entry: { price: 3412 },
-    stopLoss: { price: 3240, pips: 1720, isBreakeven: false },
-    takeProfits: [
-      { id: 1, price: 3560, pips: 1480, percentage: "40%", isHit: false },
-      { id: 2, price: 3660, pips: 2480, percentage: "35%", isHit: false },
-      { id: 3, price: 3780, pips: 3680, percentage: "25%", isHit: false },
-    ],
-    timeline: { created: "2026-08-05 06:20 UTC" },
-    isPremium: false,
-    time: "34m ago",
-    rationale:
-      "Limit order at H4 demand; ETH/BTC ratio basing with staking inflows trending higher.",
-  },
-  {
-    id: "s5",
-    asset: "GBPJPY",
-    name: "Pound / Yen",
-    direction: "BUY",
-    timeframe: "H1",
-    status: "SL Hit",
-    rr: "1:2.5",
-    confidence: "68%",
-    risk: "High",
-    potentialPips: "+250p",
-    entry: { price: 191.4 },
-    stopLoss: { price: 190.4, pips: 100, isBreakeven: false },
-    takeProfits: [
-      { id: 1, price: 192.4, pips: 100, percentage: "50%", isHit: false },
-      { id: 2, price: 193.15, pips: 175, percentage: "30%", isHit: false },
-      { id: 3, price: 193.9, pips: 250, percentage: "20%", isHit: false },
-    ],
-    timeline: { created: "2026-08-04 09:30 UTC", closed: "2026-08-04 15:12 UTC" },
-    isPremium: false,
-    time: "1h ago",
-    rationale:
-      "London breakout play invalidated by surprise BoJ commentary; volatility spike took out stops.",
-  },
-  {
-    id: "s6",
-    asset: "US30",
-    name: "Dow Jones 30",
-    direction: "SELL",
-    timeframe: "M15",
-    status: "Active",
-    rr: "1:4.5",
-    confidence: "71%",
-    risk: "High",
-    potentialPips: "+900p",
-    entry: { price: 44210 },
-    stopLoss: { price: 44410, pips: 200, isBreakeven: false },
-    takeProfits: [
-      { id: 1, price: 44010, pips: 200, percentage: "50%", isHit: true },
-      { id: 2, price: 43760, pips: 450, percentage: "30%", isHit: true },
-      { id: 3, price: 43310, pips: 900, percentage: "20%", isHit: false },
-    ],
-    timeline: { created: "2026-08-05 09:02 UTC" },
-    isPremium: true,
-    time: "2h ago",
-    rationale:
-      "Distribution at prior highs into NY open; breadth deteriorating with defensives outperforming.",
-  },
-  {
-    id: "s7",
-    asset: "XAGUSD",
-    name: "Silver",
-    direction: "BUY",
-    timeframe: "D1",
-    status: "Won",
-    rr: "1:6.0",
-    confidence: "79%",
-    risk: "Medium",
-    potentialPips: "+1800p",
-    entry: { price: 27.4 },
-    stopLoss: { price: 27.1, pips: 30, isBreakeven: true },
-    takeProfits: [
-      { id: 1, price: 27.85, pips: 45, percentage: "40%", isHit: true },
-      { id: 2, price: 28.6, pips: 120, percentage: "35%", isHit: true },
-      { id: 3, price: 29.2, pips: 180, percentage: "25%", isHit: true },
-    ],
-    timeline: { created: "2026-08-01 10:00 UTC", closed: "2026-08-04 19:20 UTC" },
-    isPremium: false,
-    time: "3h ago",
-    rationale:
-      "Daily cup-and-handle breakout with industrial demand tailwind; gold/silver ratio compressing.",
-  },
-];
+router.get("/signals", async (_req, res) => {
+  const url = process.env["SUPABASE_URL"] ?? process.env["EXPO_PUBLIC_SUPABASE_URL"];
+  const key = process.env["SUPABASE_SERVICE_ROLE_KEY"];
+  if (!url || !key) {
+    res.status(500).json({ error: "Live signals database is not configured." });
+    return;
+  }
 
-router.get("/signals", (_req, res) => {
-  res.json(GetSignalsResponse.parse(SIGNALS));
+  try {
+    const supabase = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+    const { data, error } = await supabase
+      .from("tradiqs_signals")
+      .select("id,pair,asset_class,action,status,risk_reward,entry,stop_loss,take_profits,timestamp,pips")
+      .order("timestamp", { ascending: false });
+    if (error) throw error;
+    const signals: ProductionSignal[] = ((data ?? []) as SignalRow[]).map((row) => ({
+      id: row.id, pair: row.pair, assetClass: row.asset_class, action: row.action,
+      status: row.status, riskReward: Number(row.risk_reward), entry: Number(row.entry),
+      stopLoss: Number(row.stop_loss), takeProfits: row.take_profits ?? [],
+      timestamp: Date.parse(row.timestamp), pips: Number(row.pips),
+    }));
+    res.json(signals);
+  } catch (error) {
+    console.error("Live signals query failed:", error);
+    res.status(500).json({ error: "Live signals database query failed." });
+  }
 });
 
 export default router;
