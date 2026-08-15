@@ -8,6 +8,8 @@ import {
   Check,
   Copy,
   GraduationCap,
+  HelpCircle,
+  LineChart,
   Play,
   Radar,
   ShieldCheck,
@@ -19,8 +21,8 @@ import WaitlistForm from './components/waitlist-form';
 const stats = [
   ['50,000+', 'Active Traders'],
   ['85%', 'Avg Win Rate'],
-  ['15,000+', 'Signals'],
-  ['146+', 'Lessons'],
+  ['Multi-Asset', 'Coverage'],
+  ['AutoPilot', 'Enabled'],
 ];
 
 const steps = [
@@ -55,26 +57,34 @@ const plans = [
   },
   {
     name: 'Pro',
-    price: '$29',
+    price: '$19.99',
     detail: 'For active traders',
     features: ['Daily AI signals', 'All market coverage', 'Volatility Radar'],
     cta: 'Choose Pro',
   },
   {
     name: 'Elite',
-    price: '$79',
+    price: '$49.99',
     detail: 'For serious execution',
     features: ['Everything in Pro', 'Priority alerts', 'AI Chart Analysis', 'Psychology Shield'],
     cta: 'Choose Elite',
     featured: true,
   },
-  {
-    name: 'Whale',
-    price: '$149',
-    detail: 'For full desk access',
-    features: ['Everything in Elite', 'AutoCopy to MT5', 'Private market rooms', 'Concierge support'],
-    cta: 'Choose Whale',
-  },
+];
+
+const closedTrades = [
+  ['XAU/USD', 'WON', '+142 pips', 'text-[#00FFFF]'],
+  ['SOL/USD', 'WON', '+8.4%', 'text-[#00FFFF]'],
+  ['EUR/USD', 'WON', '+61 pips', 'text-[#00FFFF]'],
+  ['NAS100', 'WON', '+227 pts', 'text-[#00FFFF]'],
+];
+
+const faqs = [
+  ['What markets do you cover?', 'TradiQs AI delivers intelligence across forex, crypto, stocks, indices, and commodities — all from one mobile trading desk.'],
+  ['How does AutoPilot work?', 'AutoPilot applies your risk limits and selected broker connection to approved signals. You stay in control of every execution setting.'],
+  ['Are signals suitable for beginners?', 'Every setup includes entries, targets, invalidation, and clear risk context, so you can learn the process while you trade.'],
+  ['Can I connect my broker?', 'Elite members can configure supported broker and exchange connections including MetaTrader, crypto exchanges, equities brokers, and prop firms.'],
+  ['Is TradiQs AI financial advice?', 'No. TradiQs AI provides market intelligence and educational tools. Trading involves substantial risk and you make every final decision.'],
 ];
 
 function StoreButton({
@@ -142,17 +152,17 @@ function SignalPhone() {
 
 export default function Home() {
   return (
-    <main className="overflow-hidden bg-[#050505]">
+    <main className="overflow-hidden bg-[#0A0A0A]">
       <section className="mx-auto grid min-h-[90vh] max-w-7xl grid-cols-1 items-center gap-12 px-6 pb-16 pt-32 lg:grid-cols-2">
         <div>
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-[#00F0FF]/20 bg-[#00F0FF]/5 px-3 py-1.5 text-xs font-semibold text-[#00F0FF]">
             <Sparkles className="h-3.5 w-3.5" /> AI market intelligence
           </div>
           <h1 className="mb-6 text-5xl font-extrabold tracking-tight text-white md:text-7xl">
-            Institutional trading edge, <span className="text-[#00F0FF]">delivered in real time.</span>
+            Professional market intelligence, <span className="text-[#00FFFF]">delivered in real time.</span>
           </h1>
           <p className="mb-8 max-w-xl text-lg leading-8 text-gray-400">
-            AI-driven entries for forex, crypto, and equities. Backed by institutional chart analysis.
+            AI-driven signals for Forex, Crypto, and Stocks — built for disciplined traders who want institutional context without the noise.
           </p>
           <WaitlistForm />
           <div className="flex flex-wrap gap-3">
@@ -181,6 +191,26 @@ export default function Home() {
           <div className="mt-6 flex flex-wrap justify-center gap-x-12 gap-y-4 text-lg font-bold tracking-tight text-white/35">
             <span>Exness</span><span>IC Markets</span><span>XM</span>
           </div>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-6 py-24">
+        <div className="mb-12 flex flex-col justify-between gap-4 md:flex-row md:items-end">
+          <div>
+            <p className="mb-3 text-sm font-semibold uppercase tracking-[0.18em] text-[#00FFFF]">Live performance</p>
+            <h2 className="text-4xl font-extrabold tracking-tight text-white">A trading desk that stays in motion.</h2>
+          </div>
+          <div className="inline-flex items-center gap-2 text-sm text-gray-400"><span className="h-2 w-2 rounded-full bg-[#00FFFF] shadow-[0_0_12px_#00FFFF]" /> Updated in real time</div>
+        </div>
+        <div className="grid gap-5 lg:grid-cols-[1.2fr_.8fr]">
+          <article className="rounded-2xl border border-white/10 bg-[#111111] p-6 md:p-8">
+            <div className="mb-6 flex items-center justify-between"><div><p className="text-lg font-bold text-white">Recently Closed</p><p className="mt-1 text-sm text-gray-500">Verified trade outcomes</p></div><LineChart className="h-5 w-5 text-[#00FFFF]" /></div>
+            <div className="grid gap-3">{closedTrades.map(([pair, status, result, color])=><div key={pair} className="flex items-center justify-between rounded-xl border border-white/5 bg-black/30 px-4 py-4"><div className="flex items-center gap-3"><span className="h-2 w-2 rounded-full bg-[#00FFFF]" /><div><p className="font-bold text-white">{pair}</p><p className="text-xs text-gray-500">AI signal closed</p></div></div><div className="text-right"><p className={`text-xs font-extrabold tracking-wider ${color}`}>{status}</p><p className="mt-1 font-mono text-sm text-white">{result}</p></div></div>)}</div>
+          </article>
+          <article className="rounded-2xl border border-[#00FFFF]/20 bg-gradient-to-b from-[#00FFFF]/10 to-[#111111] p-6 md:p-8">
+            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#00FFFF]">This week</p>
+            <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-1"><div className="rounded-xl border border-white/10 bg-black/25 p-5"><p className="text-sm text-gray-400">Win Rate</p><p className="mt-3 text-4xl font-extrabold text-white">85<span className="text-[#00FFFF]">%</span></p><p className="mt-2 text-xs text-[#00FFFF]">↑ 4.2% vs last week</p></div><div className="rounded-xl border border-white/10 bg-black/25 p-5"><p className="text-sm text-gray-400">Pips Captured</p><p className="mt-3 text-4xl font-extrabold text-white">1,842</p><p className="mt-2 text-xs text-[#00FFFF]">Across 27 closed setups</p></div></div>
+          </article>
         </div>
       </section>
 
@@ -245,15 +275,15 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="pricing" className="mx-auto max-w-7xl px-6 py-24">
+      <section id="pricing" className="mx-auto max-w-6xl px-6 py-24">
         <div className="mb-12 text-center">
           <p className="mb-3 text-sm font-semibold uppercase tracking-[0.18em] text-[#00F0FF]">Plans for every stage</p>
           <h2 className="text-4xl font-extrabold tracking-tight text-white">Choose your edge.</h2>
         </div>
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
           {plans.map((plan) => (
-            <article className={`flex min-h-[390px] flex-col rounded-2xl border bg-[#0A0A0A] p-8 ${plan.featured ? 'border-[#00F0FF] shadow-[0_0_32px_rgba(0,240,255,0.08)]' : 'border-white/5'}`} key={plan.name}>
-              {plan.featured && <span className="mb-5 w-fit rounded-full bg-[#00F0FF] px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide text-black">Most popular</span>}
+            <article className={`flex min-h-[390px] flex-col rounded-2xl border bg-[#0A0A0A] p-8 ${plan.featured ? 'border-[#FFD700] shadow-[0_0_32px_rgba(255,215,0,0.1)]' : 'border-white/5'}`} key={plan.name}>
+              {plan.featured && <span className="mb-5 w-fit rounded-full bg-[#FFD700] px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide text-black">Most popular</span>}
               <h3 className="text-xl font-bold text-white">{plan.name}</h3>
               <p className="mt-2 text-sm text-gray-500">{plan.detail}</p>
               <div className="mt-7 flex items-end gap-1">
@@ -263,16 +293,21 @@ export default function Home() {
               <ul className="mt-8 grid gap-3">
                 {plan.features.map((feature) => (
                   <li className="flex items-start gap-2 text-sm text-gray-400" key={feature}>
-                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-[#00F0FF]" />{feature}
+                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-[#00FFFF]" />{feature}
                   </li>
                 ))}
               </ul>
-              <button className={`mt-auto cursor-pointer rounded-lg px-4 py-3 text-sm font-bold transition-colors ${plan.featured ? 'bg-[#00F0FF] text-black hover:bg-cyan-300' : 'border border-white/10 bg-white/5 text-white hover:border-[#00F0FF] hover:text-[#00F0FF]'}`}>
+              <button className={`mt-auto cursor-pointer rounded-lg px-4 py-3 text-sm font-bold transition-colors ${plan.featured ? 'bg-[#FFD700] text-black hover:bg-[#ffe147]' : 'border border-white/10 bg-white/5 text-white hover:border-[#00FFFF] hover:text-[#00FFFF]'}`}>
                 {plan.cta}
               </button>
             </article>
           ))}
         </div>
+      </section>
+
+      <section className="mx-auto max-w-4xl px-6 py-24">
+        <div className="mb-12 text-center"><p className="mb-3 text-sm font-semibold uppercase tracking-[0.18em] text-[#00FFFF]">Questions, answered</p><h2 className="text-4xl font-extrabold tracking-tight text-white">Frequently asked questions.</h2></div>
+        <div className="grid gap-3">{faqs.map(([question, answer])=><details key={question} className="group rounded-xl border border-white/10 bg-[#111111] p-5"><summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-bold text-white">{question}<HelpCircle className="h-5 w-5 shrink-0 text-[#00FFFF] transition-transform group-open:rotate-180" /></summary><p className="max-w-2xl pt-4 text-sm leading-7 text-gray-400">{answer}</p></details>)}</div>
       </section>
 
       <footer className="border-t border-white/5 bg-[#0A0A0A]">
@@ -288,6 +323,10 @@ export default function Home() {
               <Link href="/#pricing" className="cursor-pointer text-gray-500 transition-colors hover:text-white">Pricing</Link>
               <Link href="/about" className="cursor-pointer text-gray-500 transition-colors hover:text-white">About</Link>
             </div>
+          </div>
+          <div>
+            <p className="mb-4 text-xs font-bold uppercase tracking-[0.18em] text-white">Brokers</p>
+            <div className="grid gap-3 text-sm text-gray-500"><span>MetaTrader 5</span><span>Interactive Brokers</span><span>Binance</span></div>
           </div>
           <div>
             <p className="mb-4 text-xs font-bold uppercase tracking-[0.18em] text-white">Resources</p>
@@ -306,6 +345,7 @@ export default function Home() {
             </div>
           </div>
         </div>
+        <div className="border-t border-white/5 px-6 py-6 text-center text-xs leading-5 text-gray-600">Risk disclaimer: Trading leveraged products and digital assets carries a high level of risk and may not be suitable for all investors. Historical performance is not indicative of future results. TradiQs AI does not provide investment advice.</div>
       </footer>
     </main>
   );

@@ -40,9 +40,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             </nav>
             <Link
               href="/#waitlist"
-              className="cursor-pointer rounded-lg bg-[#00F0FF] px-4 py-2 text-sm font-bold text-black transition-colors hover:bg-cyan-300"
+               className="cursor-pointer rounded-lg bg-[#FFD700] px-4 py-2 text-sm font-bold text-black transition-colors hover:bg-[#ffe147]"
             >
-              Join Waitlist
+               Get the App
             </Link>
           </div>
         </header>
