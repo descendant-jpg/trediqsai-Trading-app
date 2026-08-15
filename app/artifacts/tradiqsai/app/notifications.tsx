@@ -6,8 +6,8 @@ import { useRouter } from 'expo-router';
 import { customFetch } from '@workspace/api-client-react';
 import colors from '@/constants/colors';
 const c=colors.light, KEY='tradiqs.notifications.read.v1';
-type Notification={id:string;title:'New Trade Setup';message:string;type:'AI_ALERT';timestamp:number;referenceId:string};
-const relative=(timestamp:number)=>{const ms=timestamp<1e11?timestamp*1000:timestamp;const minutes=Math.max(0,Math.floor((Date.now()-ms)/60000));return minutes<60?`${minutes||1}m ago`:minutes<1440?`${Math.floor(minutes/60)}h ago`:`${Math.floor(minutes/1440)}d ago`;};
+type Notification={id:string;title:'New Trade Setup';message:string;type:'AI_ALERT';timestamp:number|string;referenceId:string};
+const relative=(timestamp:number|string)=>{const numeric=Number(timestamp);const ms=Number.isFinite(numeric)?(numeric<1e11?numeric*1000:numeric):Date.parse(String(timestamp));if(!Number.isFinite(ms))return 'Just now';const minutes=Math.max(0,Math.floor((Date.now()-ms)/60000));return minutes<60?`${minutes||1}m ago`:minutes<1440?`${Math.floor(minutes/60)}h ago`:`${Math.floor(minutes/1440)}d ago`;};
 export default function NotificationsScreen(){
  const router=useRouter();const [items,setItems]=useState<Notification[]>([]);const [loading,setLoading]=useState(true);const [failed,setFailed]=useState(false);const [read,setRead]=useState<string[]>([]);
  const load=useCallback(async()=>{setLoading(true);setFailed(false);try{const data=await customFetch<Notification[]>('/api/notifications');setItems(Array.isArray(data)?data:[]);}catch{setItems([]);setFailed(true);}finally{setLoading(false);}},[]);

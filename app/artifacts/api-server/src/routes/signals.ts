@@ -59,7 +59,7 @@ router.get("/signals", async (_req, res) => {
     const signals: ProductionSignal[] = ((data ?? []) as SignalRow[]).map((row) => ({
       id: row.id, pair: row.pair, assetClass: row.asset_class, action: row.action,
       status: row.status, riskReward: Number(row.risk_reward), entry: Number(row.entry),
-      stopLoss: Number(row.stop_loss), takeProfits: row.take_profits ?? [],
+      stopLoss: Number(row.stop_loss), takeProfits: typeof row.take_profits === "string" ? JSON.parse(row.take_profits) : row.take_profits ?? [],
       timestamp: Date.parse(row.timestamp), pips: Number(row.pips),
     }));
     res.json(signals);
