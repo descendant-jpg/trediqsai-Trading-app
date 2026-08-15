@@ -27,11 +27,13 @@ function stubInsert(result: { error?: { code?: string; message: string } | null 
   return { from, insert };
 }
 
-function signupRequest(email: unknown): NextRequest {
+function signupRequest(email: unknown, name?: string): NextRequest {
+  const body: Record<string, unknown> = { email };
+  if (name !== undefined) body.name = name;
   return new NextRequest('https://tradiqs.example/api/waitlist', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-forwarded-for': '203.0.113.7' },
-    body: JSON.stringify({ email }),
+    body: JSON.stringify(body),
   });
 }
 
@@ -48,7 +50,7 @@ afterEach(() => {
 });
 
 describe('public waitlist endpoint', () => {
-  it('accepts a genuine signup', async () => {
+  it('accepts a genuine signup with email only', async () => {
     const { from, insert } = stubInsert({});
 
     const res = await POST(signupRequest('Someone@Example.com'));
@@ -57,6 +59,35 @@ describe('public waitlist endpoint', () => {
     expect(from).toHaveBeenCalledWith('waitlist');
     // Stored normalised, so casing does not create duplicate leads.
     expect(insert).toHaveBeenCalledWith({ email: 'someone@example.com' });
+  });
+
+  it('accepts a signup that includes a name alongside the email', async () => {
+    const { insert } = stubInsert({});
+
+    const res = await POST(signupRequest('trader@example.com', 'Alice'));
+
+    expect(res.status).toBe(201);
+    // Name must be stored alongside the email when provided.
+    expect(insert).toHaveBeenCalledWith({ name: 'Alice', email: 'trader@example.com' });
+  });
+
+  it('omits the name field when the caller sends an empty name', async () => {
+    const { insert } = stubInsert({});
+
+    // An empty string name should be treated as absent — no name key in the insert.
+    const res = await POST(signupRequest('trader@example.com', ''));
+
+    expect(res.status).toBe(201);
+    expect(insert).toHaveBeenCalledWith({ email: 'trader@example.com' });
+  });
+
+  it('trims whitespace from the name before storing', async () => {
+    const { insert } = stubInsert({});
+
+    await POST(signupRequest('trader@example.com', '  Bob  '));
+
+    const insertArg = (insert as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(insertArg.name).toBe('Bob');
   });
 
   it('counts the signup against the limit for that visitor', async () => {
