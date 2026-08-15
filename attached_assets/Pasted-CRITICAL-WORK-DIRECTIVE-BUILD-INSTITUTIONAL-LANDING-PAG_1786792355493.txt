@@ -1,0 +1,24 @@
+CRITICAL WORK DIRECTIVE: BUILD INSTITUTIONAL LANDING PAGE FOR TRADIQS AI.
+
+Review our project rules. We are overhauling the main website (`tradiqsai.com`) to be a high-converting, dark-mode fintech landing page. Use Next.js, React, and Tailwind CSS. The design language is Deep Dark (`bg-[#0A0A0A]`) with crisp White text, Neon Cyan (`#00FFFF`), and Premium Gold (`#FFD700`) accents.
+
+### 1. Scaffold the Page Structure (Single Page)
+Create a modular landing page (`page.tsx`) that imports the following distinct sections. Use modern Framer Motion (if available) or standard Tailwind transitions for smooth reveal effects.
+
+### 2. Build the Components
+- **Navbar:** Sticky top, TradiQs logo left, anchor links center (Features, Performance, Pricing), "Get the App" gold button right.
+- **Hero Section:** Massive bold headline: "Professional market intelligence, delivered in real time." Subtext about AI-driven signals for Forex, Crypto, and Stocks. Add two buttons: "Download on App Store" and "Get it on Google Play". Add a right-side placeholder div for a floating phone mockup.
+- **Stats & Trust Bar:** A dark grey bar across the screen with 4 stats: "50,000+ Active Traders", "85% Avg. Win Rate", "Multi-Asset Coverage", "AutoPilot Enabled".
+- **Live Performance Dashboard:** A visually distinct section. Left side: "Recently Closed" list (e.g., XAU/USD WON, SOL/USD WON). Right side: "This Week" summary cards (Win Rate, Pips Captured). 
+- **How It Works (3 Steps):** 3 simple cards: 1. Install the App, 2. Connect your Broker, 3. Let AutoPilot Execute.
+- **AI Features Grid:** A 2x3 grid of cards. Highlight: Instant Push Alerts, AutoPilot Engine, Risk Calculator, Correlation Finder, Code Lab, Prop Firm Integrations. Use subtle borders and glow effects on hover.
+- **Comparison Table:** Title "Built for traders, not marketing decks." Table comparing "Typical Provider" vs "TradiQs AI" (highlight TradiQs features in green).
+- **Pricing:** 3 cards: Free ($0), Pro ($19.99/mo), Elite ($49.99/mo - highlight this card with a gold border and "Most Popular" badge).
+- **FAQ:** An interactive accordion component for 5 common questions (e.g., "What markets do you cover?", "How does AutoPilot work?").
+- **SEO Footer:** A massive footer with columns for Product, Resources, Brokers, and Company. Include risk disclaimers at the absolute bottom.
+
+### 3. Execution & Validation
+- Ensure the page is completely fully responsive (mobile-first Tailwind classes like `flex-col md:flex-row`).
+- Run the build checker to ensure no React or Tailwind compilation errors.
+
+EXECUTION REQUIREMENT: Do not just provide boilerplate. Build out the full UI structure with the provided copy so it looks like a finished, premium, production-ready product immediately upon loading.
