@@ -15,7 +15,7 @@ export default async function AdminLoginPage({
         <p className="text-xs font-bold uppercase tracking-[.25em] text-cyan">Restricted area</p>
         <h1 className="mt-3 text-2xl font-black">Admin sign in</h1>
         <p className="mt-2 text-sm text-muted">
-          Enter the administrator password to access the CMS and waitlist leads.
+          Use your authorized administrator email and password to access the CMS.
         </p>
         <LoginForm next={next} />
       </div>

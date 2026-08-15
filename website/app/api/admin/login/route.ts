@@ -53,15 +53,17 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  let email = '';
   let password = '';
   try {
     const body = await req.json();
+    email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
     password = typeof body?.password === 'string' ? body.password : '';
   } catch {
     return NextResponse.json({ error: 'Invalid request.' }, { status: 400 });
   }
 
-  if (!verifyAdminPassword(password)) {
+  if (email !== 'nextgensynthex@gmail.com' || !verifyAdminPassword(password)) {
     // Only wrong passwords count against the limit — both per-IP and global.
     const [nowBlockedIp, nowBlockedGlobal] = await Promise.all([
       recordFailedLogin(ip),
