@@ -1,0 +1,5 @@
+const services = [['Database', 'Connected'], ['Supabase Auth', 'Active'], ['Finnhub API', 'Connected'], ['AutoPilot Engine', 'Active'], ['Server Uptime', 'Monitored']];
+
+export default function SettingsPage() {
+  return <div className="p-5 md:p-8 lg:p-10"><p className="text-xs font-bold uppercase tracking-[.25em] text-[#00FFFF]">System operations</p><h1 className="mt-3 text-3xl font-black">System Settings</h1><div className="mt-8 grid max-w-3xl gap-3">{services.map(([name, state]) => <div className="flex items-center justify-between rounded-2xl border border-gray-800 bg-[#111111] px-5 py-4" key={name}><span className="font-semibold">{name}</span><span className="flex items-center gap-2 text-sm text-green-400"><span className="h-2 w-2 rounded-full bg-green-400" />{state} 🟢</span></div>)}</div><div className="mt-8 max-w-3xl rounded-2xl border border-[#FFD700]/20 bg-[#FFD700]/5 p-6"><p className="text-xs font-bold uppercase tracking-wider text-[#FFD700]">Administrator account</p><p className="mt-3 font-bold text-white">nextgensynthex@gmail.com</p><p className="mt-1 text-sm text-gray-400">God Admin · Full CMS and operations privileges</p></div></div>;
+}

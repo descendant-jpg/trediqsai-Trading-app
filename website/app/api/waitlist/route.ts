@@ -40,9 +40,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid request.' }, { status: 400 });
   }
 
-  if (!name || !email || !EMAIL_RE.test(email)) {
+  if (!email || !EMAIL_RE.test(email)) {
     return NextResponse.json(
-      { error: 'Please enter your full name and a valid email address.' },
+      { error: 'Please enter a valid email address.' },
       { status: 422 },
     );
   }
@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
 
   const { error } = await supabase
     .from('waitlist')
-    .insert({ name, email });
+    .insert(name ? { name, email } : { email });
 
   if (error) {
     // Postgres unique-violation code
@@ -76,5 +76,5 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  return NextResponse.json({ ok: true }, { status: 200 });
+  return NextResponse.json({ ok: true }, { status: 201 });
 }

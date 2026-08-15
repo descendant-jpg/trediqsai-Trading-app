@@ -29,8 +29,9 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-/** Type a password and submit the form. */
+/** Type an authorized email, a password, and submit the form. */
 async function signIn(password: string) {
+  fireEvent.change(screen.getByLabelText(/administrator email/i), { target: { value: 'nextgensynthex@gmail.com' } });
   const input = screen.getByLabelText(/password/i);
   fireEvent.change(input, { target: { value: password } });
   await act(async () => {
