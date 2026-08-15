@@ -1,0 +1,25 @@
+CRITICAL WORK DIRECTIVE: EXPAND BROKER SELECTION TO INSTITUTIONAL GRADE.
+
+Review replit.md for our project rules. The `AutoPilotSettingsModal` currently has a limited broker selection list. We must expand this into a comprehensive, multi-category institutional integration list featuring Forex, Crypto, Stocks, and Prop Firms.
+
+### 1. Expand the Broker Data Structure
+- Inside the broker selection view logic, define an expanded grouped list of platforms:
+  - **FOREX & CFDS:** 'MetaTrader 4', 'MetaTrader 5', 'cTrader', 'Exness', 'Oanda', 'IC Markets'
+  - **CRYPTO:** 'Binance', 'Bybit', 'Coinbase', 'OKX', 'KuCoin'
+  - **STOCKS:** 'Interactive Brokers', 'Webull', 'TradeStation', 'Alpaca'
+  - **PROP FIRMS:** 'FTMO', 'Topstep'
+
+### 2. Upgrade the UI & Visual Hierarchy
+- Update the broker selection `ScrollView` to render these categories with clear section headers (`TEXT: gray, font-weight: bold, letter-spacing, margin-top: 20`).
+- **Icons:** Add a distinct, subtle icon to the left of each broker name based on its category (e.g., use a trending-up/line-chart icon for Forex, a hexagon/circle for Crypto, a bar-chart for Stocks, and a shield/briefcase for Prop Firms). Use standard Expo vector icons (Ionicons or Lucide).
+- **List Items:** Style each broker row as a dark card (`backgroundColor: '#1E1E1E'`, rounded corners, padding `16`, `marginBottom: 8`) with a subtle right chevron (`>`) indicating it is selectable.
+
+### 3. Navigation & Interaction Polish
+- At the very top of the selection list, explicitly render a green back button: `<- BACK TO AUTOPILOT` that sets `isSelectingBroker` to false without making a selection.
+- When a user taps a specific broker card, update the `selectedBroker` state, set `isSelectingBroker` to false, and return to the main AutoPilot configuration view.
+- Ensure the "Enable Automated Execution" switch remains disabled until a valid broker from this new expanded list is selected.
+
+### 4. Validation
+- Run the Expo TypeScript compiler to ensure the UI expansion introduces no errors.
+
+EXECUTION REQUIREMENT: The broker selection view must look like a premium exchange integration hub. Categorize the platforms accurately and ensure the navigation between the main settings and the selection list is flawless.
