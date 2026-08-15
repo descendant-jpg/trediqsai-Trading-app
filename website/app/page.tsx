@@ -31,8 +31,8 @@ const steps = [
 
 const tools = [
   [BellRing, 'Instant Alerts', 'Get clear trade-ready notifications when an institutional setup forms.'],
-  [BrainCircuit, 'AI Chart Analysis', 'Translate structure, momentum, and liquidity into an actionable market thesis.'],
-  [Radar, 'Volatility Radar', 'Know when conditions expand, compress, or demand a smaller risk profile.'],
+  [BrainCircuit, 'AI Chart Analysis', 'Turn Forex, Crypto, and Stocks price action into a clear multi-asset market thesis.'],
+  [Radar, 'Volatility Radar', 'Track volatility across Forex, Crypto, and Stocks before it changes your risk profile.'],
   [Copy, 'AutoCopy to MT5', 'Move from insight to execution with levels designed for your trading workflow.'],
   [ShieldCheck, 'Psychology Shield', 'Build a calmer process with guardrails that help prevent emotional decisions.'],
   [GraduationCap, 'Learning Hub', 'Master the setups, vocabulary, and discipline behind better trade decisions.'],
@@ -84,6 +84,20 @@ const faqs = [
   ['Can I connect my broker?', 'Elite members can configure supported broker and exchange connections including MetaTrader, crypto exchanges, equities brokers, and prop firms.'],
   ['Is TradiQs AI financial advice?', 'No. TradiQs AI provides market intelligence and educational tools. Trading involves substantial risk and you make every final decision.'],
 ];
+
+function StoreButton({ platform }: { platform: 'apple' | 'google' }) {
+  const isApple = platform === 'apple';
+  return (
+    <button className="flex cursor-pointer items-center gap-3 rounded-lg border border-gray-700 bg-black px-4 py-3 text-left text-white transition-colors hover:border-gray-500">
+      {isApple ? (
+        <svg aria-hidden="true" className="h-5 w-5 fill-current" viewBox="0 0 24 24"><path d="M16.37 12.25c-.02-2.2 1.8-3.27 1.88-3.32-1.03-1.5-2.63-1.7-3.2-1.72-1.35-.14-2.65.8-3.34.8-.7 0-1.75-.78-2.9-.76-1.48.02-2.87.88-3.63 2.2-1.57 2.71-.4 6.69 1.1 8.87.75 1.07 1.62 2.27 2.77 2.23 1.12-.05 1.54-.72 2.9-.72 1.35 0 1.73.72 2.9.7 1.2-.02 1.96-1.08 2.68-2.16.86-1.23 1.2-2.44 1.22-2.5-.03-.01-2.32-.89-2.34-3.62ZM14.15 5.77c.6-.75 1.01-1.77.9-2.77-.87.04-1.96.6-2.59 1.34-.56.65-1.06 1.7-.94 2.66.98.07 1.98-.5 2.63-1.23Z" /></svg>
+      ) : (
+        <svg aria-hidden="true" className="h-5 w-5" viewBox="0 0 24 24"><path fill="#4285F4" d="m3 3 10.4 9L3 21z" /><path fill="#34A853" d="m13.4 12 3.45 3-11.42 6L13.4 12z" /><path fill="#FBBC04" d="M5.43 3 16.85 9l-3.45 3z" /><path fill="#EA4335" d="m16.85 9 4.15 2.2a.9.9 0 0 1 0 1.6L16.85 15l-3.45-3z" /></svg>
+      )}
+      <span className="text-xs font-semibold">{isApple ? 'Download on the App Store' : 'Get it on Google Play'}</span>
+    </button>
+  );
+}
 
 function SignalPhone() {
   return (
@@ -147,8 +161,9 @@ export default function Home() {
           <p className="mb-8 max-w-xl text-lg leading-8 text-gray-400">
             AI-driven signals for Forex, Crypto, and Stocks — built for disciplined traders who want institutional context without the noise.
           </p>
-          <div className="max-w-2xl">
-            <WaitlistForm />
+          <div className="flex flex-wrap gap-3">
+            <StoreButton platform="apple" />
+            <StoreButton platform="google" />
           </div>
         </div>
         <div className="flex justify-center py-6 lg:py-0">
@@ -318,7 +333,7 @@ export default function Home() {
           </div>
           <div>
             <p className="mb-4 text-xs font-bold uppercase tracking-[0.18em] text-white">Brokers</p>
-            <div className="grid gap-3 text-sm text-gray-500"><span>MetaTrader 5</span><span>Interactive Brokers</span><span>Binance</span></div>
+            <div className="grid grid-cols-2 gap-x-5 gap-y-3 text-sm text-gray-500"><span>MetaTrader 4</span><span>MetaTrader 5</span><span>cTrader</span><span>Exness</span><span>Binance</span><span>Bybit</span><span>Interactive Brokers</span><span>Webull</span><span>FTMO</span><span>Topstep</span></div>
           </div>
           <div>
             <p className="mb-4 text-xs font-bold uppercase tracking-[0.18em] text-white">Resources</p>

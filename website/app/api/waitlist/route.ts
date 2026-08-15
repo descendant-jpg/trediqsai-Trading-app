@@ -30,17 +30,19 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  let name: string;
   let email: string;
   try {
     const body = await req.json();
+    name = (body?.name ?? '').trim();
     email = (body?.email ?? '').trim().toLowerCase();
   } catch {
     return NextResponse.json({ error: 'Invalid request.' }, { status: 400 });
   }
 
-  if (!email || !EMAIL_RE.test(email)) {
+  if (!name || !email || !EMAIL_RE.test(email)) {
     return NextResponse.json(
-      { error: 'Please enter a valid email address.' },
+      { error: 'Please enter your full name and a valid email address.' },
       { status: 422 },
     );
   }
@@ -50,14 +52,14 @@ export async function POST(req: NextRequest) {
     // Supabase not configured — log server-side and fail gracefully
     console.warn('[waitlist] Supabase service role key is not configured.');
     return NextResponse.json(
-      { error: 'Waitlist is temporarily unavailable. Please try again later.' },
+      { error: 'Waitlist service is not configured yet. Please try again shortly.' },
       { status: 503 },
     );
   }
 
   const { error } = await supabase
     .from('waitlist')
-    .insert({ email });
+    .insert({ name, email });
 
   if (error) {
     // Postgres unique-violation code
@@ -74,5 +76,5 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  return NextResponse.json({ ok: true }, { status: 201 });
+  return NextResponse.json({ ok: true }, { status: 200 });
 }
