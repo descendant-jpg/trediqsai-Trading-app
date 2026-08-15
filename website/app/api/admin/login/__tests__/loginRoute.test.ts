@@ -26,11 +26,11 @@ import { ADMIN_COOKIE } from '../../../../../lib/admin-auth';
 
 const PASSWORD = 'correct-horse';
 
-function signInRequest(password: unknown): NextRequest {
+function signInRequest(password: unknown, email = 'nextgensynthex@gmail.com'): NextRequest {
   return new NextRequest('https://tradiqs.example/api/admin/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-forwarded-for': '203.0.113.7' },
-    body: JSON.stringify({ password }),
+    body: JSON.stringify({ email, password }),
   });
 }
 
@@ -73,6 +73,12 @@ describe('admin sign-in endpoint', () => {
     expect(limiter.recordFailedLogin).toHaveBeenCalledWith('203.0.113.7');
     expect(limiter.recordGlobalFailedLogin).toHaveBeenCalled();
     expect(res.cookies.get(ADMIN_COOKIE)?.value).toBeFalsy();
+  });
+
+  it('rejects a correct password from an unauthorized email', async () => {
+    const res = await POST(signInRequest(PASSWORD, 'other@example.com'));
+    expect(res.status).toBe(401);
+    expect(limiter.recordFailedLogin).toHaveBeenCalledWith('203.0.113.7');
   });
 
   it('reports the per-IP lockout on the attempt that triggers it', async () => {

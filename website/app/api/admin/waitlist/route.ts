@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 // ---------------------------------------------------------------------------
 interface WaitlistRow {
   id: number;
-  name: string;
+  name: string | null;
   email: string;
   created_at: string;
 }

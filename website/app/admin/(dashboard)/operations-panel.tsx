@@ -21,7 +21,7 @@ export function WaitlistPanel() {
       const res = await fetch('/api/admin/waitlist', { cache: 'no-store' });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? 'Unable to load leads.');
-      setLeads(body.leads ?? []);
+      setLeads(body.entries ?? []);
       setStatus('');
     } catch (error) { setStatus(error instanceof Error ? error.message : 'Unable to load leads.'); }
   };
