@@ -1,0 +1,33 @@
+CRITICAL WORK DIRECTIVE: PART 2 - COMPETITOR UI REBUILD & AUTOPILOT FAB.
+
+Review replit.md for our project rules. The backend `/api/signals` is live. We must rebuild the frontend Signal Desk to consume this live feed and implement a highly-converting, data-dense UI with FOMO locks and the AutoPilot floating button.
+
+### 1. Fetch Live Data & Remove Dummy Fallbacks
+- Open `SignalDesk` (or the main signals screen component).
+- Implement a data fetching hook to pull from `/api/signals`. 
+- Type the state to match the new `ProductionSignal` interface.
+- Add an `isLoading` spinner. If the API returns a 500 or an empty array, show a sleek "No Active Signals" empty state. Remove ALL hardcoded dummy signal arrays.
+
+### 2. Rebuild SignalCard Grid Layout (Data-Dense)
+- Redesign `SignalCard` to match a professional 3-column layout.
+- **Header:** Display the `pair` (e.g., SOL/USD), `action` (BUY/SELL with appropriate colors), Risk:Reward, and `status` (Active, Won, Lost) with a colored indicator dot.
+- **Data Grid:** Use a flex row to display three columns: `ENTRY`, `SL` (Stop Loss), and `TP` (Take Profits).
+- **Take Profits Rendering:** Map over the `takeProfits` array. Render them stacked (TP1, TP2). If `hit: true`, render a green checkmark next to it. 
+
+### 3. Implement the FOMO Lock Engine
+- Connect `accessTier` context to the card.
+- **Free Tier View:** 
+  - Apply a blur or obscure the numerical values for `entry`, `stopLoss`, and `takeProfits`.
+  - Place a large absolute-positioned overlay over the data grid with a gold `🔒` icon and an "Unlock with Premium" CTA button that triggers the Paywall modal.
+  - **CRITICAL FOMO:** Do NOT blur the "TP Hit" green checkmarks or the `status` (Won). Free users must see that the signal was profitable, even if they can't see the exact entry price.
+- **Pro/Elite View:** Reveal all numbers and standard execution buttons.
+
+### 4. Build the AutoPilot FAB (Floating Action Button)
+- In the main `SignalDesk` view, build a Floating Action Button (FAB) positioned `absolute` at `bottom: 20`, `right: 20`.
+- Style it as a circular or hexagonal gold button with a "Robot" or "AI" icon.
+- **Interaction:** On press, check the user's tier. If they are not ELITE, open a premium lock modal stating "AutoPilot is a Premium Feature. Upgrade to run automated trading bots." If ELITE, open a placeholder `AutoPilotSettings` modal.
+
+### 5. Validation
+- Run Expo TypeScript check. Ensure the new UI maps perfectly to the `ProductionSignal` interface fetched from the backend.
+
+EXECUTION REQUIREMENT: The UI must prioritize conversion. The FOMO lock must obscure the specific trade parameters but explicitly reveal the winning status to drive upgrades. The AutoPilot FAB must float above the scrolling list.
