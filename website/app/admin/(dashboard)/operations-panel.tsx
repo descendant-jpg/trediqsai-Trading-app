@@ -12,16 +12,32 @@ function format(value: string) {
   return Number.isNaN(date.getTime()) ? 'Unknown date' : date.toLocaleString();
 }
 
+async function fetchAll<T>(path: string, key: string): Promise<T[]> {
+  const results: T[] = [];
+  const limit = 200;
+  let page = 1;
+  let total = Infinity;
+  while (results.length < total) {
+    const separator = path.includes('?') ? '&' : '?';
+    const res = await fetch(`${path}${separator}page=${page}&limit=${limit}`, { cache: 'no-store' });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error ?? 'Unable to load records.');
+    const batch = body[key] ?? [];
+    results.push(...batch);
+    total = Number(body.total ?? results.length);
+    if (!batch.length) break;
+    page += 1;
+  }
+  return results;
+}
+
 export function WaitlistPanel() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('Loading leads…');
   const load = async () => {
     try {
-      const res = await fetch('/api/admin/waitlist', { cache: 'no-store' });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.error ?? 'Unable to load leads.');
-      setLeads(body.entries ?? []);
+      setLeads(await fetchAll<Lead>('/api/admin/waitlist', 'entries'));
       setStatus('');
     } catch (error) { setStatus(error instanceof Error ? error.message : 'Unable to load leads.'); }
   };
@@ -43,7 +59,7 @@ export function WaitlistPanel() {
 export function MessagesPanel() {
   const [items, setItems] = useState<Message[]>([]);
   const [status, setStatus] = useState('Loading messages…');
-  const load = async () => { try { const res = await fetch('/api/admin/messages', { cache: 'no-store' }); const body = await res.json(); if (!res.ok) throw new Error(body.error); setItems(body.messages ?? []); setStatus(''); } catch (error) { setStatus(error instanceof Error ? error.message : 'Unable to load messages.'); } };
+  const load = async () => { try { setItems(await fetchAll<Message>('/api/admin/messages', 'messages')); setStatus(''); } catch (error) { setStatus(error instanceof Error ? error.message : 'Unable to load messages.'); } };
   useEffect(() => { void load(); }, []);
   const change = async (item: Message) => { const next = item.status === 'open' ? 'resolved' : 'open'; const res = await fetch('/api/admin/messages', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: item.id, status: next }) }); if (res.ok) setItems((list) => list.map((value) => value.id === item.id ? { ...value, status: next } : value)); else setStatus('Unable to update ticket.'); };
   const remove = async (id: string) => { if (!window.confirm('Delete this support ticket?')) return; const res = await fetch(`/api/admin/messages?id=${encodeURIComponent(id)}`, { method: 'DELETE' }); if (res.ok) setItems((list) => list.filter((item) => item.id !== id)); else setStatus('Unable to delete ticket.'); };
@@ -53,7 +69,7 @@ export function MessagesPanel() {
 export function CommentsPanel() {
   const [items, setItems] = useState<Comment[]>([]);
   const [status, setStatus] = useState('Loading moderation queue…');
-  const load = async () => { try { const res = await fetch('/api/admin/comments', { cache: 'no-store' }); const body = await res.json(); if (!res.ok) throw new Error(body.error); setItems((body.comments ?? []).map((item: { body?: string; content?: string } & Comment) => ({ ...item, content: item.content ?? item.body ?? '' }))); setStatus(''); } catch (error) { setStatus(error instanceof Error ? error.message : 'Unable to load comments.'); } };
+  const load = async () => { try { const comments = await fetchAll<{ body?: string; content?: string } & Comment>('/api/admin/comments', 'comments'); setItems(comments.map((item) => ({ ...item, content: item.content ?? item.body ?? '' }))); setStatus(''); } catch (error) { setStatus(error instanceof Error ? error.message : 'Unable to load comments.'); } };
   useEffect(() => { void load(); }, []);
   const approve = async (id: string) => { const res = await fetch('/api/admin/comments', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, status: 'approved' }) }); if (res.ok) setItems((items) => items.map((item) => item.id === id ? { ...item, status: 'approved' } : item)); else setStatus('Unable to approve comment.'); };
   const remove = async (id: string) => { const res = await fetch(`/api/admin/comments?id=${encodeURIComponent(id)}`, { method: 'DELETE' }); if (res.ok) setItems((items) => items.filter((item) => item.id !== id)); else setStatus('Unable to delete comment.'); };

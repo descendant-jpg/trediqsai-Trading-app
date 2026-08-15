@@ -31,4 +31,14 @@ describe('waitlist lead manager', () => {
     render(<WaitlistPage />);
     expect(await screen.findByText(/database service is not configured/i)).toBeTruthy();
   });
+
+  it('loads records beyond the first API page so they can be searched', async () => {
+    const first = Array.from({ length: 200 }, (_, index) => ({ id: String(index), name: `Lead ${index}`, email: `lead${index}@example.com`, created_at: '2026-08-15T12:00:00Z' }));
+    const finalLead = { id: '201', name: 'Final Lead', email: 'beyond-first-page@example.com', created_at: '2026-08-15T12:00:00Z' };
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => response(String(input).includes('page=2') ? { entries: [finalLead], total: 201 } : { entries: first, total: 201 })));
+    render(<WaitlistPage />);
+    expect(await screen.findByText('beyond-first-page@example.com')).toBeTruthy();
+    fireEvent.change(screen.getByPlaceholderText(/search name or email/i), { target: { value: 'beyond-first-page' } });
+    expect(screen.getByText('beyond-first-page@example.com')).toBeTruthy();
+  });
 });
