@@ -1,13 +1,14 @@
 // @vitest-environment jsdom
 /**
  * Integration test: verifies that DegradedSecurityNoticeProvider is mounted
- * inside RootLayout using a spy — the same vi.fn pattern used for
- * BiometricLock and MfaGate in rootLayoutAuthGates.test.tsx.
+ * inside RootLayout using a dedicated single-component spy — the same vi.fn
+ * pattern used for BiometricLock in rootLayoutBiometricLockGate.test.tsx and
+ * MfaGate in rootLayoutMfaGate.test.tsx.
  *
  * This catches regressions where <DegradedSecurityNoticeProvider /> is
- * silently removed from the layout. Behavior tests that mock the component's
- * side-effects would still pass in that case, so a direct mount check is the
- * only reliable guard.
+ * silently removed from the layout. Component-level unit tests and the
+ * combined gate test in rootLayoutAuthGates.test.tsx would still pass in that
+ * case, so a direct single-spy mount check is a clearer, more granular guard.
  */
 import React from 'react';
 import { cleanup, render, waitFor } from '@testing-library/react';
@@ -75,7 +76,7 @@ vi.mock('@/components/MfaGate', () => ({
 
 /**
  * DegradedSecurityNoticeProvider: record the call via the spy but render
- * nothing so the rest of the tree is unaffected.
+ * nothing (it renders a floating overlay, not children).
  */
 vi.mock('@/components/DegradedSecurityNoticeProvider', () => ({
   DegradedSecurityNoticeProvider: () => {
@@ -164,5 +165,10 @@ describe('RootLayout — DegradedSecurityNoticeProvider mount guard', () => {
   it('mounts DegradedSecurityNoticeProvider in the render tree', async () => {
     render(<RootLayout />);
     await waitFor(() => expect(degradedSecurityNoticeProviderSpy).toHaveBeenCalled());
+  });
+
+  it('mounts DegradedSecurityNoticeProvider exactly once (no duplicates)', async () => {
+    render(<RootLayout />);
+    await waitFor(() => expect(degradedSecurityNoticeProviderSpy).toHaveBeenCalledTimes(1));
   });
 });
