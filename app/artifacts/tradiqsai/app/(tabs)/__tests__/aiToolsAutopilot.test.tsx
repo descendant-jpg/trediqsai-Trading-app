@@ -15,7 +15,7 @@
  */
 import React from 'react';
 import { Alert } from 'react-native';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider, notifyManager } from '@tanstack/react-query';
 
 // react-query batches cache notifications through setTimeout by default;
@@ -41,6 +41,14 @@ const haptics = vi.hoisted(() => ({
   NotificationFeedbackType: { Error: 'error', Warning: 'warning' },
 }));
 vi.mock('expo-haptics', () => haptics);
+
+const storage = vi.hoisted(() => ({
+  getItem: vi.fn(async () => null),
+  setItem: vi.fn(async () => undefined),
+}));
+vi.mock('@react-native-async-storage/async-storage', () => ({
+  default: storage,
+}));
 
 vi.mock('@expo/vector-icons', () => ({
   Feather: () => null,
@@ -233,6 +241,8 @@ beforeEach(() => {
   haptics.impactAsync.mockClear();
   haptics.selectionAsync.mockClear();
   haptics.notificationAsync.mockClear();
+  storage.getItem.mockResolvedValue(null);
+  storage.setItem.mockClear();
   routerPush.mockClear();
   fakeServer.reset();
 });
@@ -253,7 +263,7 @@ describe('AutoPilot summary + master toggle', () => {
     expect(screen.getByText('+$1,420.50')).toBeTruthy();
   });
 
-  it('master toggle pauses everything and logs the halt', () => {
+  it('master toggle pauses everything and logs the halt', async () => {
     subscription.isSubscribed = true;
     subscription.accessTier = 'pro';
     renderScreen();
@@ -264,16 +274,17 @@ describe('AutoPilot summary + master toggle', () => {
     expect(screen.getByText('$0')).toBeTruthy();
     // Accrued P&L is server state and survives a pause.
     expect(screen.getByText('+$1,420.50')).toBeTruthy();
-    expect(
-      screen.getByText(/\[SYS\] AutoPilot paused — halting new entries/),
-    ).toBeTruthy();
+    expect(screen.getByText(/Engine standby - AutoPilot paused/)).toBeTruthy();
+    await waitFor(() => expect(fakeServer.state.masterActive).toBe(false));
 
     toggle('master-toggle');
     expect(screen.getByText('System Active')).toBeTruthy();
     expect(screen.getByText('2 Running')).toBeTruthy();
-    expect(
-      screen.getByText(/\[SYS\] AutoPilot resumed — all bots re-armed/),
-    ).toBeTruthy();
+    await waitFor(() =>
+      expect(
+        screen.getByText(/\[SYS\] AutoPilot resumed — all bots re-armed/),
+      ).toBeTruthy(),
+    );
   });
 
   it('keeps the master toggle unchanged for free traders', () => {
@@ -291,12 +302,12 @@ describe('AutoPilot summary + master toggle', () => {
 });
 
 describe('Tiered AutoPilot asset selector', () => {
-  it('lets Pro traders select Forex and Crypto with selection feedback', () => {
+  it('lets Pro traders select Forex and Crypto with selection feedback', async () => {
     subscription.isSubscribed = true;
     subscription.accessTier = 'pro';
     renderScreen();
     press('autopilot-asset-crypto');
-    expect(fakeServer.state.selectedAsset).toBe('Crypto');
+    await waitFor(() => expect(fakeServer.state.selectedAsset).toBe('Crypto'));
     expect(haptics.selectionAsync).toHaveBeenCalledTimes(1);
   });
 
@@ -315,22 +326,34 @@ describe('Tiered AutoPilot asset selector', () => {
     alert.mockRestore();
   });
 
-  it('lets Elite traders select Stocks', () => {
+  it('lets Elite traders select Stocks', async () => {
     subscription.isSubscribed = true;
     subscription.accessTier = 'elite';
     renderScreen();
     press('autopilot-asset-stocks');
-    expect(fakeServer.state.selectedAsset).toBe('Stocks');
+    await waitFor(() => expect(fakeServer.state.selectedAsset).toBe('Stocks'));
     expect(haptics.selectionAsync).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps controls interactive while the subscription tier is initializing', () => {
+  it('keeps controls interactive while the subscription tier is initializing', async () => {
     subscription.accessTier = undefined as any;
     renderScreen();
     press('autopilot-asset-crypto');
 
-    expect(fakeServer.state.selectedAsset).toBe('Crypto');
+    await waitFor(() => expect(fakeServer.state.selectedAsset).toBe('Crypto'));
     expect(haptics.selectionAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it('persists an asset choice locally before its background API sync finishes', () => {
+    subscription.isSubscribed = true;
+    subscription.accessTier = 'pro';
+    renderScreen();
+    press('autopilot-asset-crypto');
+
+    expect(storage.setItem).toHaveBeenCalledWith(
+      'tradiqs.autopilot.preferences.v1',
+      JSON.stringify({ active: true, asset: 'Crypto' }),
+    );
   });
 });
 

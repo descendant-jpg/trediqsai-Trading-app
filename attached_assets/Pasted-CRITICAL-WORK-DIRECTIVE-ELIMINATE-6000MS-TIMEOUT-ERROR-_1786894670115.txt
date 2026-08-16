@@ -1,0 +1,38 @@
+CRITICAL WORK DIRECTIVE: ELIMINATE 6000MS TIMEOUT ERROR, REMOVE STATE ROLLBACK, IMPLEMENT LOCAL PERSISTENCE FOR AUTOPILOT.
+
+Review our project rules. In the mobile app (`app/(tabs)/ai-tools.tsx` or `components/AutoPilotCard.tsx`), clicking the AutoPilot toggle or changing asset pills (Forex/Crypto/Stocks) throws a "6000ms timeout exceeded" toast after 6 seconds and rolls the state back to Forex/Active.
+
+### 1. Remove Blocking Network Calls & Rollbacks
+- Locate the handlers for `handleToggleAutoPilot` and `handleAssetSelection`.
+- Ensure they do NOT wait on a 6000ms API/Supabase call before committing state.
+- Remove any rollback logic in `.catch()` blocks that reverts `isAutoPilotActive` or `selectedAsset` back to initial defaults on network failure.
+- Suppress the blocking 6000ms timeout toast for UI interaction events.
+
+### 2. Local State & AsyncStorage Persistence
+- Use `useState` for immediate visual responsiveness:
+  - `isAutoPilotActive` (boolean)
+  - `selectedAsset` ('Forex' | 'Crypto' | 'Stocks')
+- Save these values locally using `@react-native-async-storage/async-storage` so user preferences persist across app restarts instantly without network latency.
+- Fire the database update (Supabase) in the background with a detached `Promise.resolve().then(...)` wrapped in a silent `try/catch`.
+
+### 3. Dynamic UI & Metrics Synchronization
+- When `isAutoPilotActive` is FALSE (Paused):
+  - Switch indicator: Off.
+  - Status: Dim gray text "System Paused".
+  - Metric "Active Bots": "0 Running".
+  - Metric "Capital Deployed": "$0".
+  - Log console: Append `[SYS] Engine standby - AutoPilot paused`.
+- When `isAutoPilotActive` is TRUE (Active):
+  - Switch indicator: On (Active green/cyan).
+  - Status: Neon green text "System Active".
+  - Metric "Active Bots": "2 Running".
+  - Metric "Capital Deployed": "$25,000".
+
+### 4. Asset Selection Switching
+- When tapping "Forex", "Crypto", or "Stocks":
+  - Immediately highlight the selected pill with `bg-[#00FFFF]/20 border-[#00FFFF] text-[#00FFFF]`.
+  - Unhighlight the others.
+  - Trigger `Haptics.selectionAsync()`.
+  - Do NOT reset back to Forex.
+
+EXECUTION REQUIREMENT: Ensure the toggle turns off and on smoothly without delay, asset selection switches immediately, and no 6000ms timeout errors occur. Provide the exact file and lines updated.

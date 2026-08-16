@@ -33,6 +33,10 @@ externalPort = 4200
 localPort = 18130
 externalPort = 80
 
+[[ports]]
+localPort = 18131
+externalPort = 5000
+
 [nix]
 channel = "stable-25_05"
 

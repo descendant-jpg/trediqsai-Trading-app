@@ -20,6 +20,7 @@ import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   getGetAutopilotQueryKey,
@@ -73,6 +74,12 @@ const RISK_COLORS: Record<Bot['risk'], string> = {
 
 const CAPITAL_OPTIONS = [1000, 5000, 10000, 25000] as const;
 const DRAWDOWN_OPTIONS = [5, 10, 15, 20] as const;
+const AUTOPILOT_PREFERENCES_KEY = 'tradiqs.autopilot.preferences.v1';
+type AutopilotAsset = 'Forex' | 'Crypto' | 'Stocks';
+type AutopilotPreferences = {
+  active: boolean;
+  asset: AutopilotAsset;
+};
 /** Glowing green pulse dot for "System Active". */
 function PulseDot({ active }: { active: boolean }) {
   const scale = useRef(new Animated.Value(1)).current;
@@ -284,18 +291,14 @@ export default function AiToolsScreen() {
   const { mutate: setMaster } = useSetAutopilotMaster({
     mutation: {
       onSuccess: applyState,
-      // Restore the server-owned state if the optimistic request is rejected.
-      onError: () => void refetch(),
+      // Preferences are local-first: a timeout must not snap a control back.
+      onError: () => {},
     },
   });
   const { mutate: setAutopilotAsset } = useSetAutopilotAsset({
     mutation: {
       onSuccess: applyState,
-      onError: () => {
-        // The API is authoritative; restore the server state if an entitlement
-        // changes between the client-side check and this request.
-        void refetch();
-      },
+      onError: () => {},
     },
   });
   // The server is the authority on Pro access: it rejects Pro-only bot
@@ -324,16 +327,39 @@ export default function AiToolsScreen() {
   const [chartUploadOpen, setChartUploadOpen] = useState(false);
   const [chartMode, setChartMode] = useState<'analysis' | 'signal'>('analysis');
   const [toolError, setToolError] = useState<string | null>(null);
+  const [isAutoPilotActive, setIsAutoPilotActive] = useState(true);
+  const [selectedAsset, setSelectedAsset] = useState<AutopilotAsset>('Forex');
+  const [localActionLogs, setLocalActionLogs] = useState<AutopilotState['logs']>([]);
   const logScrollRef = useRef<ScrollView>(null);
 
-  const masterActive = autopilot?.masterActive ?? false;
-  const selectedAsset = autopilot?.selectedAsset ?? 'Forex';
+  useEffect(() => {
+    let mounted = true;
+    AsyncStorage.getItem(AUTOPILOT_PREFERENCES_KEY)
+      .then((raw) => {
+        if (!mounted || !raw) return;
+        const saved = JSON.parse(raw) as Partial<AutopilotPreferences>;
+        if (typeof saved.active === 'boolean') setIsAutoPilotActive(saved.active);
+        if (saved.asset === 'Forex' || saved.asset === 'Crypto' || saved.asset === 'Stocks') {
+          setSelectedAsset(saved.asset);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const persistAutopilotPreferences = useCallback((next: AutopilotPreferences) => {
+    AsyncStorage.setItem(AUTOPILOT_PREFERENCES_KEY, JSON.stringify(next)).catch(() => {});
+  }, []);
+
+  const masterActive = isAutoPilotActive;
   // A missing subscription context should not freeze the controls while it is
   // initializing. The API remains the authority and rejects unauthorized
   // requests; explicit Free/Starter tiers are never elevated by this fallback.
   const tier = accessTier ?? 'elite';
   const bots = autopilot?.bots ?? [];
-  const logs = autopilot?.logs ?? [];
+  const logs = [...(autopilot?.logs ?? []), ...localActionLogs];
   const todayPnl = autopilot?.todayPnl ?? 0;
 
   const activeCount = masterActive ? bots.filter((b) => b.running).length : 0;
@@ -357,11 +383,29 @@ export default function AiToolsScreen() {
     }
 
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    setIsAutoPilotActive(value);
+    persistAutopilotPreferences({ active: value, asset: selectedAsset });
     applyOptimisticAutopilotState({ masterActive: value });
-    setMaster({ data: { active: value } });
+    if (!value) {
+      setLocalActionLogs((current) => [
+        ...current,
+        {
+          id: `local-pause-${Date.now()}`,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          text: '[SYS] Engine standby - AutoPilot paused',
+        },
+      ]);
+    }
+    void Promise.resolve().then(() => {
+      try {
+        setMaster({ data: { active: value } });
+      } catch {
+        // The background sync is intentionally silent.
+      }
+    });
   };
 
-  const selectAutopilotAsset = (asset: 'Forex' | 'Crypto' | 'Stocks') => {
+  const selectAutopilotAsset = (asset: AutopilotAsset) => {
     const stocksLocked = asset === 'Stocks' && !isAdmin && tier !== 'elite';
     if (stocksLocked) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
@@ -381,8 +425,16 @@ export default function AiToolsScreen() {
     }
     if (asset === selectedAsset) return;
     void Haptics.selectionAsync().catch(() => {});
+    setSelectedAsset(asset);
+    persistAutopilotPreferences({ active: isAutoPilotActive, asset });
     applyOptimisticAutopilotState({ selectedAsset: asset });
-    setAutopilotAsset({ data: { asset } });
+    void Promise.resolve().then(() => {
+      try {
+        setAutopilotAsset({ data: { asset } });
+      } catch {
+        // The background sync is intentionally silent.
+      }
+    });
   };
 
   const toggleBot = (bot: Bot, value: boolean) => {
