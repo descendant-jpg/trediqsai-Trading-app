@@ -1,18 +1,14 @@
 // @vitest-environment jsdom
 /**
- * DegradedSecurityNotice component tests.
+ * DegradedSecurityNoticeProvider tests.
  *
- * The component registers the global `setDegradedSecurityHandler` callback
- * from `@workspace/api-client-react` and renders an amber notice banner when
- * a write to a monitored settings endpoint (/api/autopilot or /api/bots)
- * succeeds while the server's MFA assurance service was unavailable.
+ * The root-level provider registers the global `setDegradedSecurityHandler`
+ * callback and renders an amber notice for every degraded settings write.
  *
  * Tests verify:
  *  - The handler is registered on mount and cleared on unmount.
- *  - The banner appears for /api/autopilot writes.
- *  - The banner appears for /api/bots POST and PATCH writes.
- *  - GET requests (non-writes) do not trigger the banner.
- *  - Unmonitored URLs do not trigger the banner.
+ *  - The banner appears for AutoPilot, bot, profile, broker, and MFA writes.
+ *  - GET requests do not trigger the banner.
  *  - The banner auto-dismisses after 8 seconds.
  *  - The banner can be manually dismissed.
  */
@@ -42,12 +38,12 @@ vi.mock('@workspace/api-client-react', () => ({
   },
 }));
 
-import { DegradedSecurityNotice } from '../DegradedSecurityNotice';
+import { DegradedSecurityNoticeProvider } from '../DegradedSecurityNoticeProvider';
 
 // ---- Helpers ----------------------------------------------------------------
 
 function renderNotice() {
-  return render(<DegradedSecurityNotice />);
+  return render(<DegradedSecurityNoticeProvider />);
 }
 
 function triggerDegraded(url: string, method: string) {
@@ -67,7 +63,7 @@ afterEach(() => {
 
 // ---- Tests ------------------------------------------------------------------
 
-describe('DegradedSecurityNotice handler lifecycle', () => {
+describe('DegradedSecurityNoticeProvider handler lifecycle', () => {
   it('registers the handler on mount', () => {
     renderNotice();
     expect(handlerRef.fn).not.toBeNull();
@@ -81,7 +77,7 @@ describe('DegradedSecurityNotice handler lifecycle', () => {
   });
 });
 
-describe('DegradedSecurityNotice — /api/autopilot writes', () => {
+describe('DegradedSecurityNoticeProvider — AutoPilot writes', () => {
   it('shows the banner when an autopilot master-toggle PUT returns degraded', async () => {
     renderNotice();
     expect(screen.queryByTestId('degraded-security-notice')).toBeNull();
@@ -119,7 +115,7 @@ describe('DegradedSecurityNotice — /api/autopilot writes', () => {
   });
 });
 
-describe('DegradedSecurityNotice — /api/bots writes', () => {
+describe('DegradedSecurityNoticeProvider — bot writes', () => {
   it('shows the banner when a bot is deployed (POST /api/bots) in degraded mode', async () => {
     renderNotice();
     triggerDegraded('/api/bots', 'POST');
@@ -137,7 +133,7 @@ describe('DegradedSecurityNotice — /api/bots writes', () => {
   });
 });
 
-describe('DegradedSecurityNotice — non-triggering requests', () => {
+describe('DegradedSecurityNoticeProvider — other settings writes', () => {
   it('does not show the banner for a GET to an autopilot route', async () => {
     renderNotice();
     triggerDegraded('/api/autopilot', 'GET');
@@ -154,16 +150,30 @@ describe('DegradedSecurityNotice — non-triggering requests', () => {
     );
   });
 
-  it('does not show the banner for an unmonitored settings endpoint', async () => {
+  it('shows the banner for a profile settings write', async () => {
     renderNotice();
     triggerDegraded('/api/profile/settings', 'PUT');
     await waitFor(() =>
-      expect(screen.queryByTestId('degraded-security-notice')).toBeNull(),
+      expect(screen.getByTestId('degraded-security-notice')).toBeTruthy(),
+    );
+  });
+
+  it('shows the banner for broker and MFA settings writes', async () => {
+    renderNotice();
+    triggerDegraded('/api/broker-sync', 'POST');
+    await waitFor(() =>
+      expect(screen.getByTestId('degraded-security-notice')).toBeTruthy(),
+    );
+    cleanup();
+    renderNotice();
+    triggerDegraded('/api/auth/mfa/settings', 'PATCH');
+    await waitFor(() =>
+      expect(screen.getByTestId('degraded-security-notice')).toBeTruthy(),
     );
   });
 });
 
-describe('DegradedSecurityNotice — dismiss behaviour', () => {
+describe('DegradedSecurityNoticeProvider — dismiss behaviour', () => {
   it('auto-dismisses the notice after 8 seconds', async () => {
     vi.useFakeTimers();
     renderNotice();

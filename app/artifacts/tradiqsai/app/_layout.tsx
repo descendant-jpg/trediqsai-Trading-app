@@ -34,7 +34,7 @@ import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { getNotificationRoute } from '@/services/NotificationService';
 import { BiometricLock } from '@/components/BiometricLock';
 import { MfaGate } from '@/components/MfaGate';
-import { DegradedSecurityNotice } from '@/components/DegradedSecurityNotice';
+import { DegradedSecurityNoticeProvider } from '@/components/DegradedSecurityNoticeProvider';
 
 // Expo web is served by Metro and native has no browser origin; neither is
 // the Express API service. Always use the explicit API origin when supplied.
@@ -281,10 +281,7 @@ export default function RootLayout() {
                   </SubscriptionProvider>
                 </AuthProvider>
               </KeyboardProvider>
-              {/* Global degraded-security notice: shown when any monitored
-                  settings write succeeds while the MFA assurance service is
-                  unavailable.  Mounted here so all screens are covered. */}
-              <DegradedSecurityNotice />
+              <DegradedSecurityNoticeProvider />
             </GestureHandlerRootView>
           </StripeProvider>
         </QueryClientProvider>
