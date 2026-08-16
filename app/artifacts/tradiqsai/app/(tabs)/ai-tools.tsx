@@ -214,9 +214,11 @@ function formatHistoryDay(isoDay: string): string {
 function PnlHistorySection({
   days,
   mfaRequired = false,
+  onReverify,
 }: {
   days: { day: string; pnl: number }[];
   mfaRequired?: boolean;
+  onReverify?: () => void;
 }) {
   const shown = days.slice(0, HISTORY_DAYS_SHOWN);
   const maxAbs = Math.max(...shown.map((d) => Math.abs(d.pnl)), 1);
@@ -232,6 +234,14 @@ function PnlHistorySection({
           <Text style={styles.historyMfaText}>
             Re-verify with two-factor authentication to view history.
           </Text>
+          <TouchableOpacity
+            onPress={onReverify}
+            accessibilityRole="button"
+            accessibilityLabel="Re-verify two-factor authentication"
+            testID="pnl-history-reverify"
+          >
+            <Text style={styles.historyMfaAction}>RE-VERIFY</Text>
+          </TouchableOpacity>
         </View>
       ) : shown.length === 0 ? (
         <Text style={styles.logLineMuted}>
@@ -322,6 +332,9 @@ export default function AiToolsScreen() {
     },
   });
   const historyMfaRequired = isMfaRequiredError(historyError);
+  const openMfaReverification = useCallback(() => {
+    router.push({ pathname: '/profile', params: { mfa: 'verify' } } as never);
+  }, [router]);
 
   const { mutate: setMaster } = useSetAutopilotMaster({
     mutation: {
@@ -663,7 +676,11 @@ export default function AiToolsScreen() {
         </View>
 
         {/* Daily P&L history */}
-        <PnlHistorySection days={history?.days ?? []} mfaRequired={historyMfaRequired} />
+        <PnlHistorySection
+          days={history?.days ?? []}
+          mfaRequired={historyMfaRequired}
+          onReverify={openMfaReverification}
+        />
 
         <Text style={styles.sectionTitle}>HERO TOOLS</Text>
         <View style={styles.heroGrid}>
@@ -989,6 +1006,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'Inter_400Regular',
     flex: 1,
+  },
+  historyMfaAction: {
+    color: GOLD,
+    fontSize: 10,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 0.8,
+    marginLeft: 8,
   },
   summaryCard: {
     backgroundColor: '#16181D',

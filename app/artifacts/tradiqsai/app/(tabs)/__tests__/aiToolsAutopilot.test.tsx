@@ -568,6 +568,11 @@ describe('Daily P&L history — MFA assurance', () => {
     expect(
       screen.getByText('Re-verify with two-factor authentication to view history.'),
     ).toBeTruthy();
+    press('pnl-history-reverify');
+    expect(routerPush).toHaveBeenCalledWith({
+      pathname: '/profile',
+      params: { mfa: 'verify' },
+    });
     // Normal history rows must not appear alongside the nudge.
     expect(screen.queryByText('No finished days yet')).toBeNull();
   });

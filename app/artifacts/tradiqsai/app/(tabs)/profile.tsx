@@ -16,7 +16,9 @@ import {
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Feather } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useQueryClient } from "@tanstack/react-query";
+import { getGetAutopilotHistoryQueryKey } from "@workspace/api-client-react";
 import TimezonePickerModal from "@/components/TimezonePickerModal";
 import { useTrading } from "@/context/TradingContext";
 import { useAuth } from "@/context/AuthContext";
@@ -183,6 +185,8 @@ type ActiveModal =
 /** Profile — account, wallet, settings, partners, support, and legal. */
 export default function ProfileScreen() {
   const router = useRouter();
+  const { mfa } = useLocalSearchParams<{ mfa?: string }>();
+  const queryClient = useQueryClient();
   const { session, signOut } = useAuth();
   const { isSubscribed, isAdmin } = useSubscription();
   const { tradingDayTz, setTradingDayTz } = useTrading();
@@ -278,6 +282,14 @@ export default function ProfileScreen() {
     if (!session) return;
     supabase.auth.mfa.listFactors().then(({ data }) => setTwoFactorEnabled(Boolean(data?.totp?.some((factor: any) => factor.status === "verified")))).catch(() => {});
   }, [session]);
+
+  useEffect(() => {
+    if (mfa === "verify") setTwoFactorOpen(true);
+  }, [mfa]);
+
+  const handleMfaVerified = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: getGetAutopilotHistoryQueryKey() });
+  }, [queryClient]);
 
   const toggleBiometrics = async () => {
     const result = await authenticateBiometrics(biometricsEnabled ? "Authenticate to disable FaceID / Biometrics" : "Authenticate to enable FaceID / Biometrics");
@@ -853,7 +865,12 @@ export default function ProfileScreen() {
         visible={socialOpen}
         onClose={() => setSocialOpen(false)}
       />
-      <TwoFactorAuthModal visible={twoFactorOpen} onClose={() => setTwoFactorOpen(false)} onStatusChange={setTwoFactorEnabled} />
+      <TwoFactorAuthModal
+        visible={twoFactorOpen}
+        onClose={() => setTwoFactorOpen(false)}
+        onStatusChange={setTwoFactorEnabled}
+        onVerified={handleMfaVerified}
+      />
 
       {/* Language */}
       <SheetModal
