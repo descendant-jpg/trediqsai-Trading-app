@@ -10,6 +10,7 @@ import marketNewsRouter from "./marketNews";
 import botsRouter from "./bots";
 import broadcastSignalsRouter from "./broadcastSignals";
 import notificationsRouter from "./notifications";
+import autopilotRouter from "./autopilot";
 
 const router: IRouter = Router();
 
@@ -24,5 +25,6 @@ router.use(marketNewsRouter);
 router.use(botsRouter);
 router.use(broadcastSignalsRouter);
 router.use(notificationsRouter);
+router.use(autopilotRouter);
 
 export default router;

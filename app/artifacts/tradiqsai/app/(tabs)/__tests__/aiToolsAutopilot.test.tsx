@@ -323,6 +323,15 @@ describe('Tiered AutoPilot asset selector', () => {
     expect(fakeServer.state.selectedAsset).toBe('Stocks');
     expect(haptics.selectionAsync).toHaveBeenCalledTimes(1);
   });
+
+  it('keeps controls interactive while the subscription tier is initializing', () => {
+    subscription.accessTier = undefined as any;
+    renderScreen();
+    press('autopilot-asset-crypto');
+
+    expect(fakeServer.state.selectedAsset).toBe('Crypto');
+    expect(haptics.selectionAsync).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('Per-bot toggles', () => {

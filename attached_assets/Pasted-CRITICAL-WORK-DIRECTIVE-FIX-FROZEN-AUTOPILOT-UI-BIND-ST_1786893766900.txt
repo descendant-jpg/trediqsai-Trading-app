@@ -1,0 +1,24 @@
+CRITICAL WORK DIRECTIVE: FIX FROZEN AUTOPILOT UI, BIND STATE TO TOUCH TARGETS, IMPLEMENT OPTIMISTIC UPDATES.
+
+Review our project rules. The AutoPilot UI has the correct visual layout (Asset Selector pills and toggle), but the UI is completely frozen. The user cannot select Crypto or Stocks, and the main toggle does not move. We must fix the React Native state binding immediately.
+
+### 1. Fix the Asset Selector Wiring (`Pressable` / `TouchableOpacity`)
+- Locate the Forex, Crypto, and Stocks pills. They are currently dead UI elements.
+- Wrap EACH pill in a `<Pressable>` or `<TouchableOpacity>`.
+- Assign an explicit `onPress` handler to each: `onPress={() => handleAssetSelection('Crypto')}`, etc.
+- In `handleAssetSelection(asset)`, synchronously call `setSelectedAsset(asset)` FIRST. Do not block this state update with async backend calls. 
+- Trigger `Haptics.selectionAsync()` on press.
+
+### 2. Implement Optimistic UI for the Toggle
+- Ensure the `Switch` (or custom toggle) has `onValueChange={handleToggleAutoPilot}` and `value={isAutoPilotActive}`.
+- Inside `handleToggleAutoPilot(newValue)`:
+  - Update the state *immediately*: `setIsAutoPilotActive(newValue)`. 
+  - Fire `Haptics.impactAsync()`.
+  - Perform the Supabase profile update (saving `auto_pilot_enabled` and `auto_pilot_asset`) asynchronously in the background. Do NOT `await` it before updating the local React state.
+
+### 3. Failsafe Subscription Tier Mocking
+- If the toggle is being blocked by a missing or `undefined` subscription tier context, implement a failsafe. 
+- For testing purposes right now, ensure the local variable evaluating the tier defaults to `'Elite'` if the context is null: `const tier = subscriptionTier || 'Elite';`.
+- This ensures the Stocks pill and the main toggle are fully unlocked for interaction.
+
+EXECUTION REQUIREMENT: Fix the state binding so the buttons actually work. The user must be able to tap Crypto, see it highlight, and toggle the main switch seamlessly. Tell me exactly what was blocking the state in the previous code.

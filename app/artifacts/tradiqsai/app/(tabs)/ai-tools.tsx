@@ -235,7 +235,7 @@ export default function AiToolsScreen() {
   const {
     isSubscribed,
     isAdmin = false,
-    accessTier = isSubscribed ? 'pro' : 'starter',
+    accessTier,
   } = useSubscription();
   const queryClient = useQueryClient();
 
@@ -262,6 +262,15 @@ export default function AiToolsScreen() {
     },
     [queryClient],
   );
+  const applyOptimisticAutopilotState = useCallback(
+    (patch: Partial<AutopilotState>) => {
+      queryClient.setQueryData<AutopilotState>(
+        getGetAutopilotQueryKey(),
+        (current) => (current ? { ...current, ...patch } : current),
+      );
+    },
+    [queryClient],
+  );
 
   const { data: history } = useGetAutopilotHistory({
     query: {
@@ -273,7 +282,11 @@ export default function AiToolsScreen() {
   });
 
   const { mutate: setMaster } = useSetAutopilotMaster({
-    mutation: { onSuccess: applyState },
+    mutation: {
+      onSuccess: applyState,
+      // Restore the server-owned state if the optimistic request is rejected.
+      onError: () => void refetch(),
+    },
   });
   const { mutate: setAutopilotAsset } = useSetAutopilotAsset({
     mutation: {
@@ -315,6 +328,10 @@ export default function AiToolsScreen() {
 
   const masterActive = autopilot?.masterActive ?? false;
   const selectedAsset = autopilot?.selectedAsset ?? 'Forex';
+  // A missing subscription context should not freeze the controls while it is
+  // initializing. The API remains the authority and rejects unauthorized
+  // requests; explicit Free/Starter tiers are never elevated by this fallback.
+  const tier = accessTier ?? 'elite';
   const bots = autopilot?.bots ?? [];
   const logs = autopilot?.logs ?? [];
   const todayPnl = autopilot?.todayPnl ?? 0;
@@ -329,7 +346,7 @@ export default function AiToolsScreen() {
   );
 
   const handleToggleAutoPilot = (value: boolean) => {
-    const canDeployAutoPilot = isAdmin || accessTier === 'pro' || accessTier === 'elite';
+    const canDeployAutoPilot = isAdmin || tier === 'pro' || tier === 'elite';
     if (!canDeployAutoPilot) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       Alert.alert(
@@ -340,11 +357,12 @@ export default function AiToolsScreen() {
     }
 
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    applyOptimisticAutopilotState({ masterActive: value });
     setMaster({ data: { active: value } });
   };
 
   const selectAutopilotAsset = (asset: 'Forex' | 'Crypto' | 'Stocks') => {
-    const stocksLocked = asset === 'Stocks' && !isAdmin && accessTier !== 'elite';
+    const stocksLocked = asset === 'Stocks' && !isAdmin && tier !== 'elite';
     if (stocksLocked) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
       Alert.alert(
@@ -353,7 +371,7 @@ export default function AiToolsScreen() {
       );
       return;
     }
-    if (!isAdmin && accessTier !== 'pro' && accessTier !== 'elite') {
+    if (!isAdmin && tier !== 'pro' && tier !== 'elite') {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       Alert.alert(
         'Pro or Elite required',
@@ -363,6 +381,7 @@ export default function AiToolsScreen() {
     }
     if (asset === selectedAsset) return;
     void Haptics.selectionAsync().catch(() => {});
+    applyOptimisticAutopilotState({ selectedAsset: asset });
     setAutopilotAsset({ data: { asset } });
   };
 
@@ -461,7 +480,7 @@ export default function AiToolsScreen() {
           <View style={styles.assetSelector} accessibilityLabel="AutoPilot execution market">
             {(['Forex', 'Crypto', 'Stocks'] as const).map((asset) => {
               const isSelected = selectedAsset === asset;
-              const isLocked = asset === 'Stocks' && !isAdmin && accessTier !== 'elite';
+              const isLocked = asset === 'Stocks' && !isAdmin && tier !== 'elite';
               return (
                 <TouchableOpacity
                   key={asset}
@@ -542,15 +561,15 @@ export default function AiToolsScreen() {
 
         <Text style={styles.sectionTitle}>HERO TOOLS</Text>
         <View style={styles.heroGrid}>
-          {TOOLS.slice(0, 2).map((tool) => <ToolCard key={tool.name} tool={tool} accessTier={accessTier} isAdmin={isAdmin} onOpen={openTool} onPaywall={openPaywall} hero />)}
+          {TOOLS.slice(0, 2).map((tool) => <ToolCard key={tool.name} tool={tool} accessTier={tier} isAdmin={isAdmin} onOpen={openTool} onPaywall={openPaywall} hero />)}
         </View>
         <Text style={styles.sectionTitle}>AI ANALYSIS</Text>
         <View style={styles.toolGrid}>
-          {TOOLS.slice(2, 7).map((tool) => <ToolCard key={tool.name} tool={tool} accessTier={accessTier} isAdmin={isAdmin} onOpen={openTool} onPaywall={openPaywall} />)}
+          {TOOLS.slice(2, 7).map((tool) => <ToolCard key={tool.name} tool={tool} accessTier={tier} isAdmin={isAdmin} onOpen={openTool} onPaywall={openPaywall} />)}
         </View>
         <Text style={styles.sectionTitle}>TOOLS & UTILITIES</Text>
         <View style={styles.toolGrid}>
-          {TOOLS.slice(7).map((tool) => <ToolCard key={tool.name} tool={tool} accessTier={accessTier} isAdmin={isAdmin} onOpen={openTool} onPaywall={openPaywall} />)}
+          {TOOLS.slice(7).map((tool) => <ToolCard key={tool.name} tool={tool} accessTier={tier} isAdmin={isAdmin} onOpen={openTool} onPaywall={openPaywall} />)}
         </View>
         {toolError && <TouchableOpacity style={styles.toolError} onPress={() => setToolError(null)}><Text style={styles.toolErrorText}>{toolError}</Text></TouchableOpacity>}
 
