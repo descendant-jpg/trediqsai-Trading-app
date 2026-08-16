@@ -6,6 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './autopilotAssetUpdate';
+export * from './autopilotAssetUpdateAsset';
 export * from './autopilotBot';
 export * from './autopilotBotRisk';
 export * from './autopilotBotUpdate';
@@ -15,6 +17,7 @@ export * from './autopilotMasterUpdate';
 export * from './autopilotPnlDay';
 export * from './autopilotPnlHistory';
 export * from './autopilotState';
+export * from './autopilotStateSelectedAsset';
 export * from './healthStatus';
 export * from './oracleChatError';
 export * from './oracleChatMessage';

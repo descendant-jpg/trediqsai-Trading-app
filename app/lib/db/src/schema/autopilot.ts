@@ -32,6 +32,8 @@ export type AutopilotBotRow = typeof autopilotBotsTable.$inferSelect;
 export const autopilotStateTable = pgTable("autopilot_state", {
   userId: text("user_id").primaryKey(),
   masterActive: boolean("master_active").notNull(),
+  /** Server-validated AutoPilot execution market preference. */
+  selectedAsset: text("selected_asset").notNull().default("Forex"),
   todayPnl: doublePrecision("today_pnl").notNull(),
   pnlDay: text("pnl_day").notNull(),
   logs: jsonb("logs")

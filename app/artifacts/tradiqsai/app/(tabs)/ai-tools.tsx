@@ -28,6 +28,7 @@ import {
   useGetAutopilot,
   useGetAutopilotHistory,
   useSetAutopilotMaster,
+  useSetAutopilotAsset,
   useUpdateAutopilotBot,
   type AutopilotBot,
   type AutopilotState,
@@ -274,6 +275,16 @@ export default function AiToolsScreen() {
   const { mutate: setMaster } = useSetAutopilotMaster({
     mutation: { onSuccess: applyState },
   });
+  const { mutate: setAutopilotAsset } = useSetAutopilotAsset({
+    mutation: {
+      onSuccess: applyState,
+      onError: () => {
+        // The API is authoritative; restore the server state if an entitlement
+        // changes between the client-side check and this request.
+        void refetch();
+      },
+    },
+  });
   // The server is the authority on Pro access: it rejects Pro-only bot
   // changes from non-subscribers with 403. Surface that as the paywall so a
   // blocked deploy explains itself instead of silently doing nothing.
@@ -303,6 +314,7 @@ export default function AiToolsScreen() {
   const logScrollRef = useRef<ScrollView>(null);
 
   const masterActive = autopilot?.masterActive ?? false;
+  const selectedAsset = autopilot?.selectedAsset ?? 'Forex';
   const bots = autopilot?.bots ?? [];
   const logs = autopilot?.logs ?? [];
   const todayPnl = autopilot?.todayPnl ?? 0;
@@ -317,12 +329,9 @@ export default function AiToolsScreen() {
   );
 
   const handleToggleAutoPilot = (value: boolean) => {
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {
-      // Haptics are unavailable on some web and simulator environments.
-    });
-
     const canDeployAutoPilot = isAdmin || accessTier === 'pro' || accessTier === 'elite';
     if (!canDeployAutoPilot) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       Alert.alert(
         'Pro or Elite required',
         'AutoPilot requires a Pro or Elite subscription. Upgrade to deploy algorithmic bots.',
@@ -330,13 +339,31 @@ export default function AiToolsScreen() {
       return;
     }
 
-    const allowedAssetClasses = accessTier === 'elite'
-      ? ['Forex', 'Crypto', 'Stocks']
-      : ['Forex', 'Crypto'];
-    // TODO: Provide this entitlement policy to the bot engine when strategies
-    // can choose their execution market.
-    console.log('[AutoPilot] permitted asset classes:', allowedAssetClasses);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     setMaster({ data: { active: value } });
+  };
+
+  const selectAutopilotAsset = (asset: 'Forex' | 'Crypto' | 'Stocks') => {
+    const stocksLocked = asset === 'Stocks' && !isAdmin && accessTier !== 'elite';
+    if (stocksLocked) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+      Alert.alert(
+        'Elite market access',
+        'Equities and Indices algorithm unlocked at Elite tier. Upgrade to Elite.',
+      );
+      return;
+    }
+    if (!isAdmin && accessTier !== 'pro' && accessTier !== 'elite') {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      Alert.alert(
+        'Pro or Elite required',
+        'AutoPilot requires a Pro or Elite subscription. Upgrade to deploy algorithmic bots.',
+      );
+      return;
+    }
+    if (asset === selectedAsset) return;
+    void Haptics.selectionAsync().catch(() => {});
+    setAutopilotAsset({ data: { asset } });
   };
 
   const toggleBot = (bot: Bot, value: boolean) => {
@@ -413,7 +440,7 @@ export default function AiToolsScreen() {
               <Text style={styles.summaryTitle}>TradiQs AutoPilot</Text>
               <View style={styles.systemRow}>
                 <PulseDot active={masterActive} />
-                <Text style={[styles.systemText, { color: masterActive ? GREEN : c.mutedForeground }]}>
+                <Text style={[styles.systemText, { color: masterActive ? CYAN : c.mutedForeground }]}>
                   {masterActive ? 'System Active' : 'System Paused'}
                 </Text>
               </View>
@@ -430,6 +457,31 @@ export default function AiToolsScreen() {
                 testID="master-toggle"
               />
             </View>
+          </View>
+          <View style={styles.assetSelector} accessibilityLabel="AutoPilot execution market">
+            {(['Forex', 'Crypto', 'Stocks'] as const).map((asset) => {
+              const isSelected = selectedAsset === asset;
+              const isLocked = asset === 'Stocks' && !isAdmin && accessTier !== 'elite';
+              return (
+                <TouchableOpacity
+                  key={asset}
+                  onPress={() => selectAutopilotAsset(asset)}
+                  style={[
+                    styles.assetPill,
+                    isSelected && styles.assetPillActive,
+                    isLocked && styles.assetPillLocked,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isSelected, disabled: isLocked }}
+                  accessibilityLabel={`${asset}${isLocked ? ', locked. Elite required' : ''}`}
+                  testID={`autopilot-asset-${asset.toLowerCase()}`}
+                >
+                  <Text style={[styles.assetPillText, isSelected && styles.assetPillTextActive]}>
+                    {asset}{isLocked ? '  🔒' : ''}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
 
           <View style={styles.metricsGrid}>
@@ -852,6 +904,40 @@ const styles = StyleSheet.create({
   masterToggleWrap: {
     alignItems: 'center',
     gap: 3,
+  },
+  assetSelector: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#22252A',
+  },
+  assetPill: {
+    flex: 1,
+    minHeight: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#22252A',
+    borderRadius: 10,
+    backgroundColor: 'transparent',
+    paddingHorizontal: 8,
+  },
+  assetPillActive: {
+    borderColor: CYAN,
+    backgroundColor: 'rgba(0,255,255,0.12)',
+  },
+  assetPillLocked: {
+    opacity: 0.72,
+  },
+  assetPillText: {
+    color: '#8A8D93',
+    fontSize: 11,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 0.2,
+  },
+  assetPillTextActive: {
+    color: CYAN,
   },
   masterLabel: {
     fontSize: 10,

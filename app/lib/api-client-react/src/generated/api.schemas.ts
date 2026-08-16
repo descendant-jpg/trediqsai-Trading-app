@@ -186,8 +186,22 @@ export interface AutopilotLogLine {
   text: string;
 }
 
+/**
+ * Server-validated execution market preference.
+ */
+export type AutopilotStateSelectedAsset = typeof AutopilotStateSelectedAsset[keyof typeof AutopilotStateSelectedAsset];
+
+
+export const AutopilotStateSelectedAsset = {
+  Forex: 'Forex',
+  Crypto: 'Crypto',
+  Stocks: 'Stocks',
+} as const;
+
 export interface AutopilotState {
   masterActive: boolean;
+  /** Server-validated execution market preference. */
+  selectedAsset: AutopilotStateSelectedAsset;
   /** Today's simulated bot P&L in USD. */
   todayPnl: number;
   bots: AutopilotBot[];
@@ -208,6 +222,19 @@ export interface AutopilotPnlHistory {
 
 export interface AutopilotMasterUpdate {
   active: boolean;
+}
+
+export type AutopilotAssetUpdateAsset = typeof AutopilotAssetUpdateAsset[keyof typeof AutopilotAssetUpdateAsset];
+
+
+export const AutopilotAssetUpdateAsset = {
+  Forex: 'Forex',
+  Crypto: 'Crypto',
+  Stocks: 'Stocks',
+} as const;
+
+export interface AutopilotAssetUpdate {
+  asset: AutopilotAssetUpdateAsset;
 }
 
 /**

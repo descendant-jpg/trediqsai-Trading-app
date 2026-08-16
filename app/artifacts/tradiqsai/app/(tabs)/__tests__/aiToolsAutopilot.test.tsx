@@ -35,7 +35,10 @@ vi.mock('expo-blur', () => ({
 
 const haptics = vi.hoisted(() => ({
   impactAsync: vi.fn(async () => undefined),
+  selectionAsync: vi.fn(async () => undefined),
+  notificationAsync: vi.fn(async () => undefined),
   ImpactFeedbackStyle: { Medium: 'medium' },
+  NotificationFeedbackType: { Error: 'error', Warning: 'warning' },
 }));
 vi.mock('expo-haptics', () => haptics);
 
@@ -62,6 +65,8 @@ const subscription = vi.hoisted(() => ({
   isSubscribed: false,
   isLoading: false,
   verificationPending: false,
+  accessTier: 'starter',
+  isAdmin: false,
 }));
 vi.mock('@/lib/revenuecat', () => ({
   useSubscription: () => subscription,
@@ -78,6 +83,7 @@ const fakeServer = vi.hoisted(() => {
 
   const state = {
     masterActive: true,
+    selectedAsset: 'Forex' as 'Forex' | 'Crypto' | 'Stocks',
     todayPnl: 1420.5,
     bots: seedBots(),
     logs: [] as { id: string; time: string; text: string }[],
@@ -94,6 +100,7 @@ const fakeServer = vi.hoisted(() => {
   function snapshot() {
     return {
       masterActive: state.masterActive,
+        selectedAsset: state.selectedAsset,
       todayPnl: state.todayPnl,
       bots: state.bots.map((b) => ({ ...b })),
       logs: [...state.logs],
@@ -105,6 +112,7 @@ const fakeServer = vi.hoisted(() => {
     snapshot,
     reset() {
       state.masterActive = true;
+      state.selectedAsset = 'Forex';
       state.todayPnl = 1420.5;
       state.bots = seedBots();
       state.logs = [];
@@ -121,6 +129,11 @@ const fakeServer = vi.hoisted(() => {
           ? '[SYS] AutoPilot resumed — all bots re-armed'
           : '[SYS] AutoPilot paused — halting new entries',
       );
+      return snapshot();
+    },
+    setAsset(asset: 'Forex' | 'Crypto' | 'Stocks') {
+      state.selectedAsset = asset;
+      pushLog(`[CFG] AutoPilot execution market set to ${asset}`);
       return snapshot();
     },
     updateBot(botId: string, data: { running?: boolean; capital?: number; drawdown?: number }) {
@@ -174,6 +187,10 @@ vi.mock('@workspace/api-client-react', async () => {
       mutate: ({ data }: { data: { active: boolean } }) =>
         options?.mutation?.onSuccess?.(fakeServer.setMaster(data.active)),
     }),
+    useSetAutopilotAsset: (options?: any) => ({
+      mutate: ({ data }: { data: { asset: 'Forex' | 'Crypto' | 'Stocks' } }) =>
+        options?.mutation?.onSuccess?.(fakeServer.setAsset(data.asset)),
+    }),
     useUpdateAutopilotBot: (options?: any) => ({
       mutate: ({ botId, data }: { botId: string; data: any }) =>
         options?.mutation?.onSuccess?.(fakeServer.updateBot(botId, data)),
@@ -211,6 +228,11 @@ function press(testID: string) {
 
 beforeEach(() => {
   subscription.isSubscribed = false;
+  subscription.accessTier = 'starter';
+  subscription.isAdmin = false;
+  haptics.impactAsync.mockClear();
+  haptics.selectionAsync.mockClear();
+  haptics.notificationAsync.mockClear();
   routerPush.mockClear();
   fakeServer.reset();
 });
@@ -233,6 +255,7 @@ describe('AutoPilot summary + master toggle', () => {
 
   it('master toggle pauses everything and logs the halt', () => {
     subscription.isSubscribed = true;
+    subscription.accessTier = 'pro';
     renderScreen();
     toggle('master-toggle');
 
@@ -262,8 +285,43 @@ describe('AutoPilot summary + master toggle', () => {
       'Pro or Elite required',
       'AutoPilot requires a Pro or Elite subscription. Upgrade to deploy algorithmic bots.',
     );
-    expect(haptics.impactAsync).toHaveBeenCalledWith('medium');
+    expect(haptics.notificationAsync).toHaveBeenCalledWith('error');
     alert.mockRestore();
+  });
+});
+
+describe('Tiered AutoPilot asset selector', () => {
+  it('lets Pro traders select Forex and Crypto with selection feedback', () => {
+    subscription.isSubscribed = true;
+    subscription.accessTier = 'pro';
+    renderScreen();
+    press('autopilot-asset-crypto');
+    expect(fakeServer.state.selectedAsset).toBe('Crypto');
+    expect(haptics.selectionAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps Stocks locked for Pro traders and explains the Elite upgrade', () => {
+    subscription.isSubscribed = true;
+    subscription.accessTier = 'pro';
+    const alert = vi.spyOn(Alert, 'alert').mockImplementation(() => {});
+    renderScreen();
+    press('autopilot-asset-stocks');
+    expect(screen.queryByText('[CFG] AutoPilot execution market set to Stocks')).toBeNull();
+    expect(alert).toHaveBeenCalledWith(
+      'Elite market access',
+      'Equities and Indices algorithm unlocked at Elite tier. Upgrade to Elite.',
+    );
+    expect(haptics.notificationAsync).toHaveBeenCalledWith('warning');
+    alert.mockRestore();
+  });
+
+  it('lets Elite traders select Stocks', () => {
+    subscription.isSubscribed = true;
+    subscription.accessTier = 'elite';
+    renderScreen();
+    press('autopilot-asset-stocks');
+    expect(fakeServer.state.selectedAsset).toBe('Stocks');
+    expect(haptics.selectionAsync).toHaveBeenCalledTimes(1);
   });
 });
 

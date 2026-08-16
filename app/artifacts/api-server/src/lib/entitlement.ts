@@ -24,6 +24,7 @@ export const isEntitlementConfigured = !!SUPABASE_URL && !!SERVICE_ROLE_KEY;
  * case-insensitively because the column is free-form text.
  */
 const PRO_TIERS = new Set(["pro", "elite", "whale", "vip"]);
+const ELITE_TIERS = new Set(["elite", "whale", "vip"]);
 
 /**
  * Default lookup: reads the caller's tier straight from Supabase with the
@@ -77,6 +78,36 @@ export function isProTier(tier: string | null | undefined): boolean {
   return !!tier && PRO_TIERS.has(tier.trim().toLowerCase());
 }
 
+/** True when the tier string grants Elite-only access. */
+export function isEliteTier(tier: string | null | undefined): boolean {
+  return !!tier && ELITE_TIERS.has(tier.trim().toLowerCase());
+}
+
+async function hasTierAccess(
+  userId: string,
+  lookup: TierLookup | undefined,
+  permits: (tier: string | null | undefined) => boolean,
+  featureName: string,
+): Promise<boolean> {
+  if (!userId || userId === ANONYMOUS) return false;
+
+  const resolve = lookup ?? supabaseTierLookup;
+  if (!lookup && !isEntitlementConfigured) {
+    logger.error(
+      { userId },
+      `${featureName} access denied: Supabase service role credentials are not configured`,
+    );
+    return false;
+  }
+
+  try {
+    return permits(await resolve(userId));
+  } catch (err) {
+    logger.error({ err, userId }, `${featureName} access denied: tier lookup failed`);
+    return false;
+  }
+}
+
 /**
  * Whether the caller may use Pro-only features.
  *
@@ -88,21 +119,13 @@ export async function hasProAccess(
   userId: string,
   lookup?: TierLookup,
 ): Promise<boolean> {
-  if (!userId || userId === ANONYMOUS) return false;
+  return hasTierAccess(userId, lookup, isProTier, "Pro");
+}
 
-  const resolve = lookup ?? supabaseTierLookup;
-  if (!lookup && !isEntitlementConfigured) {
-    logger.error(
-      { userId },
-      "Pro access denied: Supabase service role credentials are not configured",
-    );
-    return false;
-  }
-
-  try {
-    return isProTier(await resolve(userId));
-  } catch (err) {
-    logger.error({ err, userId }, "Pro access denied: tier lookup failed");
-    return false;
-  }
+/** Whether the caller may use Elite-only features. Fails closed on errors. */
+export async function hasEliteAccess(
+  userId: string,
+  lookup?: TierLookup,
+): Promise<boolean> {
+  return hasTierAccess(userId, lookup, isEliteTier, "Elite");
 }

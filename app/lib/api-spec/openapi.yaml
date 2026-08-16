@@ -88,6 +88,36 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AutopilotState"
+  /autopilot/asset:
+    put:
+      operationId: setAutopilotAsset
+      tags: [autopilot]
+      summary: Select the caller's AutoPilot execution market
+      description: >-
+        Forex and Crypto require Pro access. Stocks requires Elite access.
+        The server independently validates the caller's current subscription.
+      security:
+        - bearerAuth: []
+        - {}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AutopilotAssetUpdate"
+      responses:
+        "200":
+          description: Updated AutoPilot state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutopilotState"
+        "403":
+          description: Current subscription does not permit the selected asset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutopilotError"
   /autopilot/bots/{botId}:
     put:
       operationId: updateAutopilotBot
@@ -502,6 +532,10 @@ components:
       properties:
         masterActive:
           type: boolean
+        selectedAsset:
+          type: string
+          enum: [Forex, Crypto, Stocks]
+          description: Server-validated execution market preference.
         todayPnl:
           type: number
           description: Today's simulated bot P&L in USD.
@@ -513,7 +547,7 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/AutopilotLogLine"
-      required: [masterActive, todayPnl, bots, logs]
+      required: [masterActive, selectedAsset, todayPnl, bots, logs]
     AutopilotPnlDay:
       type: object
       properties:
@@ -539,6 +573,13 @@ components:
         active:
           type: boolean
       required: [active]
+    AutopilotAssetUpdate:
+      type: object
+      properties:
+        asset:
+          type: string
+          enum: [Forex, Crypto, Stocks]
+      required: [asset]
     AutopilotBotUpdate:
       type: object
       properties:

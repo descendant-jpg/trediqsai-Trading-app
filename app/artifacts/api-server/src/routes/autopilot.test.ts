@@ -454,6 +454,67 @@ describe("Pro-only bot enforcement", () => {
     );
   });
 
+  it("persists allowed market preferences and rejects restricted asset requests", async () => {
+    tiers.set("pro-user", "pro");
+    let result = await put(
+      "/autopilot/asset",
+      { asset: "Crypto" },
+      "token-pro-user",
+    );
+    expect(result.status).toBe(200);
+    expect(result.body.selectedAsset).toBe("Crypto");
+
+    result = await put(
+      "/autopilot/asset",
+      { asset: "Stocks" },
+      "token-pro-user",
+    );
+    expect(result.status).toBe(403);
+    expect(result.body.error).toMatch(/Elite tier/i);
+
+    tiers.set("elite-user", "elite");
+    result = await put(
+      "/autopilot/asset",
+      { asset: "Stocks" },
+      "token-elite-user",
+    );
+    expect(result.status).toBe(200);
+    expect(result.body.selectedAsset).toBe("Stocks");
+  });
+
+  it("removes a persisted Stocks preference immediately after an Elite downgrade", async () => {
+    tiers.set("asset-lapsing-user", "elite");
+    let result = await put(
+      "/autopilot/asset",
+      { asset: "Stocks" },
+      "token-asset-lapsing-user",
+    );
+    expect(result.status).toBe(200);
+    expect(result.body.selectedAsset).toBe("Stocks");
+
+    // A subsequent read represents both a restored state after restart and
+    // normal background polling: neither may retain Elite-only execution.
+    tiers.set("asset-lapsing-user", "pro");
+    const res = await fetch(`${proBase}/autopilot`, {
+      headers: { authorization: "Bearer token-asset-lapsing-user" },
+    });
+    result = { status: res.status, body: (await res.json()) as any };
+    expect(result.status).toBe(200);
+    expect(result.body.selectedAsset).toBe("Forex");
+    expect(result.body.logs.at(-1).text).toMatch(/Stocks execution market removed/i);
+  });
+
+  it("rejects a free user's asset preference replay", async () => {
+    tiers.set("free-user", "free");
+    const { status, body } = await put(
+      "/autopilot/asset",
+      { asset: "Forex" },
+      "token-free-user",
+    );
+    expect(status).toBe(403);
+    expect(body.error).toMatch(/Pro or Elite subscription/i);
+  });
+
   it("blocks a free user from reconfiguring the Pro-only bot", async () => {
     tiers.set("free-user", "free");
     const { status } = await put(
@@ -584,14 +645,13 @@ describe("Pro-only bot enforcement", () => {
 
       // Pause and re-arm the whole system.
       await put("/autopilot/master", { active: false }, "token-lapsing-user");
-      const { body } = await put(
+      const { status, body } = await put(
         "/autopilot/master",
         { active: true },
         "token-lapsing-user",
       );
-      expect(
-        body.bots.find((b: any) => b.id === "quantum-inst").running,
-      ).toBe(false);
+      expect(status).toBe(403);
+      expect(body.error).toMatch(/requires a Pro or Elite subscription/i);
     });
 
     it("stops the Pro bot when the tier lookup starts failing", async () => {

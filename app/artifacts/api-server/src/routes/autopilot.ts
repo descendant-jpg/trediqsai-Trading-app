@@ -2,6 +2,7 @@ import { Router, type IRouter, type RequestHandler } from "express";
 import {
   GetAutopilotResponse,
   GetAutopilotHistoryResponse,
+  SetAutopilotAssetBody,
   SetAutopilotMasterBody,
   UpdateAutopilotBotBody,
 } from "@workspace/api-zod";
@@ -15,7 +16,7 @@ import { eq } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { identity, requestUserId, type TokenVerifier } from "../middlewares/identity";
 import { requireAal2IfMfaEnrolled } from "../middlewares/aal2";
-import { hasProAccess, type TierLookup } from "../lib/entitlement";
+import { hasEliteAccess, hasProAccess, type TierLookup } from "../lib/entitlement";
 
 type BotState = {
   id: string;
@@ -132,6 +133,7 @@ type HistoryEntry = { day: string; pnl: number };
 type UserAutopilot = {
   bots: BotState[];
   masterActive: boolean;
+  selectedAsset: "Forex" | "Crypto" | "Stocks";
   todayPnl: number;
   pnlDay: string;
   logs: LogLine[];
@@ -157,6 +159,7 @@ function defaultUserState(bootAt: number): UserAutopilot {
   return {
     bots: DEFAULT_BOTS.map((b) => ({ ...b })),
     masterActive: true,
+    selectedAsset: "Forex",
     todayPnl: 0,
     pnlDay: new Date(bootAt).toDateString(),
     logs: [],
@@ -191,6 +194,7 @@ async function persistState(userId: string, state: UserAutopilot): Promise<void>
   const values = {
     userId,
     masterActive: state.masterActive,
+    selectedAsset: state.selectedAsset,
     todayPnl: state.todayPnl,
     pnlDay: state.pnlDay,
     logs: state.logs,
@@ -289,6 +293,10 @@ async function loadUserState(userId: string): Promise<UserAutopilot> {
   const saved = stateRows[0];
   if (saved) {
     state.masterActive = saved.masterActive;
+    state.selectedAsset =
+      saved.selectedAsset === "Crypto" || saved.selectedAsset === "Stocks"
+        ? saved.selectedAsset
+        : "Forex";
     state.todayPnl = saved.todayPnl;
     state.pnlDay = saved.pnlDay;
     state.logs = saved.logs;
@@ -389,6 +397,7 @@ function snapshot(userId: string, state: UserAutopilot) {
   persistStateThrottled(userId, state);
   return GetAutopilotResponse.parse({
     masterActive: state.masterActive,
+    selectedAsset: state.selectedAsset,
     todayPnl: Math.round(state.todayPnl * 100) / 100,
     bots: state.bots,
     logs: state.logs,
@@ -431,6 +440,31 @@ async function enforceProEntitlement(
   return true;
 }
 
+/**
+ * Revoke an Elite-only market preference as soon as the user loses Elite
+ * access. The asset is persisted execution configuration, so merely hiding it
+ * in the app would leave a replayed or restored Stocks selection in effect.
+ */
+async function enforceSelectedAssetEntitlement(
+  userId: string,
+  state: UserAutopilot,
+  tierLookup?: TierLookup,
+): Promise<boolean> {
+  if (state.selectedAsset !== "Stocks") return false;
+  if (await hasEliteAccess(userId, tierLookup)) return false;
+
+  state.selectedAsset = "Forex";
+  pushLog(
+    state,
+    "[SYS] Stocks execution market removed — Elite subscription required",
+  );
+  logger.warn(
+    { userId },
+    "Reset Elite-only AutoPilot asset after entitlement loss",
+  );
+  return true;
+}
+
 /** Persist the bots stopped by an entitlement revocation. */
 async function persistStoppedPro(
   userId: string,
@@ -462,8 +496,12 @@ export function createAutopilotRouter(
     try {
       const userId = requestUserId(res);
       const state = await stateFor(userId);
-      if (await enforceProEntitlement(userId, state, tierLookup)) {
+      const proRevoked = await enforceProEntitlement(userId, state, tierLookup);
+      const assetRevoked = await enforceSelectedAssetEntitlement(userId, state, tierLookup);
+      if (proRevoked) {
         await persistStoppedPro(userId, state);
+      } else if (assetRevoked) {
+        await persistState(userId, state);
       }
       res.json(snapshot(userId, state));
     } catch (err) {
@@ -477,8 +515,12 @@ export function createAutopilotRouter(
       const state = await stateFor(userId);
       // This endpoint advances the simulation, so a lapsed user could keep
       // accruing Pro P&L here alone. Revoke before any time passes.
-      if (await enforceProEntitlement(userId, state, tierLookup)) {
+      const proRevoked = await enforceProEntitlement(userId, state, tierLookup);
+      const assetRevoked = await enforceSelectedAssetEntitlement(userId, state, tierLookup);
+      if (proRevoked) {
         await persistStoppedPro(userId, state);
+      } else if (assetRevoked) {
+        await persistState(userId, state);
       }
       advanceSimulation(userId, state);
       persistStateThrottled(userId, state);
@@ -500,8 +542,20 @@ export function createAutopilotRouter(
     try {
       const userId = requestUserId(res);
       const state = await stateFor(userId);
+      // The anonymous state is a shared unauthenticated demo only; it never
+      // represents a user's persisted execution engine. Authenticated users
+      // must prove current Pro access before they can re-arm AutoPilot.
+      if (
+        parsed.data.active &&
+        userId !== ANONYMOUS &&
+        !(await hasProAccess(userId, tierLookup))
+      ) {
+        res.status(403).json({ error: "AutoPilot requires a Pro or Elite subscription" });
+        return;
+      }
       // Re-arming must not resurrect a Pro bot the user no longer pays for.
       await enforceProEntitlement(userId, state, tierLookup);
+      await enforceSelectedAssetEntitlement(userId, state, tierLookup);
       advanceSimulation(userId, state);
       state.masterActive = parsed.data.active;
       state.lastTickAt = Date.now();
@@ -511,6 +565,40 @@ export function createAutopilotRouter(
           ? "[SYS] AutoPilot resumed — all bots re-armed"
           : "[SYS] AutoPilot paused — halting new entries",
       );
+      await persistState(userId, state);
+      res.json(snapshot(userId, state));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.put("/autopilot/asset", requireAssurance, async (req, res, next) => {
+    const parsed = SetAutopilotAssetBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid request body" });
+      return;
+    }
+    try {
+      const userId = requestUserId(res);
+      const state = await stateFor(userId);
+      if (await enforceSelectedAssetEntitlement(userId, state, tierLookup)) {
+        await persistState(userId, state);
+      }
+      const canUseAsset =
+        parsed.data.asset === "Stocks"
+          ? await hasEliteAccess(userId, tierLookup)
+          : await hasProAccess(userId, tierLookup);
+      if (!canUseAsset) {
+        res.status(403).json({
+          error:
+            parsed.data.asset === "Stocks"
+              ? "Equities and Indices algorithm unlocked at Elite tier. Upgrade to Elite."
+              : "AutoPilot requires a Pro or Elite subscription",
+        });
+        return;
+      }
+      state.selectedAsset = parsed.data.asset;
+      pushLog(state, `[CFG] AutoPilot execution market set to ${state.selectedAsset}`);
       await persistState(userId, state);
       res.json(snapshot(userId, state));
     } catch (err) {
@@ -538,6 +626,7 @@ export function createAutopilotRouter(
       // by touching a free bot, and would 403 out of a request to stop the
       // Pro bot before revocation ever ran.
       const revoked = await enforceProEntitlement(userId, state, tierLookup);
+      const assetRevoked = await enforceSelectedAssetEntitlement(userId, state, tierLookup);
 
       // Pro-only bots are gated on the server, not just hidden in the UI:
       // the client's tier is never trusted, and the check runs before any
@@ -547,6 +636,7 @@ export function createAutopilotRouter(
       const wantsToStart = parsed.data.running !== false;
       if (bot.proOnly && wantsToStart && !(await hasProAccess(userId, tierLookup))) {
         if (revoked) await persistStoppedPro(userId, state);
+        else if (assetRevoked) await persistState(userId, state);
         logger.warn(
           { userId, botId: bot.id },
           "Blocked Pro-only bot update for a non-Pro user",
@@ -590,7 +680,10 @@ export function createAutopilotRouter(
       const state = await stateFor(userId);
       // Also advances the simulation; revoke first so clearing logs cannot be
       // used as a way to keep a lapsed Pro bot ticking.
-      await enforceProEntitlement(userId, state, tierLookup);
+      const proRevoked = await enforceProEntitlement(userId, state, tierLookup);
+      const assetRevoked = await enforceSelectedAssetEntitlement(userId, state, tierLookup);
+      if (proRevoked) await persistStoppedPro(userId, state);
+      else if (assetRevoked) await persistState(userId, state);
       advanceSimulation(userId, state);
       state.logs = [];
       await persistState(userId, state);

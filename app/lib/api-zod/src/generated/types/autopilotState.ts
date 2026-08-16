@@ -7,9 +7,12 @@
  */
 import type { AutopilotBot } from './autopilotBot';
 import type { AutopilotLogLine } from './autopilotLogLine';
+import type { AutopilotStateSelectedAsset } from './autopilotStateSelectedAsset';
 
 export interface AutopilotState {
   masterActive: boolean;
+  /** Server-validated execution market preference. */
+  selectedAsset: AutopilotStateSelectedAsset;
   /** Today's simulated bot P&L in USD. */
   todayPnl: number;
   bots: AutopilotBot[];

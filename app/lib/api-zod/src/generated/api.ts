@@ -14,6 +14,7 @@ import * as zod from 'zod';
  */
 export const GetAutopilotResponse = zod.object({
   "masterActive": zod.boolean(),
+  "selectedAsset": zod.enum(['Forex', 'Crypto', 'Stocks']).describe('Server-validated execution market preference.'),
   "todayPnl": zod.number().describe('Today\'s simulated bot P&L in USD.'),
   "bots": zod.array(zod.object({
   "id": zod.string(),
@@ -57,6 +58,40 @@ export const SetAutopilotMasterBody = zod.object({
 
 export const SetAutopilotMasterResponse = zod.object({
   "masterActive": zod.boolean(),
+  "selectedAsset": zod.enum(['Forex', 'Crypto', 'Stocks']).describe('Server-validated execution market preference.'),
+  "todayPnl": zod.number().describe('Today\'s simulated bot P&L in USD.'),
+  "bots": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "tags": zod.string(),
+  "risk": zod.enum(['Low', 'Medium', 'High']),
+  "winRate": zod.string(),
+  "return30d": zod.string(),
+  "totalTrades": zod.number(),
+  "proOnly": zod.boolean(),
+  "running": zod.boolean(),
+  "capital": zod.number(),
+  "drawdown": zod.number().describe('Max drawdown limit in percent.')
+})),
+  "logs": zod.array(zod.object({
+  "id": zod.string(),
+  "time": zod.string().describe('HH:MM:SS wall-clock time of the log line.'),
+  "text": zod.string()
+}))
+})
+
+
+/**
+ * Forex and Crypto require Pro access. Stocks requires Elite access. The server independently validates the caller's current subscription.
+ * @summary Select the caller's AutoPilot execution market
+ */
+export const SetAutopilotAssetBody = zod.object({
+  "asset": zod.enum(['Forex', 'Crypto', 'Stocks'])
+})
+
+export const SetAutopilotAssetResponse = zod.object({
+  "masterActive": zod.boolean(),
+  "selectedAsset": zod.enum(['Forex', 'Crypto', 'Stocks']).describe('Server-validated execution market preference.'),
   "todayPnl": zod.number().describe('Today\'s simulated bot P&L in USD.'),
   "bots": zod.array(zod.object({
   "id": zod.string(),
@@ -94,6 +129,7 @@ export const UpdateAutopilotBotBody = zod.object({
 
 export const UpdateAutopilotBotResponse = zod.object({
   "masterActive": zod.boolean(),
+  "selectedAsset": zod.enum(['Forex', 'Crypto', 'Stocks']).describe('Server-validated execution market preference.'),
   "todayPnl": zod.number().describe('Today\'s simulated bot P&L in USD.'),
   "bots": zod.array(zod.object({
   "id": zod.string(),
@@ -121,6 +157,7 @@ export const UpdateAutopilotBotResponse = zod.object({
  */
 export const ClearAutopilotLogsResponse = zod.object({
   "masterActive": zod.boolean(),
+  "selectedAsset": zod.enum(['Forex', 'Crypto', 'Stocks']).describe('Server-validated execution market preference.'),
   "todayPnl": zod.number().describe('Today\'s simulated bot P&L in USD.'),
   "bots": zod.array(zod.object({
   "id": zod.string(),

@@ -20,6 +20,7 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AutopilotAssetUpdate,
   AutopilotBotUpdate,
   AutopilotError,
   AutopilotMasterUpdate,
@@ -287,6 +288,78 @@ export const useSetAutopilotMaster = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getSetAutopilotMasterMutationOptions(options));
+    }
+
+export const getSetAutopilotAssetUrl = () => {
+
+
+
+
+  return `/api/autopilot/asset`
+}
+
+/**
+ * Forex and Crypto require Pro access. Stocks requires Elite access. The server independently validates the caller's current subscription.
+ * @summary Select the caller's AutoPilot execution market
+ */
+export const setAutopilotAsset = async (autopilotAssetUpdate: AutopilotAssetUpdate, options?: Parameters<typeof customFetch>[1]): Promise<AutopilotState> => {
+
+  return customFetch<AutopilotState>(getSetAutopilotAssetUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(autopilotAssetUpdate)
+  }
+);}
+
+
+
+
+
+export const getSetAutopilotAssetMutationOptions = <TError = ErrorType<AutopilotError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setAutopilotAsset>>, TError,{data: BodyType<AutopilotAssetUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof setAutopilotAsset>>, TError,{data: BodyType<AutopilotAssetUpdate>}, TContext> => {
+
+const mutationKey = ['setAutopilotAsset'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof setAutopilotAsset>>, {data: BodyType<AutopilotAssetUpdate>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  setAutopilotAsset(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SetAutopilotAssetMutationResult = NonNullable<Awaited<ReturnType<typeof setAutopilotAsset>>>
+    export type SetAutopilotAssetMutationBody = BodyType<AutopilotAssetUpdate>
+    export type SetAutopilotAssetMutationError = ErrorType<AutopilotError>
+
+    /**
+ * @summary Select the caller's AutoPilot execution market
+ */
+export const useSetAutopilotAsset = <TError = ErrorType<AutopilotError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setAutopilotAsset>>, TError,{data: BodyType<AutopilotAssetUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof setAutopilotAsset>>,
+        TError,
+        {data: BodyType<AutopilotAssetUpdate>},
+        TContext
+      > => {
+      return useMutation(getSetAutopilotAssetMutationOptions(options));
     }
 
 export const getUpdateAutopilotBotUrl = (botId: string,) => {
