@@ -1,0 +1,25 @@
+CRITICAL WORK DIRECTIVE: FIX AUTOPILOT TOGGLE, ADD HAPTICS, AND ENFORCE SUBSCRIPTION TIERS.
+
+Review our project rules. The "TradiQs AutoPilot" toggle on the AI Tools screen is completely unresponsive. We need to wire it up with premium state management, haptic feedback, and subscription gating.
+
+### 1. Locate the Component
+- Find the component rendering the `TradiQs AutoPilot` card (likely in `app/(tabs)/ai-tools.tsx`, `AutoPilotCard.tsx`, or similar).
+
+### 2. Implement State & Haptics
+- Import `useState` from React and `* as Haptics` from `expo-haptics`.
+- Create a local state: `const [isAutoPilotActive, setIsAutoPilotActive] = useState(false);`
+- Bind this state to the `value` prop of the React Native `Switch` (or custom toggle component).
+- Create a handler function `handleToggleAutoPilot(newValue)`. Inside it, trigger `Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);` to give tactile feedback.
+
+### 3. Implement Tier Gating (Free / Pro / Elite)
+- Fetch the user's current subscription tier from the existing state/context.
+- In `handleToggleAutoPilot`:
+  - IF user is `Free`: Do NOT change the toggle state. Trigger an alert or modal stating: "AutoPilot requires a Pro or Elite subscription. Upgrade to deploy algorithmic bots."
+  - IF user is `Pro` or `Elite`: Allow the state to change. 
+  - *Note for future logic:* Elite gets Forex, Crypto, and Stocks. Pro is restricted to Forex and Crypto. Add a console.log or TODO to pass the allowed asset classes to the bot engine based on this tier.
+
+### 4. Update UI & Backend Sync
+- When `isAutoPilotActive` is true, change the status text from "System Paused" (gray) to "System Active" (neon cyan `#00FFFF`).
+- Add a dummy Supabase async update in the handler to persist `auto_pilot_enabled: newValue` to the user's profile table.
+
+EXECUTION REQUIREMENT: Fix the toggle so it animates smoothly, vibrates on touch, and blocks free users. Provide the exact code changes and tell me which file you modified. Ensure TypeScript compiles perfectly.

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
+  Alert,
   Easing,
   Modal,
   Platform,
@@ -18,6 +19,7 @@ import { BlurView } from 'expo-blur';
 import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import * as Haptics from 'expo-haptics';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   getGetAutopilotQueryKey,
@@ -314,7 +316,26 @@ export default function AiToolsScreen() {
     [masterActive, bots],
   );
 
-  const toggleMaster = (value: boolean) => {
+  const handleToggleAutoPilot = (value: boolean) => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {
+      // Haptics are unavailable on some web and simulator environments.
+    });
+
+    const canDeployAutoPilot = isAdmin || accessTier === 'pro' || accessTier === 'elite';
+    if (!canDeployAutoPilot) {
+      Alert.alert(
+        'Pro or Elite required',
+        'AutoPilot requires a Pro or Elite subscription. Upgrade to deploy algorithmic bots.',
+      );
+      return;
+    }
+
+    const allowedAssetClasses = accessTier === 'elite'
+      ? ['Forex', 'Crypto', 'Stocks']
+      : ['Forex', 'Crypto'];
+    // TODO: Provide this entitlement policy to the bot engine when strategies
+    // can choose their execution market.
+    console.log('[AutoPilot] permitted asset classes:', allowedAssetClasses);
     setMaster({ data: { active: value } });
   };
 
@@ -403,7 +424,7 @@ export default function AiToolsScreen() {
               </Text>
               <Switch
                 value={masterActive}
-                onValueChange={toggleMaster}
+                onValueChange={handleToggleAutoPilot}
                 trackColor={{ false: '#22252A', true: 'rgba(0,240,255,0.35)' }}
                 thumbColor={masterActive ? CYAN : '#8A8D93'}
                 testID="master-toggle"

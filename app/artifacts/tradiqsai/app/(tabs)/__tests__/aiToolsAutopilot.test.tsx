@@ -14,6 +14,7 @@
  *   - "Ask AI Oracle" navigates to /oracle.
  */
 import React from 'react';
+import { Alert } from 'react-native';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider, notifyManager } from '@tanstack/react-query';
 
@@ -31,6 +32,12 @@ vi.mock('react-native-safe-area-context', () => ({
 vi.mock('expo-blur', () => ({
   BlurView: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
 }));
+
+const haptics = vi.hoisted(() => ({
+  impactAsync: vi.fn(async () => undefined),
+  ImpactFeedbackStyle: { Medium: 'medium' },
+}));
+vi.mock('expo-haptics', () => haptics);
 
 vi.mock('@expo/vector-icons', () => ({
   Feather: () => null,
@@ -225,6 +232,7 @@ describe('AutoPilot summary + master toggle', () => {
   });
 
   it('master toggle pauses everything and logs the halt', () => {
+    subscription.isSubscribed = true;
     renderScreen();
     toggle('master-toggle');
 
@@ -243,6 +251,19 @@ describe('AutoPilot summary + master toggle', () => {
     expect(
       screen.getByText(/\[SYS\] AutoPilot resumed — all bots re-armed/),
     ).toBeTruthy();
+  });
+
+  it('keeps the master toggle unchanged for free traders', () => {
+    const alert = vi.spyOn(Alert, 'alert').mockImplementation(() => {});
+    renderScreen();
+    toggle('master-toggle');
+    expect(screen.getByText('System Active')).toBeTruthy();
+    expect(alert).toHaveBeenCalledWith(
+      'Pro or Elite required',
+      'AutoPilot requires a Pro or Elite subscription. Upgrade to deploy algorithmic bots.',
+    );
+    expect(haptics.impactAsync).toHaveBeenCalledWith('medium');
+    alert.mockRestore();
   });
 });
 
