@@ -36,17 +36,30 @@ const GREEN = '#00E676';
 const RED = '#FF6174';
 const marketNewsUrl = `${process.env.EXPO_PUBLIC_API_URL ?? (process.env.EXPO_PUBLIC_DOMAIN ? `https://${process.env.EXPO_PUBLIC_DOMAIN}` : '(no API base URL)')}/api/market-news`;
 type LiveNews = { headline: string; summary: string; url: string; image: string; datetime: number };
+function textValue(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function fallbackTitle(summary: string): string {
+  const compact = summary.replace(/\s+/g, ' ').trim();
+  if (!compact) return 'Market update';
+  return `${compact.slice(0, 60).trimEnd()}${compact.length > 60 ? '...' : ''}`;
+}
+
 function normalizeNews(value: unknown): LiveNews[] {
   if (!Array.isArray(value)) return [];
   return value
     .filter((article): article is Record<string, unknown> => !!article && typeof article === 'object')
-    .map((article) => ({
-      headline: typeof article.headline === 'string' && article.headline.trim() ? article.headline.trim() : 'No title available',
-      summary: typeof article.summary === 'string' ? article.summary.trim() : '',
-      url: typeof article.url === 'string' ? article.url : '',
-      image: typeof article.image === 'string' ? article.image : '',
+    .map((article) => {
+      const summary = textValue(article.summary) || textValue(article.description);
+      const articleTitle = textValue(article.headline) || textValue(article.title) || textValue(article.name);
+      return {
+      headline: articleTitle || fallbackTitle(summary),
+      summary,
+      url: textValue(article.url),
+      image: textValue(article.image) || textValue(article.imageUrl),
       datetime: typeof article.datetime === 'number' && Number.isFinite(article.datetime) ? article.datetime : 0,
-    }));
+    }; });
 }
 
 function notify(title: string, message: string) {
@@ -165,13 +178,13 @@ function NewsWorkspace({ state, news, error, onRetry, onArticle }: { state: stri
   if (state === 'error') return <View style={styles.errorBox}><Text style={styles.errorText}>Connection Failed</Text><Text style={styles.errorDetail}>Tried fetching: {marketNewsUrl}</Text><Text style={styles.errorDetail}>Error: {error || 'Unknown network error'}</Text><TouchableOpacity style={styles.retry} onPress={onRetry}><Text style={styles.primaryText}>REFRESH LIVE NEWS</Text></TouchableOpacity></View>;
   if (!Array.isArray(news) || !news.length) return <Text style={styles.hint}>No market headlines are available yet. Pull to refresh later.</Text>;
   return <>{news.map((article, index) => {
-    const headline = article?.headline || 'No title available';
+    const articleTitle = article?.headline || fallbackTitle(article?.summary || '');
     const summary = article?.summary || 'Open this headline for current market context.';
     const image = typeof article?.image === 'string' ? article.image : '';
     const timestamp = typeof article?.datetime === 'number' && article.datetime > 0
       ? new Date(article.datetime * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       : 'LIVE';
-    return <TouchableOpacity style={styles.news} key={`${article?.url || headline}-${article?.datetime || index}`} onPress={() => onArticle(article)}><View style={styles.newsTop}>{image ? <Image source={{ uri: image }} style={styles.newsImage} /> : <Feather name="radio" size={20} color={CYAN} />}<Text style={styles.status}>{timestamp}</Text></View><Text style={styles.item}>{headline}</Text><Text style={styles.hint} numberOfLines={3}>{summary}</Text><Text style={styles.openAnalysis}>ANALYZE SENTIMENT ›</Text></TouchableOpacity>;
+    return <TouchableOpacity style={styles.news} key={`${article?.url || articleTitle}-${article?.datetime || index}`} onPress={() => onArticle(article)}><View style={styles.newsTop}>{image ? <Image source={{ uri: image }} style={styles.newsImage} /> : <Feather name="radio" size={20} color={CYAN} />}<Text style={styles.status}>{timestamp}</Text></View><Text style={styles.item}>{articleTitle}</Text><Text style={styles.hint} numberOfLines={3}>{summary}</Text><Text style={styles.openAnalysis}>ANALYZE SENTIMENT ›</Text></TouchableOpacity>;
   })}</>;
 }
 function NewsAnalysis({ article, state, analysis, onBack }: { article: LiveNews; state: string; analysis: string; onBack: () => void }) {
