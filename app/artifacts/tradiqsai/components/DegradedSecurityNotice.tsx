@@ -20,7 +20,10 @@ export function DegradedSecurityNotice({
 }) {
   if (!visible) return null;
   return (
-    <View style={styles.banner} testID="degraded-security-notice" pointerEvents="box-none">
+    <View
+      style={[styles.banner, { pointerEvents: 'box-none' }]}
+      testID="degraded-security-notice"
+    >
       <Feather name="shield" size={13} color={GOLD} />
       <Text style={styles.text}>Applied — security re-check pending</Text>
       <TouchableOpacity
