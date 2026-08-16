@@ -15,7 +15,7 @@ import {
 import { eq } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { identity, requestUserId, type TokenVerifier } from "../middlewares/identity";
-import { requireAal2IfMfaEnrolled, requireAal2IfMfaEnrolledSoft } from "../middlewares/aal2";
+import { requireAal2IfMfaEnrolledSoft, requireAal2IfMfaEnrolledWrite } from "../middlewares/aal2";
 import { hasEliteAccess, hasProAccess, type TierLookup } from "../lib/entitlement";
 
 type BotState = {
@@ -482,9 +482,12 @@ async function persistStoppedPro(
  * Build the AutoPilot router. The token verifier is injectable for tests;
  * production uses the default Supabase-backed verifier.
  *
- * @param assurance     - Strict MFA assurance for write/mutation endpoints.
- *                        Defaults to `requireAal2IfMfaEnrolled` in production,
- *                        or a no-op when a custom verifier is injected (tests).
+ * @param assurance     - MFA assurance for write/mutation endpoints. Defaults
+ *                        to `requireAal2IfMfaEnrolledWrite` in production
+ *                        (definitive MFA rejections are enforced, but an AAL
+ *                        service outage degrades to pass-through instead of
+ *                        503 — see the middleware's policy doc), or a no-op
+ *                        when a custom verifier is injected (tests).
  * @param readAssurance - Soft MFA assurance for read-only polling endpoints
  *                        (history). Passes through when AAL service is
  *                        unavailable so ordinary signed-in sessions are never
@@ -501,7 +504,7 @@ export function createAutopilotRouter(
   const router: IRouter = Router();
   const testPassthrough: RequestHandler = (_req, _res, next) => next();
   const requireAssurance: RequestHandler =
-    assurance ?? (verifier ? testPassthrough : requireAal2IfMfaEnrolled);
+    assurance ?? (verifier ? testPassthrough : requireAal2IfMfaEnrolledWrite);
   const requireReadAssurance: RequestHandler =
     readAssurance ?? (verifier ? testPassthrough : requireAal2IfMfaEnrolledSoft);
   router.use("/autopilot", identity(verifier));

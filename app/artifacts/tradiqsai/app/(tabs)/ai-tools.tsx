@@ -336,17 +336,35 @@ export default function AiToolsScreen() {
     router.push({ pathname: '/profile', params: { mfa: 'verify' } } as never);
   }, [router]);
 
+  // Writes degrade gracefully during a server-side security-check outage:
+  // the API applies the change anyway (never a 503), so a successful
+  // response needs no special handling here. Only a definitive MFA block
+  // (403 + `mfa_required`) deserves a user-facing explanation — the change
+  // did NOT apply, and re-syncing snaps the optimistic UI back.
+  const notifyMfaBlocked = useCallback(() => {
+    Alert.alert(
+      'Verification needed',
+      'Your account has two-factor authentication enabled. Please re-verify with your authenticator code to change AutoPilot settings.',
+    );
+    void refetch();
+  }, [refetch]);
+
   const { mutate: setMaster } = useSetAutopilotMaster({
     mutation: {
       onSuccess: applyState,
-      // Preferences are local-first: a timeout must not snap a control back.
-      onError: () => {},
+      // Preferences are local-first: a timeout must not snap a control back —
+      // but a definitive MFA block means the server refused the change.
+      onError: (error: unknown) => {
+        if (isMfaRequiredError(error)) notifyMfaBlocked();
+      },
     },
   });
   const { mutate: setAutopilotAsset } = useSetAutopilotAsset({
     mutation: {
       onSuccess: applyState,
-      onError: () => {},
+      onError: (error: unknown) => {
+        if (isMfaRequiredError(error)) notifyMfaBlocked();
+      },
     },
   });
   // The server is the authority on Pro access: it rejects Pro-only bot
@@ -359,6 +377,9 @@ export default function AiToolsScreen() {
         if (isProRequiredError(error)) {
           setConfigBot(null);
           router.push({ pathname: '/paywall', params: { defaultTier: 'ELITE' } });
+        } else if (isMfaRequiredError(error)) {
+          notifyMfaBlocked();
+          return;
         }
         // Re-sync so an optimistic-looking UI never keeps a rejected change.
         void refetch();
@@ -366,7 +387,12 @@ export default function AiToolsScreen() {
     },
   });
   const { mutate: clearLogs } = useClearAutopilotLogs({
-    mutation: { onSuccess: applyState },
+    mutation: {
+      onSuccess: applyState,
+      onError: (error: unknown) => {
+        if (isMfaRequiredError(error)) notifyMfaBlocked();
+      },
+    },
   });
 
   const [configBot, setConfigBot] = useState<Bot | null>(null);
