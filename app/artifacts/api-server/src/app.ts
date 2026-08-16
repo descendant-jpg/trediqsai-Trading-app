@@ -57,7 +57,10 @@ app.post(
 );
 
 // JSON / form parsing for all other routes (comes after the webhook route).
-app.use(cors());
+// Expose the X-Security-Check header so browser cross-origin fetch() calls
+// (Expo web using EXPO_PUBLIC_API_URL) can read it and surface the degraded-
+// security notice in the UI.
+app.use(cors({ exposedHeaders: ["X-Security-Check"] }));
 // Chart uploads are intentionally parsed separately from normal API JSON.
 // Base64 image payloads can be several megabytes; every other route retains
 // Express's small default limit.

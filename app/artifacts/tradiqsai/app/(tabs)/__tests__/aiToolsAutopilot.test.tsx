@@ -219,6 +219,10 @@ vi.mock('@workspace/api-client-react', async () => {
     useClearAutopilotLogs: (options?: any) => ({
       mutate: () => options?.mutation?.onSuccess?.(fakeServer.clearLogs()),
     }),
+    // The degraded-security handler is registered by the root-layout
+    // DegradedSecurityNotice component, not by the ai-tools screen. Provide a
+    // no-op stub so the screen does not throw when the module is imported.
+    setDegradedSecurityHandler: vi.fn(),
   };
 });
 
@@ -589,3 +593,4 @@ describe('Daily P&L history — MFA assurance', () => {
     expect(screen.queryByTestId('pnl-history-mfa-required')).toBeNull();
   });
 });
+

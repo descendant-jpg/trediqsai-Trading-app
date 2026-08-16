@@ -64,6 +64,39 @@ export type AuthFailureHandler = () => void | Promise<void>;
 
 let _authSessionRefresher: AuthSessionRefresher | null = null;
 let _authFailureHandler: AuthFailureHandler | null = null;
+
+/**
+ * Called whenever a successful (2xx) response carries the
+ * `X-Security-Check: degraded` header, which signals that the server-side
+ * MFA assurance check was unavailable and the write succeeded in degraded
+ * mode.  Receives the request URL and HTTP method so callers can filter to
+ * the specific endpoints they care about.
+ */
+export type DegradedSecurityHandler = (ctx: {
+  url: string;
+  method: string;
+}) => void;
+
+let _degradedSecurityHandler: DegradedSecurityHandler | null = null;
+
+/**
+ * Register a handler invoked when the API returns a successful response
+ * tagged with `X-Security-Check: degraded`.  Pass `null` to clear.
+ */
+export function setDegradedSecurityHandler(
+  handler: DegradedSecurityHandler | null,
+): void {
+  _degradedSecurityHandler = handler;
+}
+
+function notifyDegradedSecurity(ctx: { url: string; method: string }): void {
+  if (!_degradedSecurityHandler) return;
+  try {
+    _degradedSecurityHandler(ctx);
+  } catch {
+    // Never let notification errors mask a successful response.
+  }
+}
 // Dedupe concurrent refreshes: many queries can 401 at once (e.g. app
 // resumed after long background) — only one refresh should run.
 let _refreshInFlight: Promise<string | null> | null = null;
@@ -449,6 +482,10 @@ export async function customFetch<T = unknown>(
   if (!response.ok) {
     const errorData = await parseErrorBody(response, method);
     throw new ApiError(response, errorData, requestInfo);
+  }
+
+  if (response.headers.get("x-security-check") === "degraded") {
+    notifyDegradedSecurity({ url: requestInfo.url, method });
   }
 
   return (await parseSuccessBody(response, responseType, requestInfo)) as T;
