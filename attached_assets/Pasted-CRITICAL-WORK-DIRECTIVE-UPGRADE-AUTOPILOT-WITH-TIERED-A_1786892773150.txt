@@ -1,0 +1,33 @@
+CRITICAL WORK DIRECTIVE: UPGRADE AUTOPILOT WITH TIERED ASSET SELECTOR, HAPTICS, AND PERSISTENT STATE.
+
+Review our project rules. We are upgrading the "TradiQs AutoPilot" component (likely located in `app/(tabs)/ai-tools.tsx` or `components/AutoPilotCard.tsx`) to behave like an institutional-grade, "set-it-and-forget-it" trading engine. 
+
+### 1. Component State & Dependencies
+- Import `useState`, `useEffect` from React, and `* as Haptics` from `expo-haptics`.
+- Create local states: 
+  - `isAutoPilotActive` (boolean, default false)
+  - `selectedAsset` (string, default 'Forex')
+- Assume access to a user context/store that provides the user's `subscriptionTier` ('Free', 'Pro', 'Elite').
+
+### 2. The Asset Selector UI (Persistent Memory)
+- Immediately below the main AutoPilot toggle, add a sleek row of three selectable pills: `Forex`, `Crypto`, and `Stocks`.
+- **Styling:** 
+  - Active pill: `bg-[#00FFFF]/20 border border-[#00FFFF] text-[#00FFFF]`.
+  - Inactive pill: `bg-transparent border border-gray-800 text-gray-500`.
+- **Tier Logic for Selector:**
+  - If `subscriptionTier` is 'Pro', render the `Stocks` pill with a lock icon (`Stocks 🔒`).
+  - If a 'Pro' user taps `Stocks 🔒`, do NOT change the `selectedAsset` state. Instead, trigger an alert/modal: "Equities and Indices algorithm unlocked at Elite tier. Upgrade to Elite."
+  - If a user taps a permitted asset, update `selectedAsset` and fire `Haptics.selectionAsync()`.
+
+### 3. The Main Toggle Logic & Gating
+- Wire the main AutoPilot `Switch` (or custom toggle) to `isAutoPilotActive`.
+- Create `handleToggleAutoPilot(newValue)`:
+  - **Free Tier Block:** If `subscriptionTier` is 'Free', block the toggle. Fire a failure haptic and show an alert: "AutoPilot requires a Pro or Elite subscription. Upgrade to deploy algorithms."
+  - **Pro/Elite Execution:** If permitted, update `isAutoPilotActive`, and fire `Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)`.
+- **Dynamic UI:** When `isAutoPilotActive` is true, the status text must change from a dim "System Paused" to a glowing neon cyan "System Active". Update the "0 Running" metric to "1 Running".
+
+### 4. Backend Synchronization (Supabase)
+- Wrap the state updates in a function that mocks/calls a Supabase profile update. 
+- The app must save BOTH `auto_pilot_enabled: boolean` and `auto_pilot_asset: string` to the user's profile table in the background so their preference persists perfectly across app restarts.
+
+EXECUTION REQUIREMENT: Implement this complete logic seamlessly. Ensure the UI looks incredibly high-end, dark-mode compliant, and compiles without TypeScript errors. Tell me exactly which file you updated.
