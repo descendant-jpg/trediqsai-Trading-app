@@ -60,6 +60,21 @@ function isProRequiredError(error: unknown): boolean {
   return code === undefined || code === 'pro_subscription_required';
 }
 
+/**
+ * True when the server rejected a request because the user has MFA enrolled
+ * but has not completed a fresh TOTP verification in this session.
+ * Matches the `requireAal2IfMfaEnrolledSoft` 403 + `mfa_required` contract.
+ */
+function isMfaRequiredError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const { status, data } = error as { status?: number; data?: unknown };
+  if (status !== 403) return false;
+  const code =
+    data && typeof data === 'object'
+      ? (data as { code?: unknown }).code
+      : undefined;
+  return code === 'mfa_required';
+}
 const GREEN = '#00E676';
 const CYAN = '#00F0FF';
 const CRIMSON = '#E54B4B';
@@ -196,7 +211,13 @@ function formatHistoryDay(isoDay: string): string {
 }
 
 /** Per-day AutoPilot P&L history: rows with proportional bars. */
-function PnlHistorySection({ days }: { days: { day: string; pnl: number }[] }) {
+function PnlHistorySection({
+  days,
+  mfaRequired = false,
+}: {
+  days: { day: string; pnl: number }[];
+  mfaRequired?: boolean;
+}) {
   const shown = days.slice(0, HISTORY_DAYS_SHOWN);
   const maxAbs = Math.max(...shown.map((d) => Math.abs(d.pnl)), 1);
   return (
@@ -205,7 +226,14 @@ function PnlHistorySection({ days }: { days: { day: string; pnl: number }[] }) {
         <Feather name="bar-chart-2" size={13} color={CYAN} />
         <Text style={styles.consoleTitle}>Daily P&L History</Text>
       </View>
-      {shown.length === 0 ? (
+      {mfaRequired ? (
+        <View style={styles.historyMfaRow} testID="pnl-history-mfa-required">
+          <Feather name="shield" size={13} color={GOLD} />
+          <Text style={styles.historyMfaText}>
+            Re-verify with two-factor authentication to view history.
+          </Text>
+        </View>
+      ) : shown.length === 0 ? (
         <Text style={styles.logLineMuted}>
           No finished days yet — history appears after the first full day of trading.
         </Text>
@@ -279,14 +307,21 @@ export default function AiToolsScreen() {
     [queryClient],
   );
 
-  const { data: history } = useGetAutopilotHistory({
+  const {
+    data: history,
+    error: historyError,
+  } = useGetAutopilotHistory({
     query: {
       queryKey: getGetAutopilotHistoryQueryKey(),
       // Rollovers happen at most daily; refresh occasionally in case the
       // screen stays open across midnight.
       refetchInterval: 60_000,
+      // Stop retrying when the server has definitively told us that MFA
+      // verification is needed — repeated retries would only produce noise.
+      retry: (_, error) => !isMfaRequiredError(error),
     },
   });
+  const historyMfaRequired = isMfaRequiredError(historyError);
 
   const { mutate: setMaster } = useSetAutopilotMaster({
     mutation: {
@@ -348,6 +383,25 @@ export default function AiToolsScreen() {
       mounted = false;
     };
   }, []);
+
+  // Hydrate local controls from the server on the first successful response.
+  // This makes the UI authoritative for a second device, a server-enforced
+  // pause, or a restored session — without snapping back after every refetch
+  // or mutation (which keep the local state as the optimistic source of truth
+  // through `applyState` / `applyOptimisticAutopilotState`).
+  const hasHydratedFromServer = useRef(false);
+  useEffect(() => {
+    if (!autopilot || hasHydratedFromServer.current) return;
+    hasHydratedFromServer.current = true;
+    setIsAutoPilotActive(autopilot.masterActive);
+    if (
+      autopilot.selectedAsset === 'Forex' ||
+      autopilot.selectedAsset === 'Crypto' ||
+      autopilot.selectedAsset === 'Stocks'
+    ) {
+      setSelectedAsset(autopilot.selectedAsset);
+    }
+  }, [autopilot]);
 
   const persistAutopilotPreferences = useCallback((next: AutopilotPreferences) => {
     AsyncStorage.setItem(AUTOPILOT_PREFERENCES_KEY, JSON.stringify(next)).catch(() => {});
@@ -609,7 +663,7 @@ export default function AiToolsScreen() {
         </View>
 
         {/* Daily P&L history */}
-        <PnlHistorySection days={history?.days ?? []} />
+        <PnlHistorySection days={history?.days ?? []} mfaRequired={historyMfaRequired} />
 
         <Text style={styles.sectionTitle}>HERO TOOLS</Text>
         <View style={styles.heroGrid}>
@@ -924,6 +978,17 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
     minWidth: 78,
     textAlign: 'right',
+  },
+  historyMfaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  historyMfaText: {
+    color: GOLD,
+    fontSize: 12,
+    fontFamily: 'Inter_400Regular',
+    flex: 1,
   },
   summaryCard: {
     backgroundColor: '#16181D',

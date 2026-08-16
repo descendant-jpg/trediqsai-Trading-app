@@ -98,6 +98,7 @@ const fakeServer = vi.hoisted(() => {
     logSeq: 0,
     queryOptions: null as any,
     historyDays: [] as { day: string; pnl: number }[],
+    historyErrorMode: null as null | 'mfa_required',
   };
 
   function pushLog(text: string) {
@@ -127,6 +128,7 @@ const fakeServer = vi.hoisted(() => {
       state.logSeq = 0;
       state.queryOptions = null;
       state.historyDays = [];
+      state.historyErrorMode = null;
       pushLog('[SYS] TradiQs AutoPilot core initialized');
       pushLog('[SYS] 2 algorithms deployed — monitoring 14 markets');
     },
@@ -177,12 +179,23 @@ vi.mock('@workspace/api-client-react', async () => {
   return {
     getGetAutopilotQueryKey: () => QUERY_KEY,
     getGetAutopilotHistoryQueryKey: () => HISTORY_KEY,
-    useGetAutopilotHistory: () =>
-      useQuery({
+    useGetAutopilotHistory: (options?: any) => {
+      // When historyErrorMode is set, simulate the server returning that error.
+      if (fakeServer.state.historyErrorMode === 'mfa_required') {
+        // Fabricate the error shape that isMfaRequiredError checks.
+        const mfaError = Object.assign(new Error('mfa_required'), { status: 403, data: { code: 'mfa_required' } });
+        return useQuery({
+          queryKey: HISTORY_KEY,
+          queryFn: async () => { throw mfaError; },
+          retry: options?.query?.retry ?? false,
+        });
+      }
+      return useQuery({
         queryKey: HISTORY_KEY,
         queryFn: async () => ({ days: fakeServer.state.historyDays }),
         initialData: { days: fakeServer.state.historyDays },
-      }),
+      });
+    },
     useGetAutopilot: (options?: any) => {
       fakeServer.state.queryOptions = options?.query ?? null;
       return useQuery({
@@ -505,5 +518,69 @@ describe('Ask AI Oracle', () => {
     renderScreen();
     press('ask-oracle');
     expect(routerPush).toHaveBeenCalledWith('/oracle');
+  });
+});
+
+describe('Server-state hydration', () => {
+  it('reflects a server-paused AutoPilot on first load', async () => {
+    // The server reports the system is paused and running Crypto.
+    // Even though the component initialises to active=true/Forex, the
+    // first successful API response must override both.
+    subscription.isSubscribed = true;
+    subscription.accessTier = 'pro';
+    fakeServer.state.masterActive = false;
+    fakeServer.state.selectedAsset = 'Crypto';
+    renderScreen();
+
+    // masterActive hydration: the master toggle and status text must
+    // reflect the server's paused state after the first API response.
+    await waitFor(() => expect(screen.getByText('System Paused')).toBeTruthy());
+    expect(screen.getByText('0 Running')).toBeTruthy();
+    expect(screen.getByText('$0')).toBeTruthy();
+
+    // selectedAsset hydration: pressing Crypto (already selected) hits the
+    // early-return guard `if (asset === selectedAsset) return`, so no haptic
+    // or API call is made. Pressing Forex (not selected) would fire a haptic.
+    haptics.selectionAsync.mockClear();
+    press('autopilot-asset-crypto');
+    expect(haptics.selectionAsync).not.toHaveBeenCalled(); // Crypto already selected
+
+    press('autopilot-asset-forex');
+    expect(haptics.selectionAsync).toHaveBeenCalledTimes(1); // switching away from Crypto
+  });
+
+  it('shows System Active and Forex when server reports active+Forex', () => {
+    // Defaults match server state — no regression.
+    renderScreen();
+    expect(screen.getByText('System Active')).toBeTruthy();
+    expect(screen.getByText('2 Running')).toBeTruthy();
+  });
+});
+
+describe('Daily P&L history — MFA assurance', () => {
+  it('shows the MFA nudge when the server requires two-factor verification', async () => {
+    fakeServer.state.historyErrorMode = 'mfa_required';
+    renderScreen();
+
+    await waitFor(() =>
+      expect(screen.getByTestId('pnl-history-mfa-required')).toBeTruthy(),
+    );
+    expect(
+      screen.getByText('Re-verify with two-factor authentication to view history.'),
+    ).toBeTruthy();
+    // Normal history rows must not appear alongside the nudge.
+    expect(screen.queryByText('No finished days yet')).toBeNull();
+  });
+
+  it('shows the empty state when history is available but has no days yet', () => {
+    fakeServer.state.historyErrorMode = null;
+    fakeServer.state.historyDays = [];
+    renderScreen();
+    expect(
+      screen.getByText(
+        'No finished days yet — history appears after the first full day of trading.',
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByTestId('pnl-history-mfa-required')).toBeNull();
   });
 });

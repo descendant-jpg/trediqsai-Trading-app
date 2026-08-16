@@ -903,3 +903,133 @@ describe("autopilot per-user state", () => {
     expect(bobHistory.body.days[0]!.pnl).not.toBe(alicePnl);
   });
 });
+
+// ---- History assurance policy --------------------------------------------
+
+/**
+ * These tests verify that GET /autopilot/history uses the "soft" AAL2
+ * assurance policy: transient service unavailability passes through while
+ * a definitive MFA requirement is still enforced.
+ */
+describe("GET /autopilot/history assurance policy", () => {
+  /** Controls what the fake AAL2 assurance middleware returns. */
+  type AssuranceResult = "ok" | "mfa_required" | "service_unavailable" | "network_error";
+  let assuranceResult: AssuranceResult;
+
+  let assuranceServer: Server;
+  let assuranceBase: string;
+
+  beforeEach(async () => {
+    assuranceResult = "ok";
+
+    const { createAutopilotRouter } = await import("./autopilot");
+    const app = express();
+    app.use(express.json());
+
+    // Strict assurance for write endpoints (simulates the production default).
+    const strictAssurance: import("express").RequestHandler = (_req, res, next) => {
+      if (assuranceResult === "ok") return next();
+      if (assuranceResult === "mfa_required") {
+        res.status(403).json({ error: "Two-factor verification is required for this action." });
+        return;
+      }
+      if (assuranceResult === "service_unavailable") {
+        res.status(503).json({ error: "Unable to verify account security." });
+        return;
+      }
+      // network_error
+      next(new Error("Simulated network failure"));
+    };
+
+    // Soft assurance for the history read endpoint (simulates requireAal2IfMfaEnrolledSoft).
+    const softAssurance: import("express").RequestHandler = (_req, res, next) => {
+      if (assuranceResult === "ok") return next();
+      if (assuranceResult === "mfa_required") {
+        res.status(403).json({ error: "Two-factor verification is required to view this.", code: "mfa_required" });
+        return;
+      }
+      // service_unavailable and network_error both pass through in the soft variant.
+      next();
+    };
+
+    app.use(
+      "/api",
+      createAutopilotRouter(verifier, undefined, strictAssurance, softAssurance),
+    );
+    await new Promise<void>((resolve) => {
+      assuranceServer = app.listen(0, "127.0.0.1", () => resolve());
+    });
+    const { address, port } = assuranceServer.address() as AddressInfo;
+    assuranceBase = `http://${address}:${port}/api`;
+  });
+
+  afterEach(async () => {
+    await new Promise<void>((resolve, reject) =>
+      assuranceServer.close((err) => (err ? reject(err) : resolve())),
+    );
+  });
+
+  async function historyFor(token?: string): Promise<{ status: number; body: any }> {
+    const res = await fetch(`${assuranceBase}/autopilot/history`, {
+      headers: token ? { authorization: `Bearer ${token}` } : {},
+    });
+    return { status: res.status, body: await res.json() };
+  }
+
+  it("serves history to a signed-in user when assurance is available", async () => {
+    assuranceResult = "ok";
+    const { status, body } = await historyFor("token-user1");
+    expect(status).toBe(200);
+    expect(GetAutopilotHistoryResponse.safeParse(body).success).toBe(true);
+  });
+
+  it("serves history when the AAL assurance service is temporarily unavailable", async () => {
+    // This is the core regression: a 503 from Supabase must not produce a
+    // 503 to the client. Ordinary signed-in sessions should not be blocked.
+    assuranceResult = "service_unavailable";
+    const { status, body } = await historyFor("token-user2");
+    expect(status).toBe(200);
+    expect(GetAutopilotHistoryResponse.safeParse(body).success).toBe(true);
+  });
+
+  it("serves history when the AAL assurance network call fails", async () => {
+    assuranceResult = "network_error";
+    const { status, body } = await historyFor("token-user3");
+    expect(status).toBe(200);
+    expect(GetAutopilotHistoryResponse.safeParse(body).success).toBe(true);
+  });
+
+  it("returns 403 with mfa_required code when MFA verification is genuinely required", async () => {
+    assuranceResult = "mfa_required";
+    const { status, body } = await historyFor("token-user4");
+    expect(status).toBe(403);
+    expect(body.code).toBe("mfa_required");
+  });
+
+  it("still serves history to anonymous callers (soft assurance does not require sign-in)", async () => {
+    assuranceResult = "service_unavailable";
+    const { status, body } = await historyFor(); // no token
+    expect(status).toBe(200);
+    expect(body).toHaveProperty("days");
+  });
+
+  it("write endpoints still fail when assurance service is unavailable (strict variant)", async () => {
+    assuranceResult = "service_unavailable";
+    const res = await fetch(`${assuranceBase}/autopilot/master`, {
+      method: "PUT",
+      headers: { "content-type": "application/json", authorization: "Bearer token-user5" },
+      body: JSON.stringify({ active: false }),
+    });
+    expect(res.status).toBe(503);
+  });
+
+  it("write endpoints still enforce MFA when required", async () => {
+    assuranceResult = "mfa_required";
+    const res = await fetch(`${assuranceBase}/autopilot/master`, {
+      method: "PUT",
+      headers: { "content-type": "application/json", authorization: "Bearer token-user6" },
+      body: JSON.stringify({ active: false }),
+    });
+    expect(res.status).toBe(403);
+  });
+});

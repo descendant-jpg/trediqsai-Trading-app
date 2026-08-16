@@ -15,7 +15,7 @@ import {
 import { eq } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { identity, requestUserId, type TokenVerifier } from "../middlewares/identity";
-import { requireAal2IfMfaEnrolled } from "../middlewares/aal2";
+import { requireAal2IfMfaEnrolled, requireAal2IfMfaEnrolledSoft } from "../middlewares/aal2";
 import { hasEliteAccess, hasProAccess, type TierLookup } from "../lib/entitlement";
 
 type BotState = {
@@ -481,15 +481,29 @@ async function persistStoppedPro(
 /**
  * Build the AutoPilot router. The token verifier is injectable for tests;
  * production uses the default Supabase-backed verifier.
+ *
+ * @param assurance     - Strict MFA assurance for write/mutation endpoints.
+ *                        Defaults to `requireAal2IfMfaEnrolled` in production,
+ *                        or a no-op when a custom verifier is injected (tests).
+ * @param readAssurance - Soft MFA assurance for read-only polling endpoints
+ *                        (history). Passes through when AAL service is
+ *                        unavailable so ordinary signed-in sessions are never
+ *                        blocked by transient infrastructure issues.
+ *                        Defaults to `requireAal2IfMfaEnrolledSoft` in
+ *                        production, or a no-op in test mode.
  */
 export function createAutopilotRouter(
   verifier?: TokenVerifier,
   tierLookup?: TierLookup,
   assurance?: RequestHandler,
+  readAssurance?: RequestHandler,
 ): IRouter {
   const router: IRouter = Router();
+  const testPassthrough: RequestHandler = (_req, _res, next) => next();
   const requireAssurance: RequestHandler =
-    assurance ?? (verifier ? (_req, _res, next) => next() : requireAal2IfMfaEnrolled);
+    assurance ?? (verifier ? testPassthrough : requireAal2IfMfaEnrolled);
+  const requireReadAssurance: RequestHandler =
+    readAssurance ?? (verifier ? testPassthrough : requireAal2IfMfaEnrolledSoft);
   router.use("/autopilot", identity(verifier));
 
   router.get("/autopilot", async (_req, res, next) => {
@@ -509,7 +523,7 @@ export function createAutopilotRouter(
     }
   });
 
-  router.get("/autopilot/history", requireAssurance, async (_req, res, next) => {
+  router.get("/autopilot/history", requireReadAssurance, async (_req, res, next) => {
     try {
       const userId = requestUserId(res);
       const state = await stateFor(userId);
