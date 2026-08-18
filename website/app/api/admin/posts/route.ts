@@ -71,6 +71,10 @@ function db503() {
   );
 }
 
+function supabaseInsertError(error: { message?: string; details?: string | null; hint?: string | null }) {
+  return [error.message, error.details, error.hint].filter(Boolean).join(' — ');
+}
+
 // ---------------------------------------------------------------------------
 // GET — list all posts for admin (no public=1 filter; public endpoint is separate)
 // ---------------------------------------------------------------------------
@@ -176,8 +180,8 @@ export async function POST(req: NextRequest) {
       status,
     });
     return NextResponse.json(
-      { error: 'Failed to create post. If this persists, confirm the blog_posts migration has been applied in Supabase.' },
-      { status: 500 },
+      { error: supabaseInsertError(error) || 'Supabase rejected the post insert.' },
+      { status: 400 },
     );
   }
 

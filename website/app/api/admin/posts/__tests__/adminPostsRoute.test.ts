@@ -296,10 +296,13 @@ describe('admin posts — POST', () => {
   });
 
   it('returns 500 on an unexpected database error', async () => {
-    stubFrom({ blog_posts: { data: null, error: { code: '99999', message: 'unknown' } } });
+    stubFrom({ blog_posts: { data: null, error: { code: '99999', message: 'unknown', details: 'missing required column' } } });
 
     const res = await POST(postReq({ title: 'Error test' }));
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toEqual({
+      error: 'unknown — missing required column',
+    });
   });
 });
 
