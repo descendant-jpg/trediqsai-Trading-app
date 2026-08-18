@@ -1,0 +1,25 @@
+CRITICAL WORK DIRECTIVE: INTEGRATE REVENUECAT SANDBOX INTO EXISTING PAYWALL UI WITHOUT ALTERING DESIGN.
+
+Review our project rules. The user has already built a stunning, fully designed subscription modal (featuring a cyan "TradiQs Pro" tab and a purple "TradiQs Elite" tab with Monthly/Annual buttons). DO NOT alter the visual design, text, or layout of this component. We only need to wire the backend logic.
+
+### 1. Install & Initialize RevenueCat (`react-native-purchases`)
+- Install `@react-native-purchases/purchases`.
+- In the root layout (`app/_layout.tsx` or similar), initialize Purchases in a `useEffect` using a mock testing key: `Purchases.configure({ apiKey: 'goog_mock_testing_key_1234567890' });`. 
+
+### 2. Wire the Existing Paywall UI
+- Locate the existing subscription component (e.g., `Paywall.tsx`, `SubscriptionScreen.tsx`, `UpgradeModal.tsx`).
+- Import `Purchases` into this file.
+- Wrap the existing "Monthly" and "Annual" touchable buttons with an `onPress` handler that triggers `Purchases.purchasePackage(mockPackage)`. 
+- Ensure a loading state (e.g., an ActivityIndicator overlay or button spinner) is triggered during the transaction so the user cannot double-tap.
+
+### 3. Wire Feature Gates to Trigger the Modal
+- Locate the AutoPilot component (`app/(tabs)/ai-tools.tsx`).
+- Fetch the user's current subscription state (mock this via local state or user context if RevenueCat fetching isn't fully ready).
+- If a 'Free' user taps the AutoPilot toggle, or a 'Pro' user taps the `Stocks` pill, intercept the action and trigger the existing Subscription Modal to open.
+
+### 4. Background Supabase Synchronization
+- Implement a listener (`Purchases.addCustomerInfoUpdateListener`) in a global provider.
+- When an active entitlement for `pro` or `elite` is detected, silently update the user's `subscription_tier` in the Supabase `public.profiles` table.
+- Update the local app context so the UI unlocks immediately upon successful sandbox purchase.
+
+EXECUTION REQUIREMENT: Only touch the logic and wiring. Preserve 100% of the existing UI design. Tell me exactly which files you updated and confirm the UI was not modified.
