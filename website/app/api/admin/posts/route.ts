@@ -140,7 +140,7 @@ export async function POST(req: NextRequest) {
     ai_badge: String(b?.ai_badge ?? '').trim().slice(0, 100),
     upvotes: Math.max(0, Number(b?.upvotes ?? 0) || 0),
     status,
-    author: String(b?.author ?? '').trim(),
+    author: String(b?.author ?? '').trim() || 'TradiQs AI Quant Desk',
     cover_image: b?.cover_image ? String(b.cover_image).trim() : null,
     tags,
     published_at: status === 'published' && !b?.published_at ? new Date().toISOString() : (b?.published_at ? String(b.published_at) : null),
@@ -157,7 +157,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'A post with that slug already exists.' }, { status: 409 });
     }
     console.error('[admin/posts] POST error:', error.message);
-    return NextResponse.json({ error: 'Failed to create post.' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Failed to create post. If this persists, confirm the blog_posts migration has been applied in Supabase.' },
+      { status: 500 },
+    );
   }
 
   return NextResponse.json({ post: data }, { status: 201 });

@@ -14,6 +14,10 @@ localPort = 4321
 externalPort = 3000
 
 [[ports]]
+localPort = 5000
+externalPort = 6000
+
+[[ports]]
 localPort = 8080
 externalPort = 8080
 
@@ -64,6 +68,10 @@ args = "test"
 task = "workflow.run"
 args = "typecheck"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "website: Next.js"
+
 [[workflows.workflow]]
 name = "test"
 author = "agent"
@@ -85,3 +93,15 @@ args = "cd website && npx tsc --noEmit"
 
 [workflows.workflow.metadata]
 isValidation = true
+
+[[workflows.workflow]]
+name = "website: Next.js"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd website && npm run dev -- --hostname 0.0.0.0 --port 5000"
+waitForPort = 5000
+
+[workflows.workflow.metadata]
+outputType = "webview"

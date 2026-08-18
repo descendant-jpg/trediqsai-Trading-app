@@ -14,7 +14,7 @@ import {
   Sparkles,
   TrendingUp,
 } from 'lucide-react';
-import WaitlistForm from './components/waitlist-form';
+import WaitlistForm from '../components/waitlist-form';
 
 const stats = [
   ['50,000+', 'Active Traders'],
