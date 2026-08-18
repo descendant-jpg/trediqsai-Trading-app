@@ -70,6 +70,7 @@ describe("supabase tier lookup query contract", () => {
     expect(selected).toEqual([
       "role",
       "tier",
+      "revenuecat_tier",
       "manual_tier_override",
       "free_trial_until",
     ]);
@@ -86,6 +87,18 @@ describe("supabase tier lookup query contract", () => {
       const { hasProAccess } = await loadEntitlement();
       await expect(hasProAccess(`user-${tier}`)).resolves.toBe(true);
     }
+  });
+
+  it("keeps access from another billing source when RevenueCat expires", async () => {
+    stubRows([{ tier: "elite", revenuecat_tier: "starter" }]);
+    const { hasEliteAccess } = await loadEntitlement();
+    await expect(hasEliteAccess("stripe-elite-user")).resolves.toBe(true);
+  });
+
+  it("grants access from an active RevenueCat entitlement without replacing Stripe tier", async () => {
+    stubRows([{ tier: "starter", revenuecat_tier: "pro" }]);
+    const { hasProAccess } = await loadEntitlement();
+    await expect(hasProAccess("revenuecat-pro-user")).resolves.toBe(true);
   });
 
   it("denies access for free and unrecognised tiers", async () => {

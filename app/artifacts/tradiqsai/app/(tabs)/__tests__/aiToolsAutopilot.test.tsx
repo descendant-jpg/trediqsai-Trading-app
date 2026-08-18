@@ -304,17 +304,12 @@ describe('AutoPilot summary + master toggle', () => {
     );
   });
 
-  it('keeps the master toggle unchanged for free traders', () => {
-    const alert = vi.spyOn(Alert, 'alert').mockImplementation(() => {});
+  it('opens the existing paywall when free traders use the master toggle', () => {
     renderScreen();
     toggle('master-toggle');
     expect(screen.getByText('System Active')).toBeTruthy();
-    expect(alert).toHaveBeenCalledWith(
-      'Pro or Elite required',
-      'AutoPilot requires a Pro or Elite subscription. Upgrade to deploy algorithmic bots.',
-    );
+    expect(screen.getByTestId('paywall-card')).toBeTruthy();
     expect(haptics.notificationAsync).toHaveBeenCalledWith('error');
-    alert.mockRestore();
   });
 });
 
@@ -328,19 +323,14 @@ describe('Tiered AutoPilot asset selector', () => {
     expect(haptics.selectionAsync).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps Stocks locked for Pro traders and explains the Elite upgrade', () => {
+  it('keeps Stocks locked for Pro traders and opens the Elite paywall', () => {
     subscription.isSubscribed = true;
     subscription.accessTier = 'pro';
-    const alert = vi.spyOn(Alert, 'alert').mockImplementation(() => {});
     renderScreen();
     press('autopilot-asset-stocks');
     expect(screen.queryByText('[CFG] AutoPilot execution market set to Stocks')).toBeNull();
-    expect(alert).toHaveBeenCalledWith(
-      'Elite market access',
-      'Equities and Indices algorithm unlocked at Elite tier. Upgrade to Elite.',
-    );
+    expect(routerPush).toHaveBeenCalledWith({ pathname: '/paywall', params: { defaultTier: 'ELITE' } });
     expect(haptics.notificationAsync).toHaveBeenCalledWith('warning');
-    alert.mockRestore();
   });
 
   it('lets Elite traders select Stocks', async () => {

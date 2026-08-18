@@ -43,6 +43,7 @@ const subscription = vi.hoisted(() => ({
   isRestoring: false,
   purchase: vi.fn(async () => ({})),
   restore: vi.fn(async () => ({})),
+  refreshProfileEntitlement: vi.fn(async () => ({})),
 }));
 
 vi.mock('@/lib/revenuecat', () => ({
@@ -60,6 +61,7 @@ describe('PaywallModal', () => {
     };
     subscription.purchase = vi.fn(async () => ({}));
     subscription.restore = vi.fn(async () => ({}));
+    subscription.refreshProfileEntitlement = vi.fn(async () => ({}));
     vi.spyOn(window, 'alert').mockImplementation(() => {});
   });
 
@@ -77,6 +79,7 @@ describe('PaywallModal', () => {
     press('paywall-cta');
     await vi.waitFor(() => expect(onClose).toHaveBeenCalled());
     expect(subscription.purchase).toHaveBeenCalledWith(annualPackage);
+    expect(subscription.refreshProfileEntitlement).toHaveBeenCalled();
   });
 
   it('purchases the monthly package when Monthly is selected', async () => {
@@ -105,6 +108,7 @@ describe('PaywallModal', () => {
     render(<PaywallModal visible onClose={() => {}} />);
     press('paywall-restore');
     await vi.waitFor(() => expect(subscription.restore).toHaveBeenCalled());
+    expect(subscription.refreshProfileEntitlement).toHaveBeenCalled();
   });
 
   it('opens the Terms and Privacy documents', () => {

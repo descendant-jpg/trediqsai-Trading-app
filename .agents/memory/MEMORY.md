@@ -9,3 +9,4 @@
 - [Applied migrations are immutable](applied-migrations-are-immutable.md) — fix forward in a new file; tests reading one migration assert a definition the live DB may no longer run.
 - [Supabase schema drift](supabase-schema-drift.md) — migrations in the repo are often NOT applied; probe PostgREST before trusting a table/RPC exists, and DDL needs the SQL editor.
 - [Anthropic model availability](anthropic-model-availability.md) — Claude 3/3.5 ids 404 on this account; list /v1/models before hardcoding, mocked tests won't catch it.
+- [RevenueCat web key requirements](revenuecat-web-key-requirements.md) — native sandbox keys are rejected by RevenueCat web; only configure web with a Web Billing key.

@@ -41,7 +41,7 @@ const ELITE_TIERS = new Set(["elite", "whale", "vip"]);
 const supabaseTierLookup: TierLookup = async (userId) => {
   const params = new URLSearchParams({
     id: `eq.${userId}`,
-    select: "role,tier,manual_tier_override,free_trial_until",
+    select: "role,tier,revenuecat_tier,manual_tier_override,free_trial_until",
     limit: "1",
   });
   const res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?${params}`, {
@@ -55,6 +55,7 @@ const supabaseTierLookup: TierLookup = async (userId) => {
   const rows = (await res.json()) as {
     role?: string | null;
     tier?: string | null;
+    revenuecat_tier?: string | null;
     manual_tier_override?: string | null;
     free_trial_until?: string | null;
   }[];
@@ -70,8 +71,20 @@ const supabaseTierLookup: TierLookup = async (userId) => {
     return "pro";
   }
   // A manual override (set by staff) wins over the billing-derived tier.
-  return row.manual_tier_override ?? row.tier ?? null;
+  if (row.manual_tier_override) return row.manual_tier_override;
+  return highestPaidTier(row.tier, row.revenuecat_tier);
 };
+
+function highestPaidTier(
+  first: string | null | undefined,
+  second: string | null | undefined,
+): string | null {
+  const normalize = (tier: string | null | undefined) => tier?.trim().toLowerCase() ?? '';
+  const tierRank = (tier: string) => ELITE_TIERS.has(tier) ? 2 : PRO_TIERS.has(tier) ? 1 : 0;
+  const primary = normalize(first);
+  const secondary = normalize(second);
+  return tierRank(secondary) > tierRank(primary) ? (second ?? null) : (first ?? second ?? null);
+}
 
 /** True when the tier string grants Pro-only access. */
 export function isProTier(tier: string | null | undefined): boolean {

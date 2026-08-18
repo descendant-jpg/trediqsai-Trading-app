@@ -27,4 +27,9 @@ describe('profile entitlements', () => {
     expect(getProfileAccessTier({ tier: 'elite', manual_tier_override: 'free' })).toBe('starter');
     expect(hasProfileProAccess({ tier: 'pro', manual_tier_override: 'starter' })).toBe(false);
   });
+
+  it('combines Stripe and RevenueCat tiers without letting either revoke the other', () => {
+    expect(getProfileAccessTier({ tier: 'elite', revenuecat_tier: 'starter' })).toBe('elite');
+    expect(getProfileAccessTier({ tier: 'starter', revenuecat_tier: 'pro' })).toBe('pro');
+  });
 });

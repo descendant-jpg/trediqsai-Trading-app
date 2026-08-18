@@ -468,10 +468,7 @@ export default function AiToolsScreen() {
     const canDeployAutoPilot = isAdmin || tier === 'pro' || tier === 'elite';
     if (!canDeployAutoPilot) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-      Alert.alert(
-        'Pro or Elite required',
-        'AutoPilot requires a Pro or Elite subscription. Upgrade to deploy algorithmic bots.',
-      );
+      setPaywallOpen(true);
       return;
     }
 
@@ -502,18 +499,12 @@ export default function AiToolsScreen() {
     const stocksLocked = asset === 'Stocks' && !isAdmin && tier !== 'elite';
     if (stocksLocked) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
-      Alert.alert(
-        'Elite market access',
-        'Equities and Indices algorithm unlocked at Elite tier. Upgrade to Elite.',
-      );
+      router.push({ pathname: '/paywall', params: { defaultTier: 'ELITE' } });
       return;
     }
     if (!isAdmin && tier !== 'pro' && tier !== 'elite') {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-      Alert.alert(
-        'Pro or Elite required',
-        'AutoPilot requires a Pro or Elite subscription. Upgrade to deploy algorithmic bots.',
-      );
+      setPaywallOpen(true);
       return;
     }
     if (asset === selectedAsset) return;

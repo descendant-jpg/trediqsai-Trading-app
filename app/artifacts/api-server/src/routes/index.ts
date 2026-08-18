@@ -11,6 +11,7 @@ import botsRouter from "./bots";
 import broadcastSignalsRouter from "./broadcastSignals";
 import notificationsRouter from "./notifications";
 import autopilotRouter from "./autopilot";
+import revenueCatRouter from "./revenuecat";
 
 const router: IRouter = Router();
 
@@ -26,5 +27,6 @@ router.use(botsRouter);
 router.use(broadcastSignalsRouter);
 router.use(notificationsRouter);
 router.use(autopilotRouter);
+router.use(revenueCatRouter);
 
 export default router;

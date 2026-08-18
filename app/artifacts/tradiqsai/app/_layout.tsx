@@ -113,7 +113,6 @@ function RootLayoutNav() {
   usePushNotifications(userId);
 
   useEffect(() => {
-    if (Platform.OS === 'web') return;
     try {
       initializeRevenueCat();
     } catch (err: unknown) {
