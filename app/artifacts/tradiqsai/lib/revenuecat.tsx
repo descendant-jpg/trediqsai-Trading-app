@@ -2,7 +2,6 @@ import React, { createContext, useCallback, useContext, useEffect, useState } fr
 import { AppState, Platform } from "react-native";
 import Purchases from "react-native-purchases";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import Constants from "expo-constants";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "@/context/AuthContext";
 import { isSupabaseConfigured, supabase } from "@/utils/supabase";
@@ -17,8 +16,6 @@ import {
 
 const SUBSCRIPTION_CACHE_KEY_PREFIX = "revenuecat.entitlement";
 
-const REVENUECAT_TEST_API_KEY =
-  process.env.EXPO_PUBLIC_REVENUECAT_TEST_API_KEY ?? "goog_mock_testing_key_1234567890";
 const REVENUECAT_IOS_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY;
 const REVENUECAT_ANDROID_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY;
 const REVENUECAT_WEB_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_WEB_API_KEY;
@@ -41,10 +38,6 @@ function getRevenueCatApiKey() {
   // demoable with their existing fallback UI until a Web Billing key is set.
   if (Platform.OS === "web") return REVENUECAT_WEB_API_KEY ?? null;
 
-  if (__DEV__ || Constants.executionEnvironment === "storeClient") {
-    return REVENUECAT_TEST_API_KEY;
-  }
-
   if (Platform.OS === "ios") {
     if (!REVENUECAT_IOS_API_KEY) throw new Error("RevenueCat iOS public API key not found");
     return REVENUECAT_IOS_API_KEY;
@@ -55,7 +48,7 @@ function getRevenueCatApiKey() {
     return REVENUECAT_ANDROID_API_KEY;
   }
 
-  return REVENUECAT_TEST_API_KEY;
+  return null;
 }
 
 export function initializeRevenueCat() {

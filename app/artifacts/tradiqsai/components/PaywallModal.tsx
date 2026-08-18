@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -113,9 +113,7 @@ function notify(title: string, message?: string) {
  * Full-screen "Upgrade to Pro" subscription paywall, openable from any tab.
  *
  * Wired to RevenueCat: the monthly/annual toggle maps to the current
- * offering's MONTHLY/ANNUAL packages and the CTA runs a real purchase. In
- * environments without store packages (dev/web preview) it falls back to a
- * short simulated flow so the screen remains demoable.
+ * offering's MONTHLY/ANNUAL packages and the CTA runs a real store purchase.
  */
 export function PaywallModal({
   visible,
@@ -137,30 +135,16 @@ export function PaywallModal({
     defaultTier === 'ELITE' ? 'ELITE' : 'PRO',
   );
   const [billingCycle, setBillingCycle] = useState<BillingCycle>('annual');
-  const [simulating, setSimulating] = useState(false);
   const [docOpen, setDocOpen] = useState<'terms' | 'privacy' | null>(null);
-  const simulateTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Reset transient state whenever the paywall closes so a reopen starts
   // fresh (default annual cycle, no doc modal, no pending simulated purchase).
   useEffect(() => {
     if (visible) return;
-    if (simulateTimer.current) {
-      clearTimeout(simulateTimer.current);
-      simulateTimer.current = null;
-    }
     setSelectedTier('PRO');
     setBillingCycle('annual');
-    setSimulating(false);
     setDocOpen(null);
   }, [visible]);
-
-  useEffect(
-    () => () => {
-      if (simulateTimer.current) clearTimeout(simulateTimer.current);
-    },
-    [],
-  );
 
   const proPackages = offerings?.current?.availablePackages ?? [];
   const elitePackages = useMemo(
@@ -188,7 +172,7 @@ export function PaywallModal({
   const monthlyPrice = monthlyPackage?.product.priceString ?? (selectedTier === 'ELITE' ? '$49.99' : MONTHLY_PRICE_FALLBACK);
   const annualPrice = annualPackage?.product.priceString ?? (selectedTier === 'ELITE' ? '$399.99' : ANNUAL_PRICE_FALLBACK);
   const selectedPackage = billingCycle === 'annual' ? annualPackage : monthlyPackage;
-  const working = isPurchasing || isRestoring || simulating;
+  const working = isPurchasing || isRestoring;
   const accent = selectedTier === 'ELITE' ? '#B026FF' : '#00F0FF';
   const selectedPrice = billingCycle === 'annual' ? annualPrice : monthlyPrice;
   const features = selectedTier === 'ELITE' ? ELITE_FEATURES : PRO_FEATURES;
@@ -219,17 +203,6 @@ export function PaywallModal({
         // User cancelled or store error — stay on the paywall.
         console.log('Purchase cancelled or failed:', err?.message);
       }
-      return;
-    }
-    // No store package available. Only simulate in dev / web preview —
-    // in production this is a transient offerings failure, never a success.
-    if (__DEV__ || Platform.OS === 'web') {
-      setSimulating(true);
-      simulateTimer.current = setTimeout(() => {
-        simulateTimer.current = null;
-        setSimulating(false);
-        finishSuccess();
-      }, 1500);
       return;
     }
     notify(
@@ -369,7 +342,7 @@ export function PaywallModal({
             disabled={working}
             testID="paywall-cta"
           >
-            {isPurchasing || simulating ? <ActivityIndicator color={Platform.OS === 'web' ? '#0A0B0E' : '#FFFFFF'} /> : (
+            {isPurchasing ? <ActivityIndicator color={Platform.OS === 'web' ? '#0A0B0E' : '#FFFFFF'} /> : (
               <>
                 {Platform.OS === 'ios' ? <Text style={styles.applePayText}>Pay with  Apple Pay</Text> : null}
                 {Platform.OS === 'android' ? <Text style={styles.googlePayText}><Text style={styles.googleMark}>G</Text> Pay</Text> : null}
