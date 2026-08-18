@@ -1057,6 +1057,71 @@ grant execute on function public.payout_evaluation_summary() to authenticated;
 grant execute on function public.request_evaluation_payout() to authenticated;
 
 -- ============================================================
+-- migrations/022_revenuecat_tier.sql
+-- ============================================================
+-- RevenueCat's verified entitlement is separate from `tier`, which is also
+-- managed by Stripe and staff tools. Only verified webhooks may write it.
+alter table if exists public.profiles
+  add column if not exists revenuecat_tier text not null default 'starter';
+
+alter table if exists public.profiles
+  drop constraint if exists profiles_revenuecat_tier_check;
+
+alter table if exists public.profiles
+  add constraint profiles_revenuecat_tier_check
+  check (revenuecat_tier in ('starter', 'pro', 'elite'));
+
+comment on column public.profiles.revenuecat_tier is
+  'Server-owned RevenueCat entitlement tier. Updated only by verified RevenueCat webhooks.';
+
+revoke update (revenuecat_tier) on public.profiles from authenticated;
+
+-- ============================================================
+-- migrations/023_revenuecat_webhook_ordering.sql
+-- ============================================================
+-- RevenueCat retries webhooks and does not guarantee delivery order. The RPC
+-- accepts only newer events so a delayed purchase cannot restore an expired
+-- or transferred entitlement.
+alter table if exists public.profiles
+  add column if not exists revenuecat_last_event_at timestamptz;
+
+comment on column public.profiles.revenuecat_last_event_at is
+  'Timestamp of the newest verified RevenueCat webhook applied to this profile.';
+
+create or replace function public.apply_revenuecat_entitlement(
+  p_user_id uuid,
+  p_tier text,
+  p_event_at timestamptz
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  updated_rows integer := 0;
+begin
+  if p_tier not in ('starter', 'pro', 'elite') then
+    raise exception 'invalid RevenueCat tier';
+  end if;
+
+  update public.profiles
+     set revenuecat_tier = p_tier,
+         revenuecat_last_event_at = p_event_at
+   where id = p_user_id
+     and (revenuecat_last_event_at is null or revenuecat_last_event_at < p_event_at);
+
+  get diagnostics updated_rows = row_count;
+  return updated_rows > 0;
+end;
+$$;
+
+revoke all on function public.apply_revenuecat_entitlement(uuid, text, timestamptz)
+  from public, anon, authenticated;
+grant execute on function public.apply_revenuecat_entitlement(uuid, text, timestamptz)
+  to service_role;
+
+-- ============================================================
 -- migrations/017_admin_roles.sql
 -- ============================================================
 -- Administrative authority is server-owned. Authenticated clients receive no
