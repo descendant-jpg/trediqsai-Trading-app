@@ -276,6 +276,25 @@ describe('admin posts — POST', () => {
     expect(insertArg.tags).toEqual(['forex', 'crypto', 'sp']);
   });
 
+  it('calculates reading time server-side from the submitted body', async () => {
+    const { queries } = stubFrom({ blog_posts: { data: { id: 1 }, error: null } });
+    const content = Array.from({ length: 401 }, (_, index) => `word${index}`).join(' ');
+
+    await POST(postReq({ title: 'Reading time', content }));
+
+    const insertArg = (queries.blog_posts.insert as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(insertArg.read_time).toBe('3 min read');
+  });
+
+  it('preserves an optional cover image URL', async () => {
+    const { queries } = stubFrom({ blog_posts: { data: { id: 1 }, error: null } });
+
+    await POST(postReq({ title: 'Cover image', cover_image: 'https://images.example/cover.jpg' }));
+
+    const insertArg = (queries.blog_posts.insert as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(insertArg.cover_image).toBe('https://images.example/cover.jpg');
+  });
+
   it('returns 500 on an unexpected database error', async () => {
     stubFrom({ blog_posts: { data: null, error: { code: '99999', message: 'unknown' } } });
 

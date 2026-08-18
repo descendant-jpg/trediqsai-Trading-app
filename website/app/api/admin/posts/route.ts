@@ -20,6 +20,7 @@ interface PostInsert {
   status: PostStatus;
   author: string;
   cover_image?: string | null;
+  read_time: string;
   tags: string[];
   published_at?: string | null;
 }
@@ -53,6 +54,15 @@ function sanitizeTag(t: unknown): string {
     .slice(0, 50);
 }
 
+/**
+ * A consistent reading-time label should come from the server, not a manually
+ * entered CMS value. Treat an empty body as the shortest useful reading time.
+ */
+function calculateReadTime(content: string): string {
+  const words = content.trim().match(/\S+/g)?.length ?? 0;
+  return `${Math.max(1, Math.ceil(words / 200))} min read`;
+}
+
 function db503() {
   console.warn('[admin/posts] Supabase service role key is not configured.');
   return NextResponse.json(
@@ -76,7 +86,7 @@ export async function GET(req: NextRequest) {
 
   let query = supabase
     .from('blog_posts')
-    .select('id, title, slug, excerpt, content, asset_class, category, ai_badge, upvotes, status, author, tags, published_at, created_at, updated_at', { count: 'exact' })
+    .select('id, title, slug, excerpt, content, asset_class, category, ai_badge, upvotes, status, author, cover_image, read_time, tags, published_at, created_at, updated_at', { count: 'exact' })
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1);
 
@@ -142,6 +152,7 @@ export async function POST(req: NextRequest) {
     status,
     author: String(b?.author ?? '').trim() || 'TradiQs AI Quant Desk',
     cover_image: b?.cover_image ? String(b.cover_image).trim() : null,
+    read_time: calculateReadTime(String(b?.content ?? '').trim()),
     tags,
     published_at: status === 'published' && !b?.published_at ? new Date().toISOString() : (b?.published_at ? String(b.published_at) : null),
   };
@@ -156,7 +167,14 @@ export async function POST(req: NextRequest) {
     if (error.code === '23505') {
       return NextResponse.json({ error: 'A post with that slug already exists.' }, { status: 409 });
     }
-    console.error('[admin/posts] POST error:', error.message);
+    console.error('[admin/posts] POST insert failed', {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      slug,
+      status,
+    });
     return NextResponse.json(
       { error: 'Failed to create post. If this persists, confirm the blog_posts migration has been applied in Supabase.' },
       { status: 500 },
@@ -213,7 +231,11 @@ export async function PUT(req: NextRequest) {
   }
 
   if (b?.excerpt !== undefined) update.excerpt = String(b.excerpt).trim();
-  if (b?.content !== undefined) update.content = String(b.content).trim();
+  if (b?.content !== undefined) {
+    const content = String(b.content).trim();
+    update.content = content;
+    update.read_time = calculateReadTime(content);
+  }
   if (b?.asset_class !== undefined && VALID_ASSETS.includes(b.asset_class as typeof VALID_ASSETS[number])) update.asset_class = b.asset_class;
   if (b?.category !== undefined) update.category = String(b.category).trim().slice(0, 50);
   if (b?.ai_badge !== undefined) update.ai_badge = String(b.ai_badge).trim().slice(0, 100);
