@@ -13,7 +13,7 @@ import {
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   fetchAdminMetrics,
   type AdminMetrics,
@@ -36,6 +36,7 @@ function formatDate(value: string) {
 
 export default function MobileCmsDashboard() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [dashboard, setDashboard] = useState<AdminMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -113,14 +114,14 @@ export default function MobileCmsDashboard() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <View style={[styles.safeArea, { paddingTop: insets.top }]}>
       <View style={styles.screen}>
         <View style={styles.header}>
           <TouchableOpacity
             accessibilityLabel="Back to Profile"
             accessibilityRole="button"
             hitSlop={8}
-            onPress={() => router.back()}
+            onPress={() => router.navigate('/(tabs)/profile')}
             style={styles.backButton}
           >
             <Feather name="chevron-left" size={22} color="#FFFFFF" />
@@ -242,7 +243,7 @@ export default function MobileCmsDashboard() {
         </View>
         </ScrollView>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
