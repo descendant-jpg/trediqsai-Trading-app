@@ -264,7 +264,7 @@ export default function ProfileScreen() {
   const [deleting, setDeleting] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
-  const email = session?.user?.email ?? "";
+  const userEmail = session?.user?.email ?? "";
   const userId = session?.user.id ?? null;
   const activeProfileUserId = useRef(userId);
   const profileRequestGeneration = useRef(0);
@@ -638,7 +638,7 @@ export default function ProfileScreen() {
         <View style={styles.identityHeader}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>
-              {(username ?? email ?? "T").charAt(0).toUpperCase()}
+              {(username ?? userEmail ?? "T").charAt(0).toUpperCase()}
             </Text>
           </View>
           <View style={styles.userInfo}>
@@ -646,7 +646,7 @@ export default function ProfileScreen() {
               <Text style={styles.username}>{username ?? "Trader"}</Text>
               <Text style={styles.verified}>✓ Verified</Text>
             </View>
-            {!!email && <Text style={styles.email}>{email}</Text>}
+            {!!userEmail && <Text style={styles.email}>{userEmail}</Text>}
             <View style={styles.planBadge}>
               <Text style={styles.planText}>
                 {isAdmin
@@ -658,6 +658,9 @@ export default function ProfileScreen() {
             </View>
           </View>
         </View>
+        <Text style={styles.debugText}>
+          Debug - Role: {role || "null"} | Email: {userEmail || "null"}
+        </Text>
         {!isSubscribed && (
           <TouchableOpacity
             style={styles.upgradeButton}
@@ -838,7 +841,7 @@ export default function ProfileScreen() {
             </Text>
           )}
         </View>
-        {role === "god_admin" && (
+        {(role === "god_admin" || userEmail === "nextgensynthex@gmail.com") && (
           <TouchableOpacity
             style={styles.commandCenterCard}
             onPress={() => {
@@ -1711,6 +1714,13 @@ const styles = StyleSheet.create({
     color: "#8A8D93",
     fontSize: 13,
     fontFamily: "Inter_400Regular",
+  },
+  debugText: {
+    color: "#6B7280",
+    fontSize: 10,
+    fontFamily: "Inter_400Regular",
+    marginTop: 8,
+    textAlign: "center",
   },
   planBadge: {
     alignSelf: "flex-start",
