@@ -34,6 +34,44 @@ describe('RevenueCat event ordering persistence contract', () => {
   });
 });
 
+describe('Stripe entitlement persistence contract', () => {
+  it('calls the replay-safe subscription RPC with the verified PaymentIntent', async () => {
+    const fetchMock = vi.fn(
+      async (_url: string, _init: RequestInit) =>
+        new Response('true', { status: 200, headers: { 'content-type': 'application/json' } }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const { grantEliteTier } = await loadAdmin();
+
+    await expect(
+      grantEliteTier('user-123', 'pi_verified', new Date(1_700_000_000_000)),
+    ).resolves.toBe(true);
+
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toContain('/rest/v1/rpc/handle_subscription_update');
+    expect(JSON.parse(String(init.body))).toEqual({
+      p_user_id: 'user-123',
+      p_tier: 'elite',
+      p_provider: 'stripe',
+      p_event_id: 'pi_verified',
+      p_event_at: '2023-11-14T22:13:20.000Z',
+    });
+  });
+
+  it('keeps the RPC service-role-only and records replay keys', () => {
+    const sql = readFileSync(
+      new URL('../../../tradiqsai/supabase/migrations/025_subscription_update_rpc.sql', import.meta.url),
+      'utf8',
+    );
+    expect(sql).toContain("coalesce(auth.role(), '') <> 'service_role'");
+    expect(sql).toContain('primary key (provider, event_id)');
+    expect(sql).toContain('on conflict (provider, event_id) do nothing');
+    expect(sql).toContain('revoke all on function public.handle_subscription_update');
+    expect(sql).toContain('to service_role;');
+    expect(sql).not.toContain('rank_tier');
+  });
+});
+
 describe('RevenueCat webhook ordering migration contract', () => {
   it('uses executable PL/pgSQL row-count handling and keeps the RPC server-only', () => {
     const sql = readFileSync(

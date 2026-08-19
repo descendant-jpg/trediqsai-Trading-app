@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { getProfileAccessTier, hasProfileProAccess, isProfileAdmin } from '../profileEntitlements';
+import {
+  getProfileAccessTier,
+  hasProfileProAccess,
+  isAccessTierUpgrade,
+  isProfileAdmin,
+} from '../profileEntitlements';
 
 describe('profile entitlements', () => {
   it('grants admin accounts Pro access', () => {
@@ -31,5 +36,13 @@ describe('profile entitlements', () => {
   it('combines Stripe and RevenueCat tiers without letting either revoke the other', () => {
     expect(getProfileAccessTier({ tier: 'elite', revenuecat_tier: 'starter' })).toBe('elite');
     expect(getProfileAccessTier({ tier: 'starter', revenuecat_tier: 'pro' })).toBe('pro');
+  });
+
+  it('announces only upward entitlement changes', () => {
+    expect(isAccessTierUpgrade('starter', 'pro')).toBe(true);
+    expect(isAccessTierUpgrade('starter', 'elite')).toBe(true);
+    expect(isAccessTierUpgrade('pro', 'elite')).toBe(true);
+    expect(isAccessTierUpgrade('pro', 'pro')).toBe(false);
+    expect(isAccessTierUpgrade('elite', 'pro')).toBe(false);
   });
 });

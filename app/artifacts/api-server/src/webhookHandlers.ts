@@ -2,6 +2,7 @@ import type Stripe from 'stripe';
 import { getStripeSync } from './stripeClient.js';
 import { grantEliteTier } from './lib/supabaseAdmin.js';
 import { logger } from './lib/logger.js';
+import { isElitePayment } from './lib/elitePlan.js';
 
 export class WebhookHandlers {
   /**
@@ -55,10 +56,15 @@ export class WebhookHandlers {
       const intent = event.data.object as Stripe.PaymentIntent;
       const userId = intent.metadata?.userId;
       const plan = intent.metadata?.plan;
+      const correctProduct = isElitePayment(intent);
 
-      if (userId && plan === 'elite') {
+      if (userId && plan === 'elite' && correctProduct) {
         try {
-          await grantEliteTier(userId);
+          await grantEliteTier(
+            userId,
+            intent.id,
+            new Date(intent.created * 1000),
+          );
           logger.info(
             { userId, paymentIntentId: intent.id },
             'Elite tier granted via webhook',
@@ -68,6 +74,16 @@ export class WebhookHandlers {
           logger.error({ err, userId }, 'Failed to grant Elite tier from webhook');
           throw err;
         }
+      } else if (userId && plan === 'elite') {
+        logger.warn(
+          {
+            userId,
+            paymentIntentId: intent.id,
+            amount: intent.amount,
+            currency: intent.currency,
+          },
+          'Ignored verified Stripe webhook with mismatched Elite product',
+        );
       }
     }
   }

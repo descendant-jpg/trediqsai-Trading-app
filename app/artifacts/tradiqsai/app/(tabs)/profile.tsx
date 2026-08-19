@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Feather } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetAutopilotHistoryQueryKey } from "@workspace/api-client-react";
@@ -40,6 +41,10 @@ import { SocialMediaModal } from "@/components/SocialMediaModal";
 import { ChangePasswordModal } from "@/components/ChangePasswordModal";
 import { DeleteAccountModal } from "@/components/DeleteAccountModal";
 import { TwoFactorAuthModal } from "@/components/TwoFactorAuthModal";
+import {
+  SubscriptionSuccessBanner,
+  type SubscriptionSuccess,
+} from "@/components/SubscriptionSuccessBanner";
 import { authenticateBiometrics, biometricCapability, getBiometricsEnabled, setBiometricsEnabled, unsupportedBiometricsMessage } from "@/lib/biometricSecurity";
 
 function showAlert(title: string, message: string) {
@@ -188,7 +193,7 @@ export default function ProfileScreen() {
   const { mfa } = useLocalSearchParams<{ mfa?: string }>();
   const queryClient = useQueryClient();
   const { session, signOut } = useAuth();
-  const { isSubscribed, isAdmin } = useSubscription();
+  const { isSubscribed, isAdmin, accessTier, profileUpgrade } = useSubscription();
   const { tradingDayTz, setTradingDayTz } = useTrading();
   const {
     evaluation,
@@ -212,6 +217,9 @@ export default function ProfileScreen() {
   const [biometricsAvailable, setBiometricsAvailable] = useState(Platform.OS !== "web");
   const [twoFactorOpen, setTwoFactorOpen] = useState(false);
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+  const [subscriptionSuccess, setSubscriptionSuccess] =
+    useState<SubscriptionSuccess | null>(null);
+  const lastUpgradeKey = useRef("");
 
   // Change password
   const [newPassword, setNewPassword] = useState("");
@@ -286,6 +294,35 @@ export default function ProfileScreen() {
   useEffect(() => {
     if (mfa === "verify") setTwoFactorOpen(true);
   }, [mfa]);
+
+  useEffect(() => {
+    lastUpgradeKey.current = "";
+    setSubscriptionSuccess(null);
+  }, [session?.user.id]);
+
+  useEffect(() => {
+    const upgradeKey = profileUpgrade
+      ? `${profileUpgrade.userId}:${profileUpgrade.sequence}`
+      : "";
+    if (
+      !profileUpgrade ||
+      upgradeKey === lastUpgradeKey.current
+    ) {
+      return;
+    }
+    lastUpgradeKey.current = upgradeKey;
+    setSubscriptionSuccess({
+      userId: profileUpgrade.userId,
+      tier: profileUpgrade.tier,
+    });
+    if (Platform.OS !== "web") {
+      void Haptics.notificationAsync(
+        Haptics.NotificationFeedbackType.Success,
+      ).catch(() => {});
+    }
+    const timeout = setTimeout(() => setSubscriptionSuccess(null), 6_000);
+    return () => clearTimeout(timeout);
+  }, [profileUpgrade]);
 
   const handleMfaVerified = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: getGetAutopilotHistoryQueryKey() });
@@ -481,14 +518,20 @@ export default function ProfileScreen() {
             <View style={styles.planBadge}>
               <Text style={styles.planText}>
                 {isAdmin
-                  ? "ADMIN · PRO PLAN"
-                  : isSubscribed
+                  ? "ADMIN · ELITE ACCESS"
+                  : accessTier === "elite"
+                    ? "ELITE PLAN"
+                    : isSubscribed
                     ? "PRO PLAN"
                     : "FREE PLAN"}
               </Text>
             </View>
           </View>
         </View>
+        <SubscriptionSuccessBanner
+          success={subscriptionSuccess}
+          currentUserId={session?.user.id ?? null}
+        />
         {!isSubscribed && (
           <TouchableOpacity
             style={styles.upgradeButton}

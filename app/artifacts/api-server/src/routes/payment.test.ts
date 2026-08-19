@@ -16,7 +16,7 @@ vi.mock('../stripeClient.js', () => ({
 }));
 
 vi.mock('../lib/supabaseAdmin.js', () => ({
-  grantEliteTier: vi.fn().mockResolvedValue(undefined),
+  grantEliteTier: vi.fn().mockResolvedValue(true),
 }));
 
 vi.mock('../lib/logger.js', () => ({
@@ -167,6 +167,7 @@ describe('POST /payment/confirm', () => {
       paymentIntents: {
         retrieve: vi.fn().mockResolvedValue({
           id: 'pi_test123',
+          created: 1_700_000_000,
           status: 'succeeded',
           amount: 4900,
           currency: 'usd',
@@ -184,7 +185,11 @@ describe('POST /payment/confirm', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
-    expect(grantEliteTier).toHaveBeenCalledWith('user-1');
+    expect(grantEliteTier).toHaveBeenCalledWith(
+      'user-1',
+      'pi_test123',
+      new Date('2023-11-14T22:13:20.000Z'),
+    );
   });
 
   it('does not grant Elite when grantEliteTier throws (Supabase failure)', async () => {
@@ -192,6 +197,7 @@ describe('POST /payment/confirm', () => {
       paymentIntents: {
         retrieve: vi.fn().mockResolvedValue({
           id: 'pi_test123',
+          created: 1_700_000_000,
           status: 'succeeded',
           amount: 4900,
           currency: 'usd',

@@ -9,6 +9,12 @@ export type ProfileEntitlement = {
 const PRO_TIERS = new Set(['pro', 'elite', 'whale', 'vip']);
 export type AccessTier = 'starter' | 'pro' | 'elite';
 
+const ACCESS_TIER_RANK: Record<AccessTier, number> = {
+  starter: 0,
+  pro: 1,
+  elite: 2,
+};
+
 function normalized(value: string | null | undefined): string {
   return value?.trim().toLowerCase() ?? '';
 }
@@ -35,6 +41,10 @@ export function getProfileAccessTier(
   const effectiveTier = override || highestPaidTier(billingTier, revenueCatTier);
   if (effectiveTier === 'elite' || effectiveTier === 'whale' || effectiveTier === 'vip') return 'elite';
   return PRO_TIERS.has(effectiveTier) ? 'pro' : 'starter';
+}
+
+export function isAccessTierUpgrade(previous: AccessTier, next: AccessTier): boolean {
+  return ACCESS_TIER_RANK[next] > ACCESS_TIER_RANK[previous];
 }
 
 function highestPaidTier(primary: string, secondary: string): string {

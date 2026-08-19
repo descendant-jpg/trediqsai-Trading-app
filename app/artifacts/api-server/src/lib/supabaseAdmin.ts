@@ -8,42 +8,50 @@ const SUPABASE_URL =
 const SUPABASE_SERVICE_ROLE_KEY = process.env['SUPABASE_SERVICE_ROLE_KEY'] ?? '';
 
 /**
- * Writes the canonical paid tier to the profiles table for the given user.
- * Uses the service role key so it is never callable from the client.
- * Safe to call multiple times — a repeated PATCH is idempotent and leaves
- * every non-entitlement field (including role) unchanged.
+ * Applies a verified Stripe PaymentIntent through the database-owned,
+ * service-role-only idempotency boundary.
  */
-export async function grantEliteTier(userId: string): Promise<void> {
+export async function grantEliteTier(
+  userId: string,
+  paymentIntentId: string,
+  eventAt: Date,
+): Promise<boolean> {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     throw new Error('Supabase service role credentials are not configured on the server.');
   }
 
-  const tier = 'elite'.toLowerCase();
-  if (tier !== 'elite') {
-    throw new Error('Invalid paid tier configuration.');
+  if (
+    !paymentIntentId.startsWith('pi_') ||
+    Number.isNaN(eventAt.getTime())
+  ) {
+    throw new Error('Invalid verified Stripe entitlement event.');
   }
 
   try {
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}`,
+      `${SUPABASE_URL}/rest/v1/rpc/handle_subscription_update`,
       {
-        method: 'PATCH',
+        method: 'POST',
         headers: {
           apikey: SUPABASE_SERVICE_ROLE_KEY,
           Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
           'Content-Type': 'application/json',
-          Prefer: 'return=minimal',
+          Prefer: 'return=representation',
         },
-        // Do not include role or staff overrides here. Payment fulfillment
-        // must never alter an administrator's authority.
-        body: JSON.stringify({ tier }),
+        body: JSON.stringify({
+          p_user_id: userId,
+          p_tier: 'elite',
+          p_provider: 'stripe',
+          p_event_id: paymentIntentId,
+          p_event_at: eventAt.toISOString(),
+        }),
       },
     );
 
     if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw new Error(`Supabase profile update failed (${res.status}): ${text}`);
+      throw new Error(`Supabase subscription update failed (${res.status}).`);
     }
+    return (await res.json()) as boolean;
   } catch (error) {
     if (error instanceof Error) {
       throw new Error(`Could not grant Elite tier: ${error.message}`);
