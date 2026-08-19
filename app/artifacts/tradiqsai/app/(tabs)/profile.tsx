@@ -192,7 +192,7 @@ export default function ProfileScreen() {
   const router = useRouter();
   const { mfa } = useLocalSearchParams<{ mfa?: string }>();
   const queryClient = useQueryClient();
-  const { session, signOut } = useAuth();
+  const { session, signOut, isGodAdmin } = useAuth();
   const { isSubscribed, isAdmin, accessTier, profileUpgrade } = useSubscription();
   const { tradingDayTz, setTradingDayTz } = useTrading();
   const {
@@ -417,6 +417,14 @@ export default function ProfileScreen() {
     } catch (err: any) {
       showAlert("Sign out failed", err?.message ?? "Unknown error");
     }
+  };
+
+  const openAdminCommandCenter = () => {
+    if (!isGodAdmin) return;
+    if (Platform.OS !== "web") {
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
+    }
+    router.push("/admin");
   };
 
   // Fail closed: anything other than a validated, eligible, non-zero server
@@ -712,6 +720,30 @@ export default function ProfileScreen() {
             </Text>
           )}
         </View>
+        {isGodAdmin && (
+          <TouchableOpacity
+            style={styles.adminCommandCenterCard}
+            onPress={openAdminCommandCenter}
+            activeOpacity={0.86}
+            accessibilityRole="button"
+            accessibilityLabel="Open Admin Command Center"
+            testID="profile-admin-command-center"
+          >
+            <View style={styles.adminCommandCenterIcon}>
+              <Feather name="shield" size={21} color={c.primary} />
+            </View>
+            <View style={styles.adminCommandCenterCopy}>
+              <View style={styles.adminCommandCenterTitleRow}>
+                <Text style={styles.adminCommandCenterTitle}>Admin Command Center</Text>
+                <Text style={styles.adminCommandCenterBadge}>GOD ADMIN</Text>
+              </View>
+              <Text style={styles.adminCommandCenterSubtitle}>
+                Manage platform insights and waitlist.
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={21} color={c.primary} />
+          </TouchableOpacity>
+        )}
         <TouchableOpacity
           style={styles.partnerCard}
           onPress={() => router.push("/partner-program")}
@@ -1288,6 +1320,57 @@ const styles = StyleSheet.create({
   historyEmpty: { color: c.mutedForeground, fontSize: 11, lineHeight: 16 },
   withdrawText: { color: c.primary, fontSize: 11, fontFamily: "Inter_700Bold" },
   walletDivider: { height: 1, backgroundColor: c.border, marginTop: 16 },
+  adminCommandCenterCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: "#0D1E22",
+    borderColor: "#00F0FF80",
+    borderWidth: 1,
+    borderRadius: 13,
+    padding: 14,
+    marginBottom: 12,
+  },
+  adminCommandCenterIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 11,
+    backgroundColor: "#07343B",
+    borderColor: "#00F0FF80",
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  adminCommandCenterCopy: { flex: 1 },
+  adminCommandCenterTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    flexWrap: "wrap",
+  },
+  adminCommandCenterTitle: {
+    color: c.foreground,
+    fontSize: 14,
+    fontFamily: "Inter_700Bold",
+  },
+  adminCommandCenterBadge: {
+    color: c.primary,
+    backgroundColor: "#07343B",
+    borderColor: "#00F0FF80",
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    fontSize: 8,
+    fontFamily: "Inter_700Bold",
+    letterSpacing: 0.6,
+  },
+  adminCommandCenterSubtitle: {
+    color: c.mutedForeground,
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 4,
+  },
   partnerCard: {
     flexDirection: "row",
     alignItems: "center",

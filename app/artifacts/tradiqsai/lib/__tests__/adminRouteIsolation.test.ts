@@ -16,9 +16,23 @@ describe('mobile admin route isolation', () => {
     expect(adminLayout).not.toContain('<Tabs');
   });
 
-  it('exposes the admin tab only for the exact server-validated role state', () => {
+  it('keeps the footer limited to the five trader navigation destinations', () => {
     const tabLayout = read('app/(tabs)/_layout.tsx');
 
-    expect(tabLayout).toContain("href: isGodAdmin ? '/admin' : null");
+    for (const tabName of ['index', 'tradiqsai', 'ai-tools', 'signals', 'profile']) {
+      expect(tabLayout).toContain(`name="${tabName}"`);
+    }
+    expect(tabLayout).not.toContain('admin-entry');
+    expect(tabLayout).not.toContain("title: 'Admin'");
+  });
+
+  it('shows the admin entry only from Profile for the exact server-validated role', () => {
+    const profileScreen = read('app/(tabs)/profile.tsx');
+
+    expect(profileScreen).toContain('const { session, signOut, isGodAdmin } = useAuth()');
+    expect(profileScreen).toContain('{isGodAdmin && (');
+    expect(profileScreen).toContain('testID="profile-admin-command-center"');
+    expect(profileScreen).toContain('Haptics.ImpactFeedbackStyle.Heavy');
+    expect(profileScreen).toContain('router.push("/admin")');
   });
 });
