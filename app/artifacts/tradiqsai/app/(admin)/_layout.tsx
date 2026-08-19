@@ -21,6 +21,7 @@ export default function AdminRouteLayout() {
   return (
     <Stack
       screenOptions={{
+        headerShown: false,
         headerStyle: { backgroundColor: '#0A0B0E' },
         headerTintColor: '#FFFFFF',
         headerTitleStyle: { fontFamily: 'Inter_600SemiBold' },

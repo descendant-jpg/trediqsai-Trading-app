@@ -13,6 +13,7 @@ import {
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   fetchAdminMetrics,
   type AdminMetrics,
@@ -112,20 +113,35 @@ export default function MobileCmsDashboard() {
   };
 
   return (
-    <View style={styles.screen}>
-      <ScrollView
-        contentContainerStyle={styles.content}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => void refresh(true)}
-            tintColor={CYAN}
-            colors={[CYAN]}
-            progressBackgroundColor="#16181D"
-          />
-        }
-        showsVerticalScrollIndicator={false}
-      >
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <View style={styles.screen}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            accessibilityLabel="Back to Profile"
+            accessibilityRole="button"
+            hitSlop={8}
+            onPress={() => router.back()}
+            style={styles.backButton}
+          >
+            <Feather name="chevron-left" size={22} color="#FFFFFF" />
+            <Text style={styles.backText}>Back</Text>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>TradiQs CMS</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => void refresh(true)}
+              tintColor={CYAN}
+              colors={[CYAN]}
+              progressBackgroundColor="#16181D"
+            />
+          }
+          showsVerticalScrollIndicator={false}
+        >
         <Text style={styles.eyebrow}>COMMAND CENTER</Text>
         <Text style={styles.title}>TradiQs CMS</Text>
         <Text style={styles.subtitle}>
@@ -224,8 +240,9 @@ export default function MobileCmsDashboard() {
             </View>
           ))}
         </View>
-      </ScrollView>
-    </View>
+        </ScrollView>
+      </View>
+    </SafeAreaView>
   );
 }
 
@@ -256,7 +273,39 @@ function QuickAction({
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    backgroundColor: '#0A0B0E',
+    flex: 1,
+  },
   screen: { backgroundColor: '#0A0B0E', flex: 1 },
+  header: {
+    alignItems: 'center',
+    backgroundColor: '#0A0B0E',
+    borderBottomColor: '#22252A',
+    borderBottomWidth: 1,
+    flexDirection: 'row',
+    height: 58,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+  },
+  backButton: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    minHeight: 44,
+    minWidth: 84,
+  },
+  backText: {
+    color: '#FFFFFF',
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+    marginLeft: 2,
+  },
+  headerTitle: {
+    color: '#FFFFFF',
+    fontFamily: 'Inter_700Bold',
+    fontSize: 16,
+  },
+  headerSpacer: { minWidth: 84 },
   content: { padding: 20, paddingBottom: 48 },
   eyebrow: {
     color: CYAN,
