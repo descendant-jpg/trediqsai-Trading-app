@@ -4,6 +4,7 @@ import request from "supertest";
 import type { Server } from "node:http";
 import type { TokenVerifier } from "../middlewares/identity";
 import {
+  adminAuthEmail,
   buildBlogPostDraft,
   createMobileAdminRouter,
   type MobileAdminDeps,
@@ -14,12 +15,14 @@ import {
 // ---------------------------------------------------------------------------
 
 const GOD_ADMIN_TOKEN = "token-god-admin";
+const MASTER_EMAIL_TOKEN = "token-master-email";
 const PLAIN_USER_TOKEN = "token-plain-user";
 const INVALID_TOKEN = "token-invalid";
 
 /** Token → userId map for hermetic tests. */
 const stubVerifier: TokenVerifier = async (token) => {
   if (token === GOD_ADMIN_TOKEN) return "user-god-admin";
+  if (token === MASTER_EMAIL_TOKEN) return "user-master-email";
   if (token === PLAIN_USER_TOKEN) return "user-plain";
   return null;
 };
@@ -27,15 +30,20 @@ const stubVerifier: TokenVerifier = async (token) => {
 /**
  * Profile lookup stub: returns the row for known users, null for unknowns.
  */
-const godAdminProfile = { role: "god_admin" };
+const godAdminProfile = { role: "god_admin", email: "other@example.com" };
+const masterEmailProfile = {
+  role: "user",
+  email: "NEXTGENSYNTHEX@GMAIL.COM",
+};
 const plainUserProfile = { role: "user" };
 
 function makeProfileLookup(
-  overrides: Record<string, { role?: string } | null> = {},
+  overrides: Record<string, { role?: string; email?: string } | null> = {},
 ): MobileAdminDeps["profileLookup"] {
   return async (userId) => {
     if (userId in overrides) return overrides[userId];
     if (userId === "user-god-admin") return godAdminProfile;
+    if (userId === "user-master-email") return masterEmailProfile;
     if (userId === "user-plain") return plainUserProfile;
     return null;
   };
@@ -65,11 +73,32 @@ describe("buildBlogPostDraft", () => {
   });
 });
 
+describe("adminAuthEmail", () => {
+  it("reads the verified email from the Supabase Auth user envelope", () => {
+    expect(
+      adminAuthEmail({ user: { email: "nextgensynthex@gmail.com" } }),
+    ).toBe("nextgensynthex@gmail.com");
+  });
+
+  it("supports the direct user response used by older GoTrue releases", () => {
+    expect(adminAuthEmail({ email: "nextgensynthex@gmail.com" })).toBe(
+      "nextgensynthex@gmail.com",
+    );
+  });
+
+  it("rejects malformed Auth responses", () => {
+    expect(adminAuthEmail({ user: { email: 123 } })).toBeUndefined();
+  });
+});
+
 function makeDeps(overrides: Partial<MobileAdminDeps> = {}): MobileAdminDeps {
   return {
     profileLookup: makeProfileLookup(),
     fetchWaitlistCount: vi.fn().mockResolvedValue(3),
+    fetchSubscriberCount: vi.fn().mockResolvedValue(11),
     fetchBlogPostCount: vi.fn().mockResolvedValue(7),
+    fetchSupportTicketCount: vi.fn().mockResolvedValue(2),
+    fetchRecentPosts: vi.fn().mockResolvedValue(samplePosts),
     fetchBlogPosts: vi.fn().mockResolvedValue(samplePosts),
     insertDraft: vi.fn().mockResolvedValue({ id: "draft-1", status: "draft" }),
     fetchWaitlist: vi.fn().mockResolvedValue(sampleLeads),
@@ -146,7 +175,7 @@ describe("non-god-admin rejection", () => {
         .set("Authorization", authed(PLAIN_USER_TOKEN))
         .send({});
       expect(res.status).toBe(403);
-      expect(res.body.error).toMatch(/god_admin/i);
+      expect(res.body.error).toMatch(/administrator/i);
     });
   }
 });
@@ -174,6 +203,15 @@ describe("GET /api/mobile-admin/access", () => {
     expect(res.status).toBe(200);
     expect(res.body.isGodAdmin).toBe(false);
     expect(res.body.role).toBe("user");
+  });
+
+  it("returns isGodAdmin=true for the verified master email", async () => {
+    const app = buildApp();
+    const res = await request(app)
+      .get("/api/mobile-admin/access")
+      .set("Authorization", authed(MASTER_EMAIL_TOKEN));
+    expect(res.status).toBe(200);
+    expect(res.body.isGodAdmin).toBe(true);
   });
 
   it("returns 503 when profileLookup throws", async () => {
@@ -209,7 +247,19 @@ describe("GET /api/mobile-admin/dashboard", () => {
       .set("Authorization", authed(GOD_ADMIN_TOKEN));
     expect(res.status).toBe(200);
     expect(res.body.waitlistCount).toBe(3);
+    expect(res.body.subscriberCount).toBe(11);
     expect(res.body.blogPostCount).toBe(7);
+    expect(res.body.supportTicketCount).toBe(2);
+    expect(res.body.recentPosts).toEqual(samplePosts);
+  });
+
+  it("returns dashboard data for the verified master email", async () => {
+    const app = buildApp();
+    const res = await request(app)
+      .get("/api/mobile-admin/dashboard")
+      .set("Authorization", authed(MASTER_EMAIL_TOKEN));
+    expect(res.status).toBe(200);
+    expect(res.body.waitlistCount).toBe(3);
   });
 
   it("returns 503 when a count fetch fails", async () => {

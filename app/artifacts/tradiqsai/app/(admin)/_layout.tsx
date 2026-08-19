@@ -3,9 +3,12 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { useAuth } from '@/context/AuthContext';
 
 export default function AdminRouteLayout() {
-  const { isGodAdmin, roleLoading } = useAuth();
+  const { isGodAdmin, roleLoading, session } = useAuth();
+  const isMasterEmail =
+    session?.user?.email?.trim().toLowerCase() ===
+    'nextgensynthex@gmail.com';
 
-  if (roleLoading) {
+  if (roleLoading && !isMasterEmail) {
     return (
       <View style={styles.loading}>
         <ActivityIndicator color="#00F0FF" />
@@ -13,7 +16,7 @@ export default function AdminRouteLayout() {
     );
   }
 
-  if (!isGodAdmin) return <Redirect href="/(tabs)" />;
+  if (!isGodAdmin && !isMasterEmail) return <Redirect href="/(tabs)" />;
 
   return (
     <Stack
@@ -25,6 +28,7 @@ export default function AdminRouteLayout() {
         headerBackTitle: 'Admin',
       }}
     >
+      <Stack.Screen name="index" options={{ title: 'TradiQs CMS', headerBackVisible: false }} />
       <Stack.Screen name="admin/index" options={{ title: 'Command Center', headerBackVisible: false }} />
       <Stack.Screen name="admin/insights" options={{ title: 'Market Insights' }} />
       <Stack.Screen name="admin/waitlist" options={{ title: 'Waitlist & Leads' }} />

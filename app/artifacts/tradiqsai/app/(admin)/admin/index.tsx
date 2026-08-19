@@ -5,7 +5,13 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { fetchAdminMetrics, type AdminMetrics } from '@/services/adminService';
 
-const initialMetrics: AdminMetrics = { waitlistCount: 0, insightsCount: 0 };
+const initialMetrics: AdminMetrics = {
+  waitlistCount: 0,
+  subscriberCount: 0,
+  insightsCount: 0,
+  supportTicketCount: 0,
+  recentPosts: [],
+};
 
 export default function AdminDashboard() {
   const router = useRouter();

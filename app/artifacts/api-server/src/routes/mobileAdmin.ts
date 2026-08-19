@@ -10,7 +10,9 @@ import { identity, requestUserId, ANONYMOUS_USER } from "../middlewares/identity
  * Looks up a profile row by user ID using the service-role key.
  * Returns the row or null when not found / unavailable.
  */
-export type ProfileLookup = (userId: string) => Promise<{ role?: string } | null>;
+export type ProfileLookup = (
+  userId: string,
+) => Promise<{ role?: string; email?: string } | null>;
 
 /**
  * All Supabase data access for the mobile-admin router.
@@ -19,7 +21,10 @@ export type ProfileLookup = (userId: string) => Promise<{ role?: string } | null
 export type MobileAdminDeps = {
   profileLookup: ProfileLookup;
   fetchWaitlistCount: () => Promise<number>;
+  fetchSubscriberCount: () => Promise<number>;
   fetchBlogPostCount: () => Promise<number>;
+  fetchSupportTicketCount: () => Promise<number>;
+  fetchRecentPosts: () => Promise<unknown[]>;
   fetchBlogPosts: () => Promise<unknown[]>;
   insertDraft: (data: QuickDraft) => Promise<unknown>;
   fetchWaitlist: () => Promise<unknown[]>;
@@ -81,6 +86,7 @@ export function buildBlogPostDraft(
 const SUPABASE_URL =
   process.env["SUPABASE_URL"] ?? process.env["EXPO_PUBLIC_SUPABASE_URL"] ?? "";
 const SERVICE_KEY = process.env["SUPABASE_SERVICE_ROLE_KEY"] ?? "";
+const MASTER_EMAIL = "nextgensynthex@gmail.com";
 
 function serviceHeaders() {
   return {
@@ -94,15 +100,34 @@ function isConfigured(): boolean {
   return !!SUPABASE_URL && !!SERVICE_KEY;
 }
 
+export function adminAuthEmail(payload: unknown): string | undefined {
+  if (!payload || typeof payload !== "object") return undefined;
+  const response = payload as Record<string, unknown>;
+  const nestedUser =
+    response["user"] && typeof response["user"] === "object"
+      ? (response["user"] as Record<string, unknown>)
+      : null;
+  const email = nestedUser?.["email"] ?? response["email"];
+  return typeof email === "string" ? email : undefined;
+}
+
 const defaultProfileLookup: ProfileLookup = async (userId) => {
   if (!isConfigured()) return null;
-  const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=role`,
-    { headers: serviceHeaders() },
-  );
-  if (!res.ok) return null;
-  const rows = (await res.json()) as Array<{ role?: string }>;
-  return rows[0] ?? null;
+  const [profileResponse, authResponse] = await Promise.all([
+    fetch(
+      `${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=role`,
+      { headers: serviceHeaders() },
+    ),
+    fetch(
+      `${SUPABASE_URL}/auth/v1/admin/users/${encodeURIComponent(userId)}`,
+      { headers: serviceHeaders() },
+    ),
+  ]);
+  if (!profileResponse.ok || !authResponse.ok) return null;
+
+  const rows = (await profileResponse.json()) as Array<{ role?: string }>;
+  const authPayload = (await authResponse.json()) as unknown;
+  return { role: rows[0]?.role, email: adminAuthEmail(authPayload) };
 };
 
 const defaultFetchWaitlistCount: MobileAdminDeps["fetchWaitlistCount"] = async () => {
@@ -118,13 +143,55 @@ const defaultFetchWaitlistCount: MobileAdminDeps["fetchWaitlistCount"] = async (
 
 const defaultFetchBlogPostCount: MobileAdminDeps["fetchBlogPostCount"] = async () => {
   if (!isConfigured()) throw new Error("Supabase not configured");
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/blog_posts?select=id`, {
-    headers: { ...serviceHeaders(), Prefer: "count=exact", Range: "0-0" },
-  });
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/blog_posts?select=id&status=eq.published`,
+    {
+      headers: { ...serviceHeaders(), Prefer: "count=exact", Range: "0-0" },
+    },
+  );
   if (!res.ok) throw new Error(`Supabase error ${res.status}`);
   const range = res.headers.get("Content-Range") ?? "";
   const total = range.split("/")[1];
   return total ? parseInt(total, 10) : 0;
+};
+
+const defaultFetchSubscriberCount: MobileAdminDeps["fetchSubscriberCount"] =
+  async () => {
+    if (!isConfigured()) throw new Error("Supabase not configured");
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/profiles?select=id&tier=in.(pro,elite,whale,vip)`,
+      {
+        headers: { ...serviceHeaders(), Prefer: "count=exact", Range: "0-0" },
+      },
+    );
+    if (!res.ok) throw new Error(`Supabase error ${res.status}`);
+    const total = (res.headers.get("Content-Range") ?? "").split("/")[1];
+    return total ? parseInt(total, 10) : 0;
+  };
+
+const defaultFetchSupportTicketCount: MobileAdminDeps["fetchSupportTicketCount"] =
+  async () => {
+    if (!isConfigured()) throw new Error("Supabase not configured");
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/contact_messages?select=id&status=eq.open`,
+      {
+        headers: { ...serviceHeaders(), Prefer: "count=exact", Range: "0-0" },
+      },
+    );
+    if (!res.ok) throw new Error(`Supabase error ${res.status}`);
+    const total = (res.headers.get("Content-Range") ?? "").split("/")[1];
+    return total ? parseInt(total, 10) : 0;
+  };
+
+const defaultFetchRecentPosts: MobileAdminDeps["fetchRecentPosts"] = async () => {
+  if (!isConfigured()) throw new Error("Supabase not configured");
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/blog_posts?select=id,title,created_at&order=created_at.desc&limit=3`,
+    { headers: serviceHeaders() },
+  );
+  if (!res.ok) throw new Error(`Supabase error ${res.status}`);
+  const rows = (await res.json()) as unknown[];
+  return Array.isArray(rows) ? rows : [];
 };
 
 const defaultFetchBlogPosts: MobileAdminDeps["fetchBlogPosts"] = async () => {
@@ -192,7 +259,10 @@ export function createMobileAdminRouter(
   const {
     profileLookup = defaultProfileLookup,
     fetchWaitlistCount = defaultFetchWaitlistCount,
+    fetchSubscriberCount = defaultFetchSubscriberCount,
     fetchBlogPostCount = defaultFetchBlogPostCount,
+    fetchSupportTicketCount = defaultFetchSupportTicketCount,
+    fetchRecentPosts = defaultFetchRecentPosts,
     fetchBlogPosts = defaultFetchBlogPosts,
     insertDraft = defaultInsertDraft,
     fetchWaitlist = defaultFetchWaitlist,
@@ -205,6 +275,15 @@ export function createMobileAdminRouter(
   // Privileged requests bypass the normal five-minute identity cache so a
   // revoked administrator token is rejected on its very next request.
   router.use("/mobile-admin", identity(verifier, { cacheVerifiedTokens: false }));
+
+  function hasMobileAdminAccess(profile: {
+    role?: string;
+    email?: string;
+  }): boolean {
+    const role = profile.role?.trim().toLowerCase() ?? "";
+    const email = profile.email?.trim().toLowerCase() ?? "";
+    return role === "god_admin" || email === MASTER_EMAIL;
+  }
 
   // ---------------------------------------------------------------------------
   // Authorization helper — reused across every endpoint.
@@ -219,7 +298,7 @@ export function createMobileAdminRouter(
       return null;
     }
 
-    let profile: { role?: string } | null;
+    let profile: { role?: string; email?: string } | null;
     try {
       profile = await profileLookup(userId);
     } catch {
@@ -232,8 +311,8 @@ export function createMobileAdminRouter(
       return null;
     }
 
-    if (profile.role !== "god_admin") {
-      res.status(403).json({ error: "god_admin role required." });
+    if (!hasMobileAdminAccess(profile)) {
+      res.status(403).json({ error: "Administrator access required." });
       return null;
     }
 
@@ -252,7 +331,7 @@ export function createMobileAdminRouter(
       return;
     }
 
-    let profile: { role?: string } | null;
+    let profile: { role?: string; email?: string } | null;
     try {
       profile = await profileLookup(userId);
     } catch {
@@ -265,7 +344,7 @@ export function createMobileAdminRouter(
       return;
     }
 
-    const isGodAdmin = profile.role === "god_admin";
+    const isGodAdmin = hasMobileAdminAccess(profile);
     res.json({ isGodAdmin, role: profile.role ?? null });
   });
 
@@ -277,11 +356,26 @@ export function createMobileAdminRouter(
     if (!(await requireGodAdmin(res))) return;
 
     try {
-      const [waitlistCount, blogPostCount] = await Promise.all([
+      const [
+        waitlistCount,
+        subscriberCount,
+        blogPostCount,
+        supportTicketCount,
+        recentPosts,
+      ] = await Promise.all([
         fetchWaitlistCount(),
+        fetchSubscriberCount(),
         fetchBlogPostCount(),
+        fetchSupportTicketCount(),
+        fetchRecentPosts(),
       ]);
-      res.json({ waitlistCount, blogPostCount });
+      res.json({
+        waitlistCount,
+        subscriberCount,
+        blogPostCount,
+        supportTicketCount,
+        recentPosts,
+      });
     } catch {
       res.status(503).json({ error: "Dashboard data unavailable." });
     }

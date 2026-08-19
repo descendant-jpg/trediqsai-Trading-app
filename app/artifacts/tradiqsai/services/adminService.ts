@@ -2,7 +2,16 @@ import { customFetch } from '@workspace/api-client-react';
 
 export type AdminMetrics = {
   waitlistCount: number;
+  subscriberCount: number;
   insightsCount: number;
+  supportTicketCount: number;
+  recentPosts: AdminRecentPost[];
+};
+
+export type AdminRecentPost = {
+  id: string | number;
+  title: string;
+  created_at: string;
 };
 
 export type AdminInsight = {
@@ -23,10 +32,22 @@ export type WaitlistLead = {
 };
 
 export async function fetchAdminMetrics() {
-  const data = await customFetch<{ waitlistCount: number; blogPostCount: number }>(
+  const data = await customFetch<{
+    waitlistCount: number;
+    subscriberCount: number;
+    blogPostCount: number;
+    supportTicketCount: number;
+    recentPosts: AdminRecentPost[];
+  }>(
     '/api/mobile-admin/dashboard',
   );
-  return { waitlistCount: data.waitlistCount, insightsCount: data.blogPostCount };
+  return {
+    waitlistCount: data.waitlistCount,
+    subscriberCount: data.subscriberCount,
+    insightsCount: data.blogPostCount,
+    supportTicketCount: data.supportTicketCount,
+    recentPosts: data.recentPosts,
+  };
 }
 
 export async function fetchAdminInsights() {

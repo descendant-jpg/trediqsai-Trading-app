@@ -658,9 +658,6 @@ export default function ProfileScreen() {
             </View>
           </View>
         </View>
-        <Text style={styles.debugText}>
-          Debug - Role: {role || "null"} | Email: {userEmail || "null"}
-        </Text>
         {!isSubscribed && (
           <TouchableOpacity
             style={styles.upgradeButton}
@@ -1714,13 +1711,6 @@ const styles = StyleSheet.create({
     color: "#8A8D93",
     fontSize: 13,
     fontFamily: "Inter_400Regular",
-  },
-  debugText: {
-    color: "#6B7280",
-    fontSize: 10,
-    fontFamily: "Inter_400Regular",
-    marginTop: 8,
-    textAlign: "center",
   },
   planBadge: {
     alignSelf: "flex-start",
