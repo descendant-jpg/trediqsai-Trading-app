@@ -31,9 +31,11 @@ const verifyCache = new Map<string, { userId: string; expiresAt: number }>();
  * because Supabase itself validates the JWT. Results are cached briefly so
  * polling endpoints don't add a network hop per request.
  */
-const supabaseVerifier: TokenVerifier = async (token) => {
-  const cached = verifyCache.get(token);
-  if (cached && cached.expiresAt > Date.now()) return cached.userId;
+async function verifySupabaseToken(token: string, cacheVerifiedTokens: boolean): Promise<string | null> {
+  if (cacheVerifiedTokens) {
+    const cached = verifyCache.get(token);
+    if (cached && cached.expiresAt > Date.now()) return cached.userId;
+  }
 
   const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
     headers: { apikey: SUPABASE_KEY, authorization: `Bearer ${token}` },
@@ -42,17 +44,19 @@ const supabaseVerifier: TokenVerifier = async (token) => {
   const body = (await res.json()) as { id?: string };
   if (!body.id) return null;
 
-  if (verifyCache.size >= VERIFY_CACHE_MAX) {
-    // Drop the oldest entry (Map preserves insertion order).
-    const oldest = verifyCache.keys().next().value;
-    if (oldest !== undefined) verifyCache.delete(oldest);
+  if (cacheVerifiedTokens) {
+    if (verifyCache.size >= VERIFY_CACHE_MAX) {
+      // Drop the oldest entry (Map preserves insertion order).
+      const oldest = verifyCache.keys().next().value;
+      if (oldest !== undefined) verifyCache.delete(oldest);
+    }
+    verifyCache.set(token, {
+      userId: body.id,
+      expiresAt: Date.now() + VERIFY_CACHE_MS,
+    });
   }
-  verifyCache.set(token, {
-    userId: body.id,
-    expiresAt: Date.now() + VERIFY_CACHE_MS,
-  });
   return body.id;
-};
+}
 
 export const isAuthConfigured = !!SUPABASE_URL && !!SUPABASE_KEY;
 
@@ -66,8 +70,14 @@ export const isAuthConfigured = !!SUPABASE_URL && !!SUPABASE_KEY;
  * - Bearer token but auth NOT configured server-side → anonymous (we cannot
  *   verify, and unverified tokens must never mint identities).
  */
-export function identity(verifier?: TokenVerifier) {
-  const verify = verifier ?? supabaseVerifier;
+export function identity(
+  verifier?: TokenVerifier,
+  options: { cacheVerifiedTokens?: boolean } = {},
+) {
+  const verify =
+    verifier ??
+    ((token: string) =>
+      verifySupabaseToken(token, options.cacheVerifiedTokens !== false));
   const configured = verifier ? true : isAuthConfigured;
 
   return async (req: Request, res: Response, next: NextFunction) => {

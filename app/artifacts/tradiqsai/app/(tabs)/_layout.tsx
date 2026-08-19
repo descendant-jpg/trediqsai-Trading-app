@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import colors from '@/constants/colors';
+import { useAuth } from '@/context/AuthContext';
 
 const c = colors.light;
 const isWeb = Platform.OS === 'web';
@@ -24,6 +25,7 @@ function AiToolsIcon({ color, focused }: { color: string; focused: boolean }) {
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
+  const { isGodAdmin } = useAuth();
 
   return (
     <Tabs
@@ -89,6 +91,16 @@ export default function TabLayout() {
           title: 'Profile',
           tabBarIcon: ({ color }) => (
             <Feather name="user" size={22} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="admin-entry"
+        options={{
+          title: 'Admin',
+          href: isGodAdmin ? '/admin' : null,
+          tabBarIcon: ({ color }) => (
+            <Feather name="shield" size={22} color={color} />
           ),
         }}
       />
