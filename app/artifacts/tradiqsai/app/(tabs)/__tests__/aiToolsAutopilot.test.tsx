@@ -232,11 +232,20 @@ function renderScreen() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  return render(
+  const result = render(
     <QueryClientProvider client={client}>
       <AiToolsScreen />
     </QueryClientProvider>,
   );
+  return {
+    ...result,
+    rerenderScreen: () =>
+      result.rerender(
+        <QueryClientProvider client={client}>
+          <AiToolsScreen />
+        </QueryClientProvider>,
+      ),
+  };
 }
 
 /** React-native-web Switch exposes a checkbox input inside the testID root. */
@@ -272,12 +281,13 @@ afterEach(() => {
 // ---- Tests ------------------------------------------------------------------
 
 describe('AutoPilot summary + master toggle', () => {
-  it('starts active with 2 running bots and deployed capital', () => {
+  it('shows a locked, zeroed AutoPilot summary for Starter traders', () => {
     renderScreen();
-    expect(screen.getByText('System Active')).toBeTruthy();
-    expect(screen.getByText('2 Running')).toBeTruthy();
-    expect(screen.getByText('$25,000')).toBeTruthy(); // 10k + 15k
-    expect(screen.getByText('+$1,420.50')).toBeTruthy();
+    expect(screen.getAllByText('Locked').length).toBeGreaterThan(0);
+    expect(screen.getByTestId('autopilot-pro-badge')).toBeTruthy();
+    expect(screen.getByText('0 Running')).toBeTruthy();
+    expect(screen.getByText('$0')).toBeTruthy();
+    expect(screen.getByText('+$0.00')).toBeTruthy();
   });
 
   it('master toggle pauses everything and logs the halt', async () => {
@@ -304,12 +314,12 @@ describe('AutoPilot summary + master toggle', () => {
     );
   });
 
-  it('opens the existing paywall when free traders use the master toggle', () => {
+  it('opens the existing paywall when free traders press the locked card', () => {
     renderScreen();
-    toggle('master-toggle');
-    expect(screen.getByText('System Active')).toBeTruthy();
+    press('autopilot-locked-card');
+    expect(screen.getAllByText('Locked').length).toBeGreaterThan(0);
     expect(screen.getByTestId('paywall-card')).toBeTruthy();
-    expect(haptics.notificationAsync).toHaveBeenCalledWith('error');
+    expect(haptics.notificationAsync).toHaveBeenCalledWith('warning');
   });
 });
 
@@ -342,13 +352,14 @@ describe('Tiered AutoPilot asset selector', () => {
     expect(haptics.selectionAsync).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps controls interactive while the subscription tier is initializing', async () => {
+  it('fails closed while the subscription tier is initializing', () => {
     subscription.accessTier = undefined as any;
     renderScreen();
-    press('autopilot-asset-crypto');
+    press('autopilot-locked-card');
 
-    await waitFor(() => expect(fakeServer.state.selectedAsset).toBe('Crypto'));
-    expect(haptics.selectionAsync).toHaveBeenCalledTimes(1);
+    expect(fakeServer.state.selectedAsset).toBe('Forex');
+    expect(screen.getByTestId('paywall-card')).toBeTruthy();
+    expect(haptics.notificationAsync).toHaveBeenCalledWith('warning');
   });
 
   it('persists an asset choice locally before its background API sync finishes', () => {
@@ -366,6 +377,8 @@ describe('Tiered AutoPilot asset selector', () => {
 
 describe('Per-bot toggles', () => {
   it('turning a bot on bumps the Active Bots count and logs initialization', () => {
+    subscription.isSubscribed = true;
+    subscription.accessTier = 'pro';
     renderScreen();
     toggle('bot-toggle-grid-matrix');
 
@@ -379,6 +392,8 @@ describe('Per-bot toggles', () => {
   });
 
   it('turning a bot off drops the count and logs the stop', () => {
+    subscription.isSubscribed = true;
+    subscription.accessTier = 'pro';
     renderScreen();
     toggle('bot-toggle-scalp-oracle');
 
@@ -392,6 +407,8 @@ describe('Per-bot toggles', () => {
 
 describe('Config modal', () => {
   it('saves new capital/drawdown for a bot and logs the change', () => {
+    subscription.isSubscribed = true;
+    subscription.accessTier = 'pro';
     renderScreen();
     press('configure-scalp-oracle');
     press('capital-25000');
@@ -410,6 +427,8 @@ describe('Config modal', () => {
   });
 
   it('re-seeds selections per bot when reopened', () => {
+    subscription.isSubscribed = true;
+    subscription.accessTier = 'pro';
     renderScreen();
 
     // Change scalp-oracle to 25k/20%, then open breakout-engine: its own
@@ -429,6 +448,21 @@ describe('Config modal', () => {
     press('config-save');
     expect(screen.getByText('$25,000 · 20% max DD')).toBeTruthy();
   });
+
+  it('closes an open config modal when paid access is revoked', async () => {
+    subscription.isSubscribed = true;
+    subscription.accessTier = 'pro';
+    const { rerenderScreen } = renderScreen();
+    press('configure-scalp-oracle');
+    expect(screen.getByTestId('config-save')).toBeTruthy();
+
+    subscription.isSubscribed = false;
+    subscription.accessTier = 'starter';
+    rerenderScreen();
+
+    await waitFor(() => expect(screen.queryByTestId('config-save')).toBeNull());
+    expect(fakeServer.state.bots.find((bot) => bot.id === 'scalp-oracle')?.capital).toBe(10000);
+  });
 });
 
 describe('Live log console', () => {
@@ -438,11 +472,22 @@ describe('Live log console', () => {
   });
 
   it('clear-logs empties the buffer', () => {
+    subscription.isSubscribed = true;
+    subscription.accessTier = 'pro';
     renderScreen();
     expect(screen.getByText(/TradiQs AutoPilot core initialized/)).toBeTruthy();
     press('clear-logs');
     expect(screen.queryByText(/TradiQs AutoPilot core initialized/)).toBeNull();
     expect(screen.getByText('— log buffer cleared —')).toBeTruthy();
+  });
+
+  it('routes Starter traders to upgrade without clearing logs', () => {
+    renderScreen();
+    press('clear-logs');
+
+    expect(screen.getByText(/TradiQs AutoPilot core initialized/)).toBeTruthy();
+    expect(screen.getByTestId('paywall-card')).toBeTruthy();
+    expect(haptics.notificationAsync).toHaveBeenCalledWith('warning');
   });
 });
 
@@ -463,14 +508,13 @@ describe('PRO-locked bot', () => {
   it('opens the paywall from the unlock button and closes it again', () => {
     renderScreen();
     press('unlock-quantum-inst');
-    expect(routerPush).toHaveBeenCalledWith({
-      pathname: '/paywall',
-      params: { defaultTier: 'ELITE' },
-    });
+    expect(screen.getByTestId('paywall-card')).toBeTruthy();
+    expect(haptics.notificationAsync).toHaveBeenCalledWith('warning');
   });
 
   it('subscribers see full metrics and controls on the PRO bot', () => {
     subscription.isSubscribed = true;
+    subscription.accessTier = 'pro';
     renderScreen();
     expect(screen.getByText('88.7%')).toBeTruthy();
     expect(screen.getByText('+21.3%')).toBeTruthy();
@@ -545,6 +589,8 @@ describe('Server-state hydration', () => {
 
   it('shows System Active and Forex when server reports active+Forex', () => {
     // Defaults match server state — no regression.
+    subscription.isSubscribed = true;
+    subscription.accessTier = 'pro';
     renderScreen();
     expect(screen.getByText('System Active')).toBeTruthy();
     expect(screen.getByText('2 Running')).toBeTruthy();

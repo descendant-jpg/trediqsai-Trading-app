@@ -38,6 +38,7 @@ import { PaywallModal } from '@/components/PaywallModal';
 import { AiToolModal, type AiToolKind } from '@/components/AiToolModal';
 import colors from '@/constants/colors';
 import { canAccessTool } from '@/lib/aiToolAccess';
+import { canAccessAutoPilot } from '@/lib/autopilotAccess';
 import { legacyOracleRedirectTarget } from '@/lib/legacyOracleRedirect';
 import { useSubscription } from '@/lib/revenuecat';
 
@@ -278,7 +279,6 @@ export default function AiToolsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const {
-    isSubscribed,
     isAdmin = false,
     accessTier,
   } = useSubscription();
@@ -446,11 +446,12 @@ export default function AiToolsScreen() {
     AsyncStorage.setItem(AUTOPILOT_PREFERENCES_KEY, JSON.stringify(next)).catch(() => {});
   }, []);
 
-  const masterActive = isAutoPilotActive;
-  // A missing subscription context should not freeze the controls while it is
-  // initializing. The API remains the authority and rejects unauthorized
-  // requests; explicit Free/Starter tiers are never elevated by this fallback.
-  const tier = accessTier ?? 'elite';
+  const autoPilotUnlocked = canAccessAutoPilot(accessTier, isAdmin);
+  const autoPilotLocked = !autoPilotUnlocked;
+  const masterActive = autoPilotUnlocked && isAutoPilotActive;
+  // Tool cards use Starter as the fail-closed value while subscription state
+  // initializes. The API remains authoritative for every paid action.
+  const tier = accessTier ?? 'starter';
   const bots = autopilot?.bots ?? [];
   const logs = [...(autopilot?.logs ?? []), ...localActionLogs];
   const todayPnl = autopilot?.todayPnl ?? 0;
@@ -463,12 +464,20 @@ export default function AiToolsScreen() {
         : 0,
     [masterActive, bots],
   );
+  const displayedTodayPnl = autoPilotLocked ? 0 : todayPnl;
+
+  const openAutoPilotPaywall = useCallback(() => {
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+    setPaywallOpen(true);
+  }, []);
+
+  useEffect(() => {
+    if (autoPilotLocked) setConfigBot(null);
+  }, [autoPilotLocked]);
 
   const handleToggleAutoPilot = (value: boolean) => {
-    const canDeployAutoPilot = isAdmin || tier === 'pro' || tier === 'elite';
-    if (!canDeployAutoPilot) {
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-      setPaywallOpen(true);
+    if (autoPilotLocked) {
+      openAutoPilotPaywall();
       return;
     }
 
@@ -502,9 +511,8 @@ export default function AiToolsScreen() {
       router.push({ pathname: '/paywall', params: { defaultTier: 'ELITE' } });
       return;
     }
-    if (!isAdmin && tier !== 'pro' && tier !== 'elite') {
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-      setPaywallOpen(true);
+    if (autoPilotLocked) {
+      openAutoPilotPaywall();
       return;
     }
     if (asset === selectedAsset) return;
@@ -522,12 +530,29 @@ export default function AiToolsScreen() {
   };
 
   const toggleBot = (bot: Bot, value: boolean) => {
+    if (autoPilotLocked) {
+      openAutoPilotPaywall();
+      return;
+    }
     updateBot({ botId: bot.id, data: { running: value } });
   };
 
   const saveConfig = (bot: Bot, capital: number, drawdown: number) => {
+    if (autoPilotLocked) {
+      setConfigBot(null);
+      openAutoPilotPaywall();
+      return;
+    }
     updateBot({ botId: bot.id, data: { capital, drawdown } });
     setConfigBot(null);
+  };
+
+  const handleClearLogs = () => {
+    if (autoPilotLocked) {
+      openAutoPilotPaywall();
+      return;
+    }
+    clearLogs();
   };
 
   const openTool = (tool: Tool) => {
@@ -589,23 +614,42 @@ export default function AiToolsScreen() {
         </View>
 
         {/* AutoPilot summary card */}
-        <View style={styles.summaryCard}>
+        <View style={[styles.summaryCard, autoPilotLocked && styles.summaryCardLocked]}>
           <View style={styles.summaryTop}>
             <View style={styles.summaryTitleWrap}>
-              <Text style={styles.summaryTitle}>TradiQs AutoPilot</Text>
+              <View style={styles.summaryHeadingRow}>
+                <Text style={styles.summaryTitle}>TradiQs AutoPilot</Text>
+                {autoPilotLocked ? (
+                  <View style={styles.autoPilotProBadge} testID="autopilot-pro-badge">
+                    <Feather name="lock" size={9} color={CYAN} />
+                    <Text style={styles.autoPilotProBadgeText}>PRO</Text>
+                  </View>
+                ) : null}
+              </View>
               <View style={styles.systemRow}>
                 <PulseDot active={masterActive} />
-                <Text style={[styles.systemText, { color: masterActive ? CYAN : c.mutedForeground }]}>
-                  {masterActive ? 'System Active' : 'System Paused'}
+                <Text
+                  style={[
+                    styles.systemText,
+                    { color: autoPilotLocked ? GOLD : masterActive ? CYAN : c.mutedForeground },
+                  ]}
+                >
+                  {autoPilotLocked ? 'Locked' : masterActive ? 'System Active' : 'System Paused'}
                 </Text>
               </View>
             </View>
             <View style={styles.masterToggleWrap}>
-              <Text style={[styles.masterLabel, { color: masterActive ? CYAN : c.mutedForeground }]}>
-                {masterActive ? 'Active' : 'Paused'}
+              <Text
+                style={[
+                  styles.masterLabel,
+                  { color: autoPilotLocked ? GOLD : masterActive ? CYAN : c.mutedForeground },
+                ]}
+              >
+                {autoPilotLocked ? 'Locked' : masterActive ? 'Active' : 'Paused'}
               </Text>
               <Switch
                 value={masterActive}
+                disabled={autoPilotLocked}
                 onValueChange={handleToggleAutoPilot}
                 trackColor={{ false: '#22252A', true: 'rgba(0,240,255,0.35)' }}
                 thumbColor={masterActive ? CYAN : '#8A8D93'}
@@ -642,7 +686,7 @@ export default function AiToolsScreen() {
           <View style={styles.metricsGrid}>
             <View style={styles.metricCol}>
               <Text style={styles.metricLabel}>ACTIVE BOTS</Text>
-              <Text style={styles.metricValue}>{activeCount} Running</Text>
+              <Text style={styles.metricValue}>{autoPilotLocked ? '0' : activeCount} Running</Text>
             </View>
             <View style={styles.metricCol}>
               <Text style={styles.metricLabel}>CAPITAL DEPLOYED</Text>
@@ -650,11 +694,22 @@ export default function AiToolsScreen() {
             </View>
             <View style={styles.metricCol}>
               <Text style={styles.metricLabel}>TODAY'S BOT P&L</Text>
-              <Text style={[styles.metricValue, { color: todayPnl < 0 ? CRIMSON : GREEN }]}>
-                {formatPnl(todayPnl)}
+              <Text
+                style={[styles.metricValue, { color: displayedTodayPnl < 0 ? CRIMSON : GREEN }]}
+              >
+                {formatPnl(displayedTodayPnl)}
               </Text>
             </View>
           </View>
+          {autoPilotLocked ? (
+            <Pressable
+              style={styles.autoPilotLockedOverlay}
+              onPress={openAutoPilotPaywall}
+              accessibilityRole="button"
+              accessibilityLabel="AutoPilot locked. Upgrade to Pro"
+              testID="autopilot-locked-card"
+            />
+          ) : null}
         </View>
 
         {/* Live console */}
@@ -665,12 +720,16 @@ export default function AiToolsScreen() {
               <Text style={styles.consoleTitle}>System Live Logs</Text>
             </View>
             <TouchableOpacity
-              onPress={() => clearLogs()}
+              onPress={handleClearLogs}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               testID="clear-logs"
-              accessibilityLabel="Clear logs"
+              accessibilityLabel={autoPilotLocked ? 'System logs locked. Upgrade to Pro' : 'Clear logs'}
             >
-              <Feather name="trash-2" size={13} color={c.mutedForeground} />
+              <Feather
+                name={autoPilotLocked ? 'lock' : 'trash-2'}
+                size={13}
+                color={autoPilotLocked ? GOLD : c.mutedForeground}
+              />
             </TouchableOpacity>
           </View>
           <ScrollView
@@ -726,7 +785,7 @@ export default function AiToolsScreen() {
           </TouchableOpacity>
         )}
         {bots.map((bot) => {
-          const locked = bot.proOnly && !isSubscribed && !isAdmin;
+          const locked = autoPilotLocked || (bot.proOnly && !autoPilotUnlocked);
           const running = masterActive && bot.running;
           const cfg = { capital: bot.capital, drawdown: bot.drawdown };
           return (
@@ -809,7 +868,13 @@ export default function AiToolsScreen() {
               </View>
 
               {locked && (
-                <View style={styles.lockOverlay}>
+                <Pressable
+                  style={styles.lockOverlay}
+                  onPress={openAutoPilotPaywall}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${bot.name} locked. Upgrade to Pro`}
+                  testID={`unlock-${bot.id}`}
+                >
                   <BlurView
                     intensity={Platform.OS === 'web' ? 26 : 20}
                     tint="dark"
@@ -817,16 +882,11 @@ export default function AiToolsScreen() {
                   />
                   <View style={styles.lockContent}>
                     <Feather name="lock" size={16} color={GOLD} />
-                    <TouchableOpacity
-                      style={styles.unlockButton}
-                      onPress={() => router.push({ pathname: '/paywall', params: { defaultTier: 'ELITE' } })}
-                      activeOpacity={0.85}
-                      testID={`unlock-${bot.id}`}
-                    >
+                    <View style={styles.unlockButton}>
                       <Text style={styles.unlockButtonText}>Upgrade to Unlock</Text>
-                    </TouchableOpacity>
+                    </View>
                   </View>
-                </View>
+                </Pressable>
               )}
             </View>
           );
@@ -1032,12 +1092,17 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   summaryCard: {
+    position: 'relative',
     backgroundColor: '#16181D',
     borderWidth: 1,
     borderColor: '#22252A',
     borderRadius: colors.radius,
     padding: 16,
     gap: 16,
+    overflow: 'hidden',
+  },
+  summaryCardLocked: {
+    borderColor: 'rgba(0,240,255,0.45)',
   },
   summaryTop: {
     flexDirection: 'row',
@@ -1047,10 +1112,37 @@ const styles = StyleSheet.create({
   summaryTitleWrap: {
     gap: 4,
   },
+  summaryHeadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   summaryTitle: {
     color: '#FFFFFF',
     fontSize: 17,
     fontFamily: 'Inter_700Bold',
+  },
+  autoPilotProBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: 'rgba(0,240,255,0.65)',
+    backgroundColor: 'rgba(0,240,255,0.08)',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  autoPilotProBadgeText: {
+    color: CYAN,
+    fontSize: 9,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 0.7,
+  },
+  autoPilotLockedOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 5,
+    backgroundColor: 'rgba(10,11,14,0.18)',
   },
   systemRow: {
     flexDirection: 'row',
