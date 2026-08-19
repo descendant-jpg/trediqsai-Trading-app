@@ -192,7 +192,7 @@ export default function ProfileScreen() {
   const router = useRouter();
   const { mfa } = useLocalSearchParams<{ mfa?: string }>();
   const queryClient = useQueryClient();
-  const { session, signOut, isGodAdmin } = useAuth();
+  const { session, signOut } = useAuth();
   const { isSubscribed, isAdmin, accessTier, profileUpgrade } = useSubscription();
   const { tradingDayTz, setTradingDayTz } = useTrading();
   const {
@@ -207,6 +207,7 @@ export default function ProfileScreen() {
   const [requestingPayout, setRequestingPayout] = useState(false);
   const [tzPickerOpen, setTzPickerOpen] = useState(false);
   const [username, setUsername] = useState<string | null>(null);
+  const [role, setRole] = useState<string | null>(null);
   const [referralCode, setReferralCode] = useState<string | null>(null);
   const [referralCount, setReferralCount] = useState<number | null>(null);
   const [referralEarned, setReferralEarned] = useState<number | null>(null);
@@ -240,11 +241,15 @@ export default function ProfileScreen() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      if (!session) return;
+      if (!session) {
+        setRole(null);
+        return;
+      }
+      setRole(null);
       const [{ data }, { data: refRows, count }] = await Promise.all([
         supabase
           .from("profiles")
-          .select("username, referral_code")
+          .select("username, referral_code, role")
           .eq("id", session.user.id)
           .single(),
         supabase
@@ -254,6 +259,7 @@ export default function ProfileScreen() {
       ]);
       if (!cancelled) {
         setUsername(data?.username ?? null);
+        setRole(typeof data?.role === "string" ? data.role : null);
         setReferralCode(data?.referral_code ?? null);
         setReferralCount(count ?? 0);
         setReferralEarned(
@@ -420,11 +426,11 @@ export default function ProfileScreen() {
   };
 
   const openAdminCommandCenter = () => {
-    if (!isGodAdmin) return;
+    if (role !== "god_admin") return;
     if (Platform.OS !== "web") {
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
     }
-    router.push("/admin");
+    router.push("/(admin)" as never);
   };
 
   // Fail closed: anything other than a validated, eligible, non-zero server
@@ -720,7 +726,7 @@ export default function ProfileScreen() {
             </Text>
           )}
         </View>
-        {isGodAdmin && (
+        {role === "god_admin" && (
           <TouchableOpacity
             style={styles.adminCommandCenterCard}
             onPress={openAdminCommandCenter}
@@ -738,7 +744,7 @@ export default function ProfileScreen() {
                 <Text style={styles.adminCommandCenterBadge}>GOD ADMIN</Text>
               </View>
               <Text style={styles.adminCommandCenterSubtitle}>
-                Manage platform insights and waitlist.
+                Manage platform insights and waitlist
               </Text>
             </View>
             <Feather name="chevron-right" size={21} color={c.primary} />
