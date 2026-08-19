@@ -89,6 +89,14 @@ describe("supabase tier lookup query contract", () => {
     }
   });
 
+  it("grants Elite access to both supported staff roles", async () => {
+    for (const role of ["admin", "god_admin", " GOD_ADMIN "]) {
+      stubRows([{ role, tier: "free" }]);
+      const { hasEliteAccess } = await loadEntitlement();
+      await expect(hasEliteAccess(`user-${role}`)).resolves.toBe(true);
+    }
+  });
+
   it("keeps access from another billing source when RevenueCat expires", async () => {
     stubRows([{ tier: "elite", revenuecat_tier: "starter" }]);
     const { hasEliteAccess } = await loadEntitlement();

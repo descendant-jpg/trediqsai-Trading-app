@@ -12,6 +12,8 @@ const TICK_MS = 2_600;
 let server: Server;
 let baseUrl: string;
 /** Rows persisted through the mocked db, inspectable/seedable from tests. */
+let botRows: Map<string, any>;
+let stateRows: Map<string, any>;
 let historyRows: Map<string, any>;
 
 async function startFreshApp(): Promise<void> {
@@ -24,8 +26,8 @@ async function startFreshApp(): Promise<void> {
   // select-where, and insert ... onConflictDoUpdate (upsert). The row maps
   // live in this function's scope so they survive vi.resetModules within a
   // test (simulating a server restart) but reset for each fresh test.
-  const botRows = new Map<string, any>();
-  const stateRows = new Map<string, any>();
+  botRows = new Map<string, any>();
+  stateRows = new Map<string, any>();
   historyRows = new Map<string, any>();
   const rowsForRestart = historyRows;
   vi.doMock("@workspace/db", () => {
@@ -456,6 +458,23 @@ describe("Pro-only bot enforcement", () => {
     return { status: res.status, body: await res.json() };
   }
 
+  async function callAutopilot(
+    method: "GET" | "PUT" | "DELETE",
+    path: string,
+    token?: string,
+    body?: unknown,
+  ): Promise<{ status: number; body: any }> {
+    const res = await fetch(`${proBase}${path}`, {
+      method,
+      headers: {
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+        ...(body !== undefined ? { "content-type": "application/json" } : {}),
+      },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    return { status: res.status, body: await res.json() };
+  }
+
   async function botFor(token: string, botId: string) {
     const userId = await verifier(token);
     const originalTier = userId ? tiers.get(userId) : undefined;
@@ -566,8 +585,8 @@ describe("Pro-only bot enforcement", () => {
     const { status, body } = await put("/autopilot/bots/quantum-inst", {
       running: true,
     });
-    expect(status).toBe(403);
-    expect(body.code).toBe("pro_subscription_required");
+    expect(status).toBe(401);
+    expect(body.error).toMatch(/sign in/i);
   });
 
   it("allows a Pro user to start the Pro-only bot", async () => {
@@ -598,17 +617,14 @@ describe("Pro-only bot enforcement", () => {
     }
   });
 
-  it("still lets free users control non-Pro bots", async () => {
+  it("blocks free users from controlling non-Pro bots", async () => {
     tiers.set("free-user", "free");
-    const { status, body } = await put(
+    const { status } = await put(
       "/autopilot/bots/grid-matrix",
       { running: true },
       "token-free-user",
     );
-    expect(status).toBe(200);
-    expect(body.bots.find((b: any) => b.id === "grid-matrix").running).toBe(
-      true,
-    );
+    expect(status).toBe(403);
   });
 
   it("denies access when the tier lookup fails (fails closed)", async () => {
@@ -631,9 +647,122 @@ describe("Pro-only bot enforcement", () => {
     expect(status).toBe(403);
   });
 
-  it("checks the bot before the tier, so unknown ids still 404", async () => {
-    const { status } = await put("/autopilot/bots/nope", { running: true });
+  it("still returns 404 for unknown bot ids after paid access is verified", async () => {
+    tiers.set("pro-user", "pro");
+    const { status } = await put(
+      "/autopilot/bots/nope",
+      { running: true },
+      "token-pro-user",
+    );
     expect(status).toBe(404);
+  });
+
+  it("rejects free, Starter, and unresolved users from every AutoPilot route", async () => {
+    const routes = [
+      ["GET", "/autopilot"],
+      ["GET", "/autopilot/history"],
+      ["PUT", "/autopilot/master", { active: false }],
+      ["PUT", "/autopilot/asset", { asset: "Forex" }],
+      ["PUT", "/autopilot/bots/grid-matrix", { running: true }],
+      ["DELETE", "/autopilot/logs"],
+    ] as const;
+
+    for (const [suffix, tier] of [
+      ["free", "free"],
+      ["starter", "starter"],
+      ["unresolved", null],
+    ] as const) {
+      const userId = `${suffix}-all-routes`;
+      if (tier !== null) tiers.set(userId, tier);
+      for (const [method, path, body] of routes) {
+        const result = await callAutopilot(
+          method,
+          path,
+          `token-${userId}`,
+          body,
+        );
+        expect(
+          result.status,
+          `${tier ?? "unresolved"} ${method} ${path}`,
+        ).toBe(403);
+        expect(result.body.code).toBe("pro_subscription_required");
+      }
+      expect(stateRows.has(userId)).toBe(false);
+      expect(
+        [...botRows.values()].some((row) => row.userId === userId),
+      ).toBe(false);
+    }
+  });
+
+  it("rejects anonymous callers from every AutoPilot route", async () => {
+    const routes = [
+      ["GET", "/autopilot"],
+      ["GET", "/autopilot/history"],
+      ["PUT", "/autopilot/master", { active: false }],
+      ["PUT", "/autopilot/asset", { asset: "Forex" }],
+      ["PUT", "/autopilot/bots/grid-matrix", { running: true }],
+      ["DELETE", "/autopilot/logs"],
+    ] as const;
+
+    for (const [method, path, body] of routes) {
+      const result = await callAutopilot(method, path, undefined, body);
+      expect(result.status, `${method} ${path}`).toBe(401);
+    }
+  });
+
+  it("revokes persisted privileged state after an API-process restart", async () => {
+    tiers.set("restart-user", "elite");
+    let result = await put(
+      "/autopilot/asset",
+      { asset: "Stocks" },
+      "token-restart-user",
+    );
+    expect(result.status).toBe(200);
+    result = await put(
+      "/autopilot/bots/quantum-inst",
+      { running: true },
+      "token-restart-user",
+    );
+    expect(result.status).toBe(200);
+
+    tiers.set("restart-user", "free");
+    vi.resetModules();
+    const { createAutopilotRouter } = await import("./autopilot");
+    const restartedApp = express();
+    restartedApp.use(express.json());
+    restartedApp.use(
+      "/api",
+      createAutopilotRouter(verifier, async (userId) => tiers.get(userId) ?? null),
+    );
+    const restartedServer = await new Promise<Server>((resolve) => {
+      const instance = restartedApp.listen(0, "127.0.0.1", () => resolve(instance));
+    });
+
+    try {
+      const { address, port } = restartedServer.address() as AddressInfo;
+      const restartedBase = `http://${address}:${port}/api`;
+      let res = await fetch(`${restartedBase}/autopilot`, {
+        headers: { authorization: "Bearer token-restart-user" },
+      });
+      expect(res.status).toBe(403);
+
+      // Inspect through the paid path after the denied request. The new
+      // process must have revoked both persisted privileged settings.
+      tiers.set("restart-user", "pro");
+      res = await fetch(`${restartedBase}/autopilot`, {
+        headers: { authorization: "Bearer token-restart-user" },
+      });
+      const body = (await res.json()) as any;
+      expect(res.status).toBe(200);
+      expect(body.selectedAsset).toBe("Forex");
+      expect(
+        body.bots.find((bot: any) => bot.id === "quantum-inst").running,
+      ).toBe(false);
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        restartedServer.close((err) => (err ? reject(err) : resolve())),
+      );
+    }
   });
 
   // A user who pays, starts the Pro bot, then lapses must not keep it
@@ -708,31 +837,32 @@ describe("Pro-only bot enforcement", () => {
 
       // Touching an unrelated free bot advances the simulation, so it must
       // revoke first rather than ticking the lapsed Pro bot forward.
-      const { body } = await put(
+      const { status } = await put(
         "/autopilot/bots/grid-matrix",
         { running: true },
         "token-lapsing-user",
       );
+      expect(status).toBe(403);
       expect(
-        body.bots.find((b: any) => b.id === "quantum-inst").running,
+        (await botFor("token-lapsing-user", "quantum-inst")).running,
       ).toBe(false);
       expect(
-        body.bots.find((b: any) => b.id === "grid-matrix").running,
-      ).toBe(true);
+        (await botFor("token-lapsing-user", "grid-matrix")).running,
+      ).toBe(false);
     });
 
-    it("lets a lapsed user stop the Pro bot instead of 403ing them", async () => {
+    it("rejects lapsed users after revoking their Pro bot", async () => {
       await startProBotAsPaidUser();
       tiers.set("lapsing-user", "free");
 
-      const { status, body } = await put(
+      const { status } = await put(
         "/autopilot/bots/quantum-inst",
         { running: false },
         "token-lapsing-user",
       );
-      expect(status).toBe(200);
+      expect(status).toBe(403);
       expect(
-        body.bots.find((b: any) => b.id === "quantum-inst").running,
+        (await botFor("token-lapsing-user", "quantum-inst")).running,
       ).toBe(false);
     });
 
@@ -772,9 +902,9 @@ describe("Pro-only bot enforcement", () => {
         method: "DELETE",
         headers: { authorization: "Bearer token-lapsing-user" },
       });
-      const body = (await res.json()) as any;
+      expect(res.status).toBe(403);
       expect(
-        body.bots.find((b: any) => b.id === "quantum-inst").running,
+        (await botFor("token-lapsing-user", "quantum-inst")).running,
       ).toBe(false);
     });
 

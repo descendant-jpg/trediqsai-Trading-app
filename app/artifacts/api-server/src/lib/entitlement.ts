@@ -25,6 +25,7 @@ export const isEntitlementConfigured = !!SUPABASE_URL && !!SERVICE_ROLE_KEY;
  */
 const PRO_TIERS = new Set(["pro", "elite", "whale", "vip"]);
 const ELITE_TIERS = new Set(["elite", "whale", "vip"]);
+const ELITE_STAFF_ROLES = new Set(["admin", "god_admin"]);
 
 /**
  * Default lookup: reads the caller's tier straight from Supabase with the
@@ -61,7 +62,9 @@ const supabaseTierLookup: TierLookup = async (userId) => {
   }[];
   const row = rows[0];
   if (!row) return null;
-  if (row.role?.trim().toLowerCase() === "admin") return "elite";
+  if (ELITE_STAFF_ROLES.has(row.role?.trim().toLowerCase() ?? "")) {
+    return "elite";
+  }
 
   // An unexpired free trial grants Pro access regardless of the stored tier.
   const trialUntil = row.free_trial_until

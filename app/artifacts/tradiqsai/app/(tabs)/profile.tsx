@@ -5,6 +5,7 @@ import {
   Linking,
   Modal,
   Platform,
+  RefreshControl,
   ScrollView,
   Share,
   StyleSheet,
@@ -41,10 +42,6 @@ import { SocialMediaModal } from "@/components/SocialMediaModal";
 import { ChangePasswordModal } from "@/components/ChangePasswordModal";
 import { DeleteAccountModal } from "@/components/DeleteAccountModal";
 import { TwoFactorAuthModal } from "@/components/TwoFactorAuthModal";
-import {
-  SubscriptionSuccessBanner,
-  type SubscriptionSuccess,
-} from "@/components/SubscriptionSuccessBanner";
 import { authenticateBiometrics, biometricCapability, getBiometricsEnabled, setBiometricsEnabled, unsupportedBiometricsMessage } from "@/lib/biometricSecurity";
 
 function showAlert(title: string, message: string) {
@@ -135,6 +132,34 @@ function Section({
   );
 }
 
+function ProfileSkeleton() {
+  return (
+    <View style={styles.profileSkeleton} testID="profile-loading-skeleton">
+      <View style={styles.skeletonIdentity}>
+        <View style={styles.skeletonAvatar} />
+        <View style={styles.skeletonIdentityCopy}>
+          <View style={[styles.skeletonLine, styles.skeletonName]} />
+          <View style={[styles.skeletonLine, styles.skeletonEmail]} />
+          <View style={[styles.skeletonLine, styles.skeletonBadge]} />
+        </View>
+      </View>
+      <View style={styles.skeletonWallet}>
+        <View style={[styles.skeletonLine, styles.skeletonLabel]} />
+        <View style={[styles.skeletonLine, styles.skeletonBalance]} />
+        <View style={styles.skeletonDivider} />
+        <View style={styles.skeletonStatRow}>
+          <View style={styles.skeletonStat} />
+          <View style={styles.skeletonStat} />
+          <View style={styles.skeletonStat} />
+        </View>
+      </View>
+      <View style={styles.skeletonCard} />
+      <View style={styles.skeletonCard} />
+      <ActivityIndicator color={c.primary} style={styles.skeletonSpinner} />
+    </View>
+  );
+}
+
 /** Bottom-sheet style modal shell shared by all profile modals. */
 function SheetModal({
   visible,
@@ -193,7 +218,7 @@ export default function ProfileScreen() {
   const { mfa } = useLocalSearchParams<{ mfa?: string }>();
   const queryClient = useQueryClient();
   const { session, signOut } = useAuth();
-  const { isSubscribed, isAdmin, accessTier, profileUpgrade } = useSubscription();
+  const { isSubscribed, isAdmin, refreshProfileEntitlement } = useSubscription();
   const { tradingDayTz, setTradingDayTz } = useTrading();
   const {
     evaluation,
@@ -202,12 +227,18 @@ export default function ProfileScreen() {
     history: payoutHistory,
     historyLoading,
     historyError,
+    refresh: refreshPayoutEvaluation,
     requestPayout,
   } = usePayoutEvaluation();
   const [requestingPayout, setRequestingPayout] = useState(false);
   const [tzPickerOpen, setTzPickerOpen] = useState(false);
   const [username, setUsername] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
+  const [loadedProfileUserId, setLoadedProfileUserId] = useState<string | null>(
+    null,
+  );
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [referralCode, setReferralCode] = useState<string | null>(null);
   const [referralCount, setReferralCount] = useState<number | null>(null);
   const [referralEarned, setReferralEarned] = useState<number | null>(null);
@@ -218,9 +249,6 @@ export default function ProfileScreen() {
   const [biometricsAvailable, setBiometricsAvailable] = useState(Platform.OS !== "web");
   const [twoFactorOpen, setTwoFactorOpen] = useState(false);
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
-  const [subscriptionSuccess, setSubscriptionSuccess] =
-    useState<SubscriptionSuccess | null>(null);
-  const lastUpgradeKey = useRef("");
 
   // Change password
   const [newPassword, setNewPassword] = useState("");
@@ -237,44 +265,157 @@ export default function ProfileScreen() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
   const email = session?.user?.email ?? "";
+  const userId = session?.user.id ?? null;
+  const activeProfileUserId = useRef(userId);
+  const profileRequestGeneration = useRef(0);
+  const referralRequestGeneration = useRef(0);
+  const refreshGeneration = useRef(0);
+  activeProfileUserId.current = userId;
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      if (!session) {
-        setRole(null);
+  const refreshProfileIdentity = useCallback(async () => {
+    const requestGeneration = ++profileRequestGeneration.current;
+    if (!userId) {
+      setUsername(null);
+      setRole(null);
+      setReferralCode(null);
+      setLoadedProfileUserId(null);
+      setProfileLoading(false);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("username, referral_code, role")
+        .eq("id", userId)
+        .maybeSingle();
+      if (error) throw error;
+      if (
+        activeProfileUserId.current !== userId ||
+        profileRequestGeneration.current !== requestGeneration
+      ) {
         return;
       }
-      setRole(null);
-      const [{ data }, { data: refRows, count }] = await Promise.all([
-        supabase
-          .from("profiles")
-          .select("username, referral_code, role")
-          .eq("id", session.user.id)
-          .single(),
-        supabase
-          .from("referrals")
-          .select("reward_amount", { count: "exact" })
-          .eq("referrer_id", session.user.id),
-      ]);
-      if (!cancelled) {
-        setUsername(data?.username ?? null);
-        setRole(typeof data?.role === "string" ? data.role : null);
-        setReferralCode(data?.referral_code ?? null);
-        setReferralCount(count ?? 0);
-        setReferralEarned(
-          (refRows ?? []).reduce(
-            (sum, row: { reward_amount: number | null }) =>
-              sum + (Number(row.reward_amount) || 0),
-            0,
-          ),
-        );
+
+      setUsername(data?.username ?? null);
+      setRole(
+        typeof data?.role === "string"
+          ? data.role.trim().toLowerCase()
+          : null,
+      );
+      setReferralCode(data?.referral_code ?? null);
+      setLoadedProfileUserId(userId);
+    } catch (error) {
+      if (
+        activeProfileUserId.current === userId &&
+        profileRequestGeneration.current === requestGeneration
+      ) {
+        setUsername(null);
+        setRole(null);
+        setReferralCode(null);
+        setLoadedProfileUserId(userId);
       }
-    })();
+      throw error;
+    } finally {
+      if (
+        activeProfileUserId.current === userId &&
+        profileRequestGeneration.current === requestGeneration
+      ) {
+        setProfileLoading(false);
+      }
+    }
+  }, [userId]);
+
+  const refreshReferralStats = useCallback(async () => {
+    const requestGeneration = ++referralRequestGeneration.current;
+    if (!userId) {
+      setReferralCount(null);
+      setReferralEarned(null);
+      return;
+    }
+
+    try {
+      const { data, count, error } = await supabase
+        .from("referrals")
+        .select("reward_amount", { count: "exact" })
+        .eq("referrer_id", userId);
+      if (error) throw error;
+      if (
+        activeProfileUserId.current !== userId ||
+        referralRequestGeneration.current !== requestGeneration
+      ) {
+        return;
+      }
+
+      setReferralCount(count ?? 0);
+      setReferralEarned(
+        (data ?? []).reduce(
+          (sum, row: { reward_amount: number | null }) =>
+            sum + (Number(row.reward_amount) || 0),
+          0,
+        ),
+      );
+    } catch (error) {
+      if (
+        activeProfileUserId.current === userId &&
+        referralRequestGeneration.current === requestGeneration
+      ) {
+        setReferralCount(null);
+        setReferralEarned(null);
+      }
+      throw error;
+    }
+  }, [userId]);
+
+  useEffect(() => {
+    setProfileLoading(true);
+    setUsername(null);
+    setRole(null);
+    setReferralCode(null);
+    setReferralCount(null);
+    setReferralEarned(null);
+
+    void refreshProfileIdentity().catch(() => undefined);
+
+    // Referral metadata is optional and must never delay or suppress the
+    // profile role that controls the Admin Command Center.
+    void refreshReferralStats().catch(() => undefined);
+
     return () => {
-      cancelled = true;
+      profileRequestGeneration.current += 1;
+      referralRequestGeneration.current += 1;
+      refreshGeneration.current += 1;
     };
-  }, [session]);
+  }, [refreshProfileIdentity, refreshReferralStats, userId]);
+
+  const handleRefresh = useCallback(async () => {
+    if (refreshing) return;
+    const requestGeneration = ++refreshGeneration.current;
+    setRefreshing(true);
+    if (Platform.OS !== "web") {
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    }
+    try {
+      await Promise.allSettled([
+        refreshProfileIdentity(),
+        refreshReferralStats(),
+        refreshProfileEntitlement(),
+        refreshPayoutEvaluation(),
+        queryClient.invalidateQueries({ type: "active" }),
+      ]);
+    } finally {
+      if (refreshGeneration.current === requestGeneration) {
+        setRefreshing(false);
+      }
+    }
+  }, [
+    queryClient,
+    refreshPayoutEvaluation,
+    refreshProfileEntitlement,
+    refreshProfileIdentity,
+    refreshReferralStats,
+    refreshing,
+  ]);
 
   // Restore persisted settings.
   useEffect(() => {
@@ -300,35 +441,6 @@ export default function ProfileScreen() {
   useEffect(() => {
     if (mfa === "verify") setTwoFactorOpen(true);
   }, [mfa]);
-
-  useEffect(() => {
-    lastUpgradeKey.current = "";
-    setSubscriptionSuccess(null);
-  }, [session?.user.id]);
-
-  useEffect(() => {
-    const upgradeKey = profileUpgrade
-      ? `${profileUpgrade.userId}:${profileUpgrade.sequence}`
-      : "";
-    if (
-      !profileUpgrade ||
-      upgradeKey === lastUpgradeKey.current
-    ) {
-      return;
-    }
-    lastUpgradeKey.current = upgradeKey;
-    setSubscriptionSuccess({
-      userId: profileUpgrade.userId,
-      tier: profileUpgrade.tier,
-    });
-    if (Platform.OS !== "web") {
-      void Haptics.notificationAsync(
-        Haptics.NotificationFeedbackType.Success,
-      ).catch(() => {});
-    }
-    const timeout = setTimeout(() => setSubscriptionSuccess(null), 6_000);
-    return () => clearTimeout(timeout);
-  }, [profileUpgrade]);
 
   const handleMfaVerified = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: getGetAutopilotHistoryQueryKey() });
@@ -425,14 +537,6 @@ export default function ProfileScreen() {
     }
   };
 
-  const openAdminCommandCenter = () => {
-    if (role !== "god_admin") return;
-    if (Platform.OS !== "web") {
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
-    }
-    router.push("/(admin)" as never);
-  };
-
   // Fail closed: anything other than a validated, eligible, non-zero server
   // result keeps the button disabled.
   const payoutEnabled =
@@ -516,7 +620,21 @@ export default function ProfileScreen() {
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            testID="profile-refresh-control"
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={c.primary}
+            colors={[c.primary]}
+            progressBackgroundColor={c.card}
+          />
+        }
       >
+        {profileLoading || loadedProfileUserId !== userId ? (
+          <ProfileSkeleton />
+        ) : (
+          <>
         <View style={styles.identityHeader}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>
@@ -532,20 +650,14 @@ export default function ProfileScreen() {
             <View style={styles.planBadge}>
               <Text style={styles.planText}>
                 {isAdmin
-                  ? "ADMIN · ELITE ACCESS"
-                  : accessTier === "elite"
-                    ? "ELITE PLAN"
-                    : isSubscribed
+                  ? "ADMIN · PRO PLAN"
+                  : isSubscribed
                     ? "PRO PLAN"
                     : "FREE PLAN"}
               </Text>
             </View>
           </View>
         </View>
-        <SubscriptionSuccessBanner
-          success={subscriptionSuccess}
-          currentUserId={session?.user.id ?? null}
-        />
         {!isSubscribed && (
           <TouchableOpacity
             style={styles.upgradeButton}
@@ -728,22 +840,20 @@ export default function ProfileScreen() {
         </View>
         {role === "god_admin" && (
           <TouchableOpacity
-            style={styles.adminCommandCenterCard}
-            onPress={openAdminCommandCenter}
+            style={styles.commandCenterCard}
+            onPress={() => {
+              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+              router.push("/(admin)" as never);
+            }}
             activeOpacity={0.86}
-            accessibilityRole="button"
-            accessibilityLabel="Open Admin Command Center"
             testID="profile-admin-command-center"
           >
-            <View style={styles.adminCommandCenterIcon}>
+            <View style={styles.commandCenterIcon}>
               <Feather name="shield" size={21} color={c.primary} />
             </View>
-            <View style={styles.adminCommandCenterCopy}>
-              <View style={styles.adminCommandCenterTitleRow}>
-                <Text style={styles.adminCommandCenterTitle}>Admin Command Center</Text>
-                <Text style={styles.adminCommandCenterBadge}>GOD ADMIN</Text>
-              </View>
-              <Text style={styles.adminCommandCenterSubtitle}>
+            <View style={styles.commandCenterCopy}>
+              <Text style={styles.commandCenterTitle}>Admin Command Center</Text>
+              <Text style={styles.commandCenterSubtitle}>
                 Manage platform insights and waitlist
               </Text>
             </View>
@@ -905,6 +1015,8 @@ export default function ProfileScreen() {
           <Text style={styles.signOutText}>Sign Out</Text>
         </TouchableOpacity>
         <Text style={styles.version}>TradiQs AI v1.0.0</Text>
+          </>
+        )}
       </ScrollView>
 
       {/* Trading-day timezone picker (restored from settings task) */}
@@ -1326,56 +1438,95 @@ const styles = StyleSheet.create({
   historyEmpty: { color: c.mutedForeground, fontSize: 11, lineHeight: 16 },
   withdrawText: { color: c.primary, fontSize: 11, fontFamily: "Inter_700Bold" },
   walletDivider: { height: 1, backgroundColor: c.border, marginTop: 16 },
-  adminCommandCenterCard: {
+  profileSkeleton: { gap: 16 },
+  skeletonIdentity: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    paddingVertical: 8,
+  },
+  skeletonAvatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#1A1D23",
+    borderColor: "#283038",
+    borderWidth: 1,
+  },
+  skeletonIdentityCopy: { flex: 1, gap: 9 },
+  skeletonLine: {
+    height: 10,
+    borderRadius: 6,
+    backgroundColor: "#20242B",
+  },
+  skeletonName: { width: "48%", height: 15 },
+  skeletonEmail: { width: "70%" },
+  skeletonBadge: { width: 82, height: 18, backgroundColor: "#12343A" },
+  skeletonWallet: {
+    minHeight: 176,
+    borderRadius: 16,
+    padding: 18,
+    backgroundColor: "#111419",
+    borderColor: "#242A31",
+    borderWidth: 1,
+  },
+  skeletonLabel: { width: 94 },
+  skeletonBalance: { width: "55%", height: 30, marginTop: 16 },
+  skeletonDivider: {
+    height: 1,
+    backgroundColor: "#242A31",
+    marginVertical: 22,
+  },
+  skeletonStatRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  skeletonStat: {
+    flex: 1,
+    height: 34,
+    borderRadius: 8,
+    backgroundColor: "#1A1D23",
+  },
+  skeletonCard: {
+    height: 76,
+    borderRadius: 14,
+    backgroundColor: "#111419",
+    borderColor: "#242A31",
+    borderWidth: 1,
+  },
+  skeletonSpinner: { marginTop: 4 },
+  commandCenterCard: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    backgroundColor: "#0D1E22",
-    borderColor: "#00F0FF80",
+    backgroundColor: c.card,
+    borderColor: "rgba(0, 240, 255, 0.5)",
     borderWidth: 1,
     borderRadius: 13,
     padding: 14,
     marginBottom: 12,
   },
-  adminCommandCenterIcon: {
+  commandCenterIcon: {
     width: 42,
     height: 42,
     borderRadius: 11,
-    backgroundColor: "#07343B",
-    borderColor: "#00F0FF80",
+    backgroundColor: "#0C2226",
+    borderColor: "rgba(0, 240, 255, 0.5)",
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
   },
-  adminCommandCenterCopy: { flex: 1 },
-  adminCommandCenterTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-    flexWrap: "wrap",
-  },
-  adminCommandCenterTitle: {
+  commandCenterCopy: { flex: 1 },
+  commandCenterTitle: {
     color: c.foreground,
     fontSize: 14,
     fontFamily: "Inter_700Bold",
   },
-  adminCommandCenterBadge: {
-    color: c.primary,
-    backgroundColor: "#07343B",
-    borderColor: "#00F0FF80",
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    fontSize: 8,
-    fontFamily: "Inter_700Bold",
-    letterSpacing: 0.6,
-  },
-  adminCommandCenterSubtitle: {
+  commandCenterSubtitle: {
     color: c.mutedForeground,
-    fontSize: 11,
-    lineHeight: 16,
-    marginTop: 4,
+    fontSize: 10,
+    marginTop: 5,
   },
   partnerCard: {
     flexDirection: "row",

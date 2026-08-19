@@ -259,7 +259,9 @@ function recordFinishedDay(
  * for a first-time user. Unknown bot rows are ignored; failure to load
  * surfaces as a request error instead of silently resetting state.
  */
-async function loadUserState(userId: string): Promise<UserAutopilot> {
+async function loadPersistedUserState(
+  userId: string,
+): Promise<UserAutopilot | null> {
   // Captured synchronously so the simulation clock starts when the load
   // begins (e.g. at server boot for the anonymous seed), not when the DB
   // round-trip completes.
@@ -278,6 +280,14 @@ async function loadUserState(userId: string): Promise<UserAutopilot> {
       .from(autopilotPnlHistoryTable)
       .where(eq(autopilotPnlHistoryTable.userId, userId)),
   ]);
+  if (
+    botRows.length === 0 &&
+    stateRows.length === 0 &&
+    historyRows.length === 0
+  ) {
+    return null;
+  }
+
   const state = defaultUserState(bootAt);
   state.history = historyRows
     .map((row) => ({ day: row.dayIso, pnl: row.pnl }))
@@ -307,8 +317,18 @@ async function loadUserState(userId: string): Promise<UserAutopilot> {
   } else {
     pushLog(state, "[SYS] TradiQs AutoPilot core initialized");
     pushLog(state, "[SYS] 2 algorithms deployed — monitoring 14 markets");
-    await persistState(userId, state);
   }
+  return state;
+}
+
+async function loadUserState(userId: string): Promise<UserAutopilot> {
+  const persisted = await loadPersistedUserState(userId);
+  if (persisted) return persisted;
+
+  const state = defaultUserState(Date.now());
+  pushLog(state, "[SYS] TradiQs AutoPilot core initialized");
+  pushLog(state, "[SYS] 2 algorithms deployed — monitoring 14 markets");
+  await persistState(userId, state);
   return state;
 }
 
@@ -507,9 +527,7 @@ export function createAutopilotRouter(
     assurance ?? (verifier ? testPassthrough : requireAal2IfMfaEnrolledWrite);
   const requireReadAssurance: RequestHandler =
     readAssurance ?? (verifier ? testPassthrough : requireAal2IfMfaEnrolledSoft);
-  router.use("/autopilot", identity(verifier));
-
-  router.get("/autopilot", async (_req, res, next) => {
+  const requireAutopilotAccess: RequestHandler = async (_req, res, next) => {
     try {
       const userId = requestUserId(res);
       if (userId === ANONYMOUS) {
@@ -517,9 +535,44 @@ export function createAutopilotRouter(
         return;
       }
       if (!(await hasProAccess(userId, tierLookup))) {
-        res.status(403).json({ error: "AutoPilot requires a Pro or Elite subscription" });
+        // If this user previously had paid access in this process, revoke
+        // privileged persisted execution before denying the request. Do not
+        // lazily load state for ordinary free users merely because they probed
+        // the endpoint.
+        const loadedState = users.get(userId);
+        const state = loadedState
+          ? await loadedState
+          : await loadPersistedUserState(userId);
+        if (state) {
+          const proRevoked = await enforceProEntitlement(userId, state, tierLookup);
+          const assetRevoked = await enforceSelectedAssetEntitlement(
+            userId,
+            state,
+            tierLookup,
+          );
+          if (proRevoked) await persistStoppedPro(userId, state);
+          else if (assetRevoked) await persistState(userId, state);
+        }
+        res.status(403).json({
+          error: "AutoPilot requires a Pro or Elite subscription",
+          code: "pro_subscription_required",
+        });
         return;
       }
+      next();
+    } catch (err) {
+      next(err);
+    }
+  };
+  router.use("/autopilot", identity(verifier));
+  // Every AutoPilot route is paid-only. Keep this gate ahead of body parsing
+  // and state loading so free, Starter, unresolved, and anonymous callers
+  // cannot read, mutate, or advance execution state through a crafted request.
+  router.use("/autopilot", requireAutopilotAccess);
+
+  router.get("/autopilot", async (_req, res, next) => {
+    try {
+      const userId = requestUserId(res);
       const state = await stateFor(userId);
       const proRevoked = await enforceProEntitlement(userId, state, tierLookup);
       const assetRevoked = await enforceSelectedAssetEntitlement(userId, state, tierLookup);
@@ -537,14 +590,6 @@ export function createAutopilotRouter(
   router.get("/autopilot/history", requireReadAssurance, async (_req, res, next) => {
     try {
       const userId = requestUserId(res);
-      if (userId === ANONYMOUS) {
-        res.status(401).json({ error: "Sign in required." });
-        return;
-      }
-      if (!(await hasProAccess(userId, tierLookup))) {
-        res.status(403).json({ error: "AutoPilot requires a Pro or Elite subscription" });
-        return;
-      }
       const state = await stateFor(userId);
       // This endpoint advances the simulation, so a lapsed user could keep
       // accruing Pro P&L here alone. Revoke before any time passes.
@@ -575,17 +620,6 @@ export function createAutopilotRouter(
     try {
       const userId = requestUserId(res);
       const state = await stateFor(userId);
-      // The anonymous state is a shared unauthenticated demo only; it never
-      // represents a user's persisted execution engine. Authenticated users
-      // must prove current Pro access before they can re-arm AutoPilot.
-      if (
-        parsed.data.active &&
-        userId !== ANONYMOUS &&
-        !(await hasProAccess(userId, tierLookup))
-      ) {
-        res.status(403).json({ error: "AutoPilot requires a Pro or Elite subscription" });
-        return;
-      }
       // Re-arming must not resurrect a Pro bot the user no longer pays for.
       await enforceProEntitlement(userId, state, tierLookup);
       await enforceSelectedAssetEntitlement(userId, state, tierLookup);
@@ -618,9 +652,8 @@ export function createAutopilotRouter(
         await persistState(userId, state);
       }
       const canUseAsset =
-        parsed.data.asset === "Stocks"
-          ? await hasEliteAccess(userId, tierLookup)
-          : await hasProAccess(userId, tierLookup);
+        parsed.data.asset !== "Stocks" ||
+        await hasEliteAccess(userId, tierLookup);
       if (!canUseAsset) {
         res.status(403).json({
           error:
