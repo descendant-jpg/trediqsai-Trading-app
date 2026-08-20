@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { RiskDisclaimer } from "@/components/RiskDisclaimer";
 import {
   ActivityIndicator,
   Alert,
@@ -235,6 +236,8 @@ export default function ProfileScreen() {
   const [tzPickerOpen, setTzPickerOpen] = useState(false);
   const [username, setUsername] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
+  const [tradingExperience, setTradingExperience] = useState<string | null>(null);
+  const [experienceOpen, setExperienceOpen] = useState(false);
   const [loadedProfileUserId, setLoadedProfileUserId] = useState<string | null>(
     null,
   );
@@ -299,7 +302,7 @@ export default function ProfileScreen() {
     try {
       const { data, error } = await supabase
         .from("profiles")
-        .select("username, referral_code, role")
+        .select("username, referral_code, role, trading_experience")
         .eq("id", userId)
         .maybeSingle();
       if (error) throw error;
@@ -317,6 +320,7 @@ export default function ProfileScreen() {
           : null,
       );
       setReferralCode(data?.referral_code ?? null);
+      setTradingExperience(data?.trading_experience ?? null);
       setLoadedProfileUserId(userId);
     } catch (error) {
       if (
@@ -672,6 +676,7 @@ export default function ProfileScreen() {
             </View>
           </View>
         </View>
+        {!isGuest && <TouchableOpacity style={styles.experienceCard} onPress={() => setExperienceOpen(true)} testID="profile-trading-experience"><Text style={styles.experienceLabel}>TRADING EXPERIENCE</Text><Text style={styles.experienceValue}>{tradingExperience ?? "Choose your experience"}</Text></TouchableOpacity>}
         {!isSubscribed && (
           <TouchableOpacity
             style={styles.upgradeButton}
@@ -1050,7 +1055,16 @@ export default function ProfileScreen() {
         <Text style={styles.version}>TradiQs AI v1.0.0</Text>
           </>
         )}
+        <RiskDisclaimer />
       </ScrollView>
+      <Modal visible={experienceOpen} transparent animationType="slide" onRequestClose={() => setExperienceOpen(false)}>
+        <View style={styles.experienceOverlay}>
+          <View style={styles.experienceSheet}>
+            <Text style={styles.experienceTitle}>Trading Experience</Text>
+            {["Beginner", "Intermediate", "Advanced", "Professional"].map((level) => <TouchableOpacity key={level} style={styles.experienceOption} onPress={() => { if (!userId) return; void supabase.from("profiles").update({ trading_experience: level }).eq("id", userId).then(({ error }) => { if (!error) setTradingExperience(level); setExperienceOpen(false); }); }}><Text style={styles.experienceOptionText}>{level}</Text></TouchableOpacity>)}
+          </View>
+        </View>
+      </Modal>
 
       {/* Trading-day timezone picker (restored from settings task) */}
       <TimezonePickerModal
@@ -1317,6 +1331,14 @@ function SettingsGroup({
 }
 
 const styles = StyleSheet.create({
+  experienceCard: { backgroundColor: c.card, borderColor: c.border, borderWidth: 1, borderRadius: 12, marginHorizontal: 20, marginBottom: 16, padding: 14 },
+  experienceLabel: { color: c.mutedForeground, fontSize: 10, fontFamily: "Inter_700Bold", letterSpacing: 1 },
+  experienceValue: { color: c.foreground, fontSize: 16, fontFamily: "Inter_600SemiBold", marginTop: 5 },
+  experienceOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,.6)", justifyContent: "flex-end" },
+  experienceSheet: { backgroundColor: c.card, padding: 22, borderTopLeftRadius: 22, borderTopRightRadius: 22 },
+  experienceTitle: { color: c.foreground, fontSize: 20, fontFamily: "Inter_700Bold", marginBottom: 12 },
+  experienceOption: { paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: c.border },
+  experienceOptionText: { color: c.foreground, fontSize: 16, fontFamily: "Inter_500Medium" },
   container: {
     flex: 1,
     backgroundColor: "#0A0B0E",
