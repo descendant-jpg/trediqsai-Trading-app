@@ -27,11 +27,28 @@ export async function fetchAdminMetrics(): Promise<AdminMetrics> {
 export type Post = {
   id: number;
   title: string;
+  slug?: string;
+  excerpt?: string;
+  cover_image?: string | null;
   content: string;
+  asset_class?: string;
   category: string;
+  tags?: string[];
   status?: "draft" | "published" | "archived";
   created_at: string;
   updated_at?: string;
+};
+
+export type PostPayload = {
+  title: string;
+  slug?: string;
+  excerpt?: string;
+  cover_image?: string | null;
+  content: string;
+  asset_class?: string;
+  category: string;
+  tags?: string[];
+  status?: Post["status"];
 };
 
 export type PostsResponse = { posts: Post[] } | Post[];
@@ -46,12 +63,7 @@ export async function fetchPost(id: number | string): Promise<Post> {
   return response.post;
 }
 
-export async function createPost(body: {
-  title: string;
-  content: string;
-  category: string;
-  status?: Post["status"];
-}): Promise<Post> {
+export async function createPost(body: PostPayload): Promise<Post> {
   const response = await customFetch<{ post: Post }>("/api/admin/posts", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -62,7 +74,7 @@ export async function createPost(body: {
 
 export async function updatePost(
   id: number | string,
-  body: { title: string; content: string; category: string; status?: Post["status"] },
+  body: PostPayload,
 ): Promise<Post> {
   const response = await customFetch<{ post: Post }>(`/api/admin/posts/${id}`, {
     method: "PUT",
@@ -70,6 +82,30 @@ export async function updatePost(
     body: JSON.stringify(body),
   });
   return response.post;
+}
+
+// ─── Taxonomy ─────────────────────────────────────────────────────────────────
+
+export type TaxonomyKind = "category" | "tag";
+
+export const FALLBACK_CATEGORIES = ["Forex", "Crypto", "Stocks"];
+export const FALLBACK_TAGS = ["Analysis", "News", "Educational"];
+
+export async function fetchTaxonomy(kind: TaxonomyKind): Promise<string[]> {
+  const response = await customFetch<{
+    terms: Array<{ name: string; kind: TaxonomyKind }>;
+  }>(
+    `/api/admin/taxonomy?kind=${kind}`,
+  );
+  const names = Array.isArray(response.terms)
+    ? response.terms
+        .filter((term) => term.kind === kind && typeof term.name === "string")
+        .map((term) => term.name)
+    : [];
+  if (names.length > 0) {
+    return names;
+  }
+  return kind === "category" ? FALLBACK_CATEGORIES : FALLBACK_TAGS;
 }
 
 // ─── Waitlist ─────────────────────────────────────────────────────────────────

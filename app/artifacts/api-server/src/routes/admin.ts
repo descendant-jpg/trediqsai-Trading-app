@@ -41,6 +41,10 @@ export type AdminDashboardLoader = () => Promise<AdminDashboardSummary>;
 
 type PostStatus = "draft" | "published" | "archived";
 const POST_STATUSES: PostStatus[] = ["draft", "published", "archived"];
+type AssetClass = "Forex" | "Crypto" | "Stocks";
+const ASSET_CLASSES: AssetClass[] = ["Forex", "Crypto", "Stocks"];
+type TaxonomyKind = "category" | "tag";
+const TAXONOMY_KINDS: TaxonomyKind[] = ["category", "tag"];
 const POST_FIELDS =
   "id, title, slug, excerpt, content, asset_class, category, ai_badge, upvotes, status, author, cover_image, read_time, tags, published_at, created_at, updated_at";
 
@@ -106,6 +110,23 @@ function postSlug(title: string) {
 
 function readTime(content: string) {
   return `${Math.max(1, Math.ceil((content.trim().match(/\S+/g)?.length ?? 0) / 200))} min read`;
+}
+
+function cleanSlug(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .slice(0, 100);
+}
+
+function normalizedTags(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((tag) => String(tag ?? "").trim().toLowerCase().replace(/[^a-z0-9\s-]/g, "").slice(0, 50))
+    .filter(Boolean);
 }
 
 const loadAdminDashboard: AdminDashboardLoader = async () => {
@@ -196,6 +217,29 @@ export function createAdminRouter(
     }
   });
 
+  router.get("/admin/taxonomy", async (req, res) => {
+    const kind = typeof req.query.kind === "string" ? req.query.kind : undefined;
+    if (kind && !TAXONOMY_KINDS.includes(kind as TaxonomyKind)) {
+      res.status(422).json({ error: "kind must be category or tag" });
+      return;
+    }
+    try {
+      let query = adminClient()
+        .from("taxonomy_terms")
+        .select("id, name, kind, created_at")
+        .order("name", { ascending: true });
+      if (kind) query = query.eq("kind", kind);
+      const { data, error } = await query;
+      if (error) throw error;
+      res.json({ terms: data ?? [] });
+    } catch (error) {
+      logger.error({ error }, "Mobile admin taxonomy read failed");
+      res.status(503).json({
+        error: "Taxonomy is unavailable. Confirm the taxonomy_terms migration is applied in Supabase.",
+      });
+    }
+  });
+
   router.get("/admin/posts", async (req, res) => {
     try {
       const page = pageValue(req.query.page, 1, 10_000);
@@ -242,20 +286,24 @@ export function createAdminRouter(
     }
     const status: PostStatus = POST_STATUSES.includes(req.body?.status) ? req.body.status : "draft";
     const now = new Date().toISOString();
+    const assetClass: AssetClass = ASSET_CLASSES.includes(req.body?.asset_class)
+      ? req.body.asset_class
+      : "Forex";
+    const requestedSlug = typeof req.body?.slug === "string" ? cleanSlug(req.body.slug) : "";
     const record = {
       title,
-      slug: postSlug(title),
-      excerpt: content.slice(0, 180),
+      slug: requestedSlug || postSlug(title),
+      excerpt: typeof req.body?.excerpt === "string" ? req.body.excerpt.trim().slice(0, 500) : content.slice(0, 180),
       content,
-      asset_class: "Forex",
+      asset_class: assetClass,
       category: typeof req.body?.category === "string" ? req.body.category.trim().slice(0, 50) || "Analysis" : "Analysis",
-      ai_badge: "",
-      upvotes: 0,
+      ai_badge: typeof req.body?.ai_badge === "string" ? req.body.ai_badge.trim().slice(0, 100) : "",
+      upvotes: Math.max(0, Number(req.body?.upvotes ?? 0) || 0),
       status,
-      author: "TradiQs AI Quant Desk",
-      cover_image: null,
+      author: typeof req.body?.author === "string" ? req.body.author.trim().slice(0, 100) || "TradiQs AI Quant Desk" : "TradiQs AI Quant Desk",
+      cover_image: typeof req.body?.cover_image === "string" && req.body.cover_image.trim() ? req.body.cover_image.trim().slice(0, 2000) : null,
       read_time: readTime(content),
-      tags: [],
+      tags: normalizedTags(req.body?.tags),
       published_at: status === "published" ? now : null,
       updated_at: now,
     };
@@ -283,10 +331,17 @@ export function createAdminRouter(
     }
     const requestedStatus: PostStatus | undefined = POST_STATUSES.includes(req.body?.status) ? req.body.status : undefined;
     const update: Record<string, unknown> = {
-      title, content, slug: postSlug(title), excerpt: content.slice(0, 180),
+      title, content,
+      slug: typeof req.body?.slug === "string" && cleanSlug(req.body.slug) ? cleanSlug(req.body.slug) : postSlug(title),
+      excerpt: typeof req.body?.excerpt === "string" ? req.body.excerpt.trim().slice(0, 500) : content.slice(0, 180),
       category: typeof req.body?.category === "string" ? req.body.category.trim().slice(0, 50) || "Analysis" : "Analysis",
       read_time: readTime(content), updated_at: new Date().toISOString(),
     };
+    if (ASSET_CLASSES.includes(req.body?.asset_class)) update.asset_class = req.body.asset_class;
+    if (req.body?.tags !== undefined) update.tags = normalizedTags(req.body.tags);
+    if (typeof req.body?.cover_image === "string") update.cover_image = req.body.cover_image.trim().slice(0, 2000) || null;
+    if (typeof req.body?.author === "string") update.author = req.body.author.trim().slice(0, 100);
+    if (typeof req.body?.ai_badge === "string") update.ai_badge = req.body.ai_badge.trim().slice(0, 100);
     if (requestedStatus) {
       update.status = requestedStatus;
       update.published_at = requestedStatus === "published" ? new Date().toISOString() : null;
