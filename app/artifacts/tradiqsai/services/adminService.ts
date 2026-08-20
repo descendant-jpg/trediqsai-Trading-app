@@ -88,7 +88,17 @@ export async function updatePost(
 
 export type TaxonomyKind = "category" | "tag";
 
-export const FALLBACK_CATEGORIES = ["Forex", "Crypto", "Stocks"];
+export const FALLBACK_CATEGORIES = [
+  "Discussion",
+  "Analysis",
+  "News",
+  "Strategy",
+  "Psychology",
+  "Brokers",
+  "Signals",
+  "Education",
+  "Results",
+];
 export const FALLBACK_TAGS = ["Analysis", "News", "Educational"];
 
 export async function fetchTaxonomy(kind: TaxonomyKind): Promise<string[]> {

@@ -24,7 +24,7 @@ import {
 } from "@/services/adminService";
 
 const CYAN = "#00F0FF";
-const ASSET_CLASSES = ["Forex", "Crypto", "Stocks", "Commodities", "Indices"];
+const ASSET_CLASSES = ["Forex", "Crypto", "Stocks"];
 const STATUSES: Array<"draft" | "published" | "archived"> = [
   "draft",
   "published",
