@@ -1061,7 +1061,7 @@ export default function ProfileScreen() {
         <View style={styles.experienceOverlay}>
           <View style={styles.experienceSheet}>
             <Text style={styles.experienceTitle}>Trading Experience</Text>
-            {["Beginner", "Intermediate", "Advanced", "Professional"].map((level) => <TouchableOpacity key={level} style={styles.experienceOption} onPress={() => { if (!userId) return; void supabase.from("profiles").update({ trading_experience: level }).eq("id", userId).then(({ error }) => { if (!error) setTradingExperience(level); setExperienceOpen(false); }); }}><Text style={styles.experienceOptionText}>{level}</Text></TouchableOpacity>)}
+            {["Beginner", "Intermediate", "Advanced", "Professional"].map((level) => <TouchableOpacity key={level} style={styles.experienceOption} onPress={() => { if (!userId) return; void supabase.from("profiles").update({ trading_experience: level }).eq("id", userId).then(({ error }) => { if (error) { showAlert("Could not save experience", "Please try again."); return; } setTradingExperience(level); setExperienceOpen(false); }); }}><Text style={styles.experienceOptionText}>{level}</Text></TouchableOpacity>)}
           </View>
         </View>
       </Modal>
