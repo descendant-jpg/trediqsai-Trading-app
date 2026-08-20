@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   RefreshControl,
   ScrollView,
@@ -106,11 +105,11 @@ export default function MobileCmsDashboard() {
     },
   ];
 
-  const showWebCmsMessage = (action: string) => {
-    Alert.alert(
-      `${action} is coming to mobile`,
-      'This workflow remains available in the web Command Center.',
+  const navigateWithHaptic = (route: Parameters<typeof router.push>[0]) => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(
+      () => undefined,
     );
+    router.push(route);
   };
 
   return (
@@ -185,22 +184,22 @@ export default function MobileCmsDashboard() {
           <QuickAction
             icon="edit-3"
             label="Write New Post"
-            onPress={() => router.push('/admin/insights')}
+            onPress={() => navigateWithHaptic('/(admin)/write-post')}
           />
           <QuickAction
             icon="user-check"
             label="View Waitlist"
-            onPress={() => router.push('/admin/waitlist')}
+            onPress={() => navigateWithHaptic('/(admin)/waitlist')}
           />
           <QuickAction
             icon="life-buoy"
             label="Check Help Desk"
-            onPress={() => showWebCmsMessage('Help Desk')}
+            onPress={() => navigateWithHaptic('/(admin)/help-desk')}
           />
           <QuickAction
             icon="radio"
             label="Broadcast Signal"
-            onPress={() => showWebCmsMessage('Signal broadcasting')}
+            onPress={() => navigateWithHaptic('/(admin)/broadcast')}
           />
         </View>
 
@@ -234,7 +233,12 @@ export default function MobileCmsDashboard() {
               <TouchableOpacity
                 accessibilityRole="button"
                 accessibilityLabel={`Edit ${post.title}`}
-                onPress={() => router.push('/admin/insights')}
+                onPress={() =>
+                  navigateWithHaptic({
+                    pathname: '/(admin)/edit-post/[id]',
+                    params: { id: String(post.id) },
+                  })
+                }
               >
                 <Text style={styles.editText}>Edit</Text>
               </TouchableOpacity>
