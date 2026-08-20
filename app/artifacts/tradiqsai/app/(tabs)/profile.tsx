@@ -36,6 +36,7 @@ import {
 import { useSubscription } from "@/lib/revenuecat";
 import { PRIVACY_POLICY, TERMS_AND_CONDITIONS } from "@/lib/legalContent";
 import { supabase } from "@/utils/supabase";
+import { canAccessPayoutEvaluation } from "@/lib/payoutAccess";
 import colors from "@/constants/colors";
 import { AcademyModal } from "../../components/AcademyModal";
 import { SocialMediaModal } from "@/components/SocialMediaModal";
@@ -265,6 +266,7 @@ export default function ProfileScreen() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
   const isGuest = session?.user?.is_anonymous === true;
+  const payoutAccessAllowed = canAccessPayoutEvaluation(session);
   const userMetadata = session?.user?.user_metadata ?? {};
   const metadataName =
     typeof userMetadata.full_name === "string"
@@ -551,7 +553,7 @@ export default function ProfileScreen() {
   // Fail closed: anything other than a validated, eligible, non-zero server
   // result keeps the button disabled.
   const payoutEnabled =
-    !isGuest &&
+    payoutAccessAllowed &&
     !!evaluation &&
     evaluation.eligible &&
     !evaluation.violated &&
@@ -681,7 +683,7 @@ export default function ProfileScreen() {
             <Text style={styles.upgradeText}>Upgrade to Pro</Text>
           </TouchableOpacity>
         )}
-        {isGuest ? (
+        {!payoutAccessAllowed ? (
           <View style={styles.guestLockedCard} testID="profile-guest-evaluation-locked">
             <Feather name="lock" size={22} color={c.primary} />
             <Text style={styles.guestLockedTitle}>$10,000 evaluation locked</Text>

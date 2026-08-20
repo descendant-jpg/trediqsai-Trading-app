@@ -7,6 +7,7 @@ import {
   type PayoutRequest,
 } from '@/lib/payoutEvaluation';
 import { isSupabaseConfigured, supabase } from '@/utils/supabase';
+import { canAccessPayoutEvaluation } from '@/lib/payoutAccess';
 
 const POLL_MS = 15_000;
 
@@ -18,6 +19,7 @@ export function usePayoutEvaluation() {
   const { session } = useAuth();
   const userId = session?.user?.id ?? null;
   const isGuest = session?.user?.is_anonymous === true;
+  const payoutAccessAllowed = canAccessPayoutEvaluation(session);
   const [evaluation, setEvaluation] = useState<PayoutEvaluation | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -27,7 +29,7 @@ export function usePayoutEvaluation() {
   const mounted = useRef(true);
 
   const refreshEvaluation = useCallback(async () => {
-    if (!userId || isGuest || !isSupabaseConfigured) {
+    if (!payoutAccessAllowed || !isSupabaseConfigured) {
       if (mounted.current) {
         setEvaluation(null);
         setError(
@@ -60,7 +62,7 @@ export function usePayoutEvaluation() {
     } finally {
       if (mounted.current) setLoading(false);
     }
-  }, [userId, isGuest]);
+  }, [userId, isGuest, payoutAccessAllowed]);
 
   /**
    * Reads only the signed-in user's rows. The table policy is the authority:
@@ -69,7 +71,7 @@ export function usePayoutEvaluation() {
    * that history is unavailable instead of impersonating an empty ledger.
    */
   const refreshHistory = useCallback(async () => {
-    if (!userId || isGuest || !isSupabaseConfigured) {
+    if (!payoutAccessAllowed || !isSupabaseConfigured) {
       if (mounted.current) {
         setHistory(null);
         setHistoryError(
@@ -106,7 +108,7 @@ export function usePayoutEvaluation() {
     } finally {
       if (mounted.current) setHistoryLoading(false);
     }
-  }, [userId, isGuest]);
+  }, [userId, isGuest, payoutAccessAllowed]);
 
   const refresh = useCallback(async () => {
     await Promise.all([refreshEvaluation(), refreshHistory()]);
@@ -124,7 +126,9 @@ export function usePayoutEvaluation() {
 
   const requestPayout = useCallback(async (): Promise<PayoutEvaluation> => {
     if (isGuest) throw new Error('Create an account to request a payout.');
-    if (!userId || !isSupabaseConfigured) throw new Error('Payout evaluation is unavailable.');
+    if (!payoutAccessAllowed || !isSupabaseConfigured) {
+      throw new Error('Payout evaluation is unavailable.');
+    }
     const { data, error: rpcError } = await supabase.rpc('request_evaluation_payout');
     if (rpcError) throw rpcError;
     const parsed = parsePayoutEvaluation(data);
@@ -137,7 +141,7 @@ export function usePayoutEvaluation() {
     // so the history card shows the reservation immediately.
     await refreshHistory();
     return parsed;
-  }, [userId, isGuest, refreshHistory]);
+  }, [isGuest, payoutAccessAllowed, refreshHistory]);
 
   return {
     evaluation,

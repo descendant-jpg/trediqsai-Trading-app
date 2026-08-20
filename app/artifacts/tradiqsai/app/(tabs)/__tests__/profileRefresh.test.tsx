@@ -14,14 +14,16 @@ const profileResponses = vi.hoisted(() => [] as Promise<any>[]);
 const referralResponses = vi.hoisted(() => [] as Promise<any>[]);
 const refreshProfileEntitlement = vi.hoisted(() => vi.fn(async () => undefined));
 const refreshPayoutEvaluation = vi.hoisted(() => vi.fn(async () => undefined));
+const startAccountCreation = vi.hoisted(() => vi.fn(async () => undefined));
 const invalidateQueries = vi.hoisted(() => vi.fn(async () => undefined));
 const authState = vi.hoisted(() => ({
   session: {
     user: {
       id: "profile-user",
       email: "trader@example.com",
+        is_anonymous: false,
     },
-  } as { user: { id: string; email: string } } | null,
+    } as { user: { id: string; email: string; is_anonymous?: boolean } } | null,
 }));
 
 vi.mock("react-native", async (importOriginal) => {
@@ -89,6 +91,7 @@ vi.mock("@/context/AuthContext", () => ({
   useAuth: () => ({
     session: authState.session,
     signOut: vi.fn(),
+    startAccountCreation,
   }),
 }));
 vi.mock("@/context/TradingContext", () => ({
@@ -199,6 +202,7 @@ beforeEach(() => {
     user: {
       id: "profile-user",
       email: "trader@example.com",
+      is_anonymous: false,
     },
   };
   profileResponses.splice(0);
@@ -212,6 +216,23 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 describe("profile identity refresh", () => {
+  it("locks guests out of evaluation and payout history", async () => {
+    authState.session = {
+      user: { id: "guest-user", email: "", is_anonymous: true },
+    };
+    profileResponses.push(Promise.resolve({ data: null, error: null }));
+    referralResponses.push(Promise.resolve({ data: [], count: 0, error: null }));
+
+    render(<ProfileScreen />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("profile-guest-evaluation-locked")).toBeTruthy(),
+    );
+    expect(screen.getByText("Guest Trader")).toBeTruthy();
+    expect(screen.queryByTestId("profile-payout-history")).toBeNull();
+    expect(screen.queryByTestId("profile-evaluation-unavailable")).toBeNull();
+  });
+
   it("shows a skeleton, then renders god_admin even when referrals fail", async () => {
     const identity = deferred<any>();
     profileResponses.push(identity.promise);

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useState } from 'react';
 import { Alert, Platform } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -166,13 +166,14 @@ function RootLayoutNav() {
       subscription.remove();
     };
   }, [router]);
-  const prevUserId = React.useRef(userId);
-  useEffect(() => {
-    if (prevUserId.current !== userId) {
-      prevUserId.current = userId;
+  const sessionCacheScope = `${userId ?? 'signed-out'}:${session?.user?.is_anonymous === true ? 'guest' : 'account'}`;
+  const previousSessionCacheScope = React.useRef(sessionCacheScope);
+  useLayoutEffect(() => {
+    if (previousSessionCacheScope.current !== sessionCacheScope) {
+      previousSessionCacheScope.current = sessionCacheScope;
       queryClient.clear();
     }
-  }, [userId]);
+  }, [sessionCacheScope]);
 
   // Preserve a signed-out user's deep-link destination and land there
   // after a successful sign-in (including legacy Oracle chat links).
