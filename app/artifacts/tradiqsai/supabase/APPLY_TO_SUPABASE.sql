@@ -1057,6 +1057,62 @@ grant execute on function public.payout_evaluation_summary() to authenticated;
 grant execute on function public.request_evaluation_payout() to authenticated;
 
 -- ============================================================
+-- migrations/024_reject_anonymous_payout_access.sql
+-- ============================================================
+create or replace function public.is_anonymous_auth_user()
+returns boolean language sql stable as $$
+  select coalesce(
+    (nullif(current_setting('request.jwt.claims', true), '')::jsonb
+      ->> 'is_anonymous')::boolean, false
+  );
+$$;
+
+do $$
+begin
+  if to_regprocedure('public.payout_evaluation_summary_unchecked()') is null
+     and to_regprocedure('public.payout_evaluation_summary()') is not null then
+    alter function public.payout_evaluation_summary() rename to payout_evaluation_summary_unchecked;
+  end if;
+  if to_regprocedure('public.request_evaluation_payout_unchecked()') is null
+     and to_regprocedure('public.request_evaluation_payout()') is not null then
+    alter function public.request_evaluation_payout() rename to request_evaluation_payout_unchecked;
+  end if;
+end;
+$$;
+
+create or replace function public.payout_evaluation_summary()
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  if public.is_anonymous_auth_user() then
+    raise exception 'Create an account to access payout evaluation.' using errcode = '42501';
+  end if;
+  return public.payout_evaluation_summary_unchecked();
+end;
+$$;
+
+create or replace function public.request_evaluation_payout()
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  if public.is_anonymous_auth_user() then
+    raise exception 'Create an account to request a payout.' using errcode = '42501';
+  end if;
+  return public.request_evaluation_payout_unchecked();
+end;
+$$;
+
+revoke all on function public.payout_evaluation_summary_unchecked() from public, anon, authenticated;
+revoke all on function public.request_evaluation_payout_unchecked() from public, anon, authenticated;
+revoke all on function public.payout_evaluation_summary() from public, anon;
+revoke all on function public.request_evaluation_payout() from public, anon;
+grant execute on function public.payout_evaluation_summary() to authenticated;
+grant execute on function public.request_evaluation_payout() to authenticated;
+
+drop policy if exists "payout_requests_select_own" on public.payout_requests;
+create policy "payout_requests_select_own"
+  on public.payout_requests for select to authenticated
+  using (auth.uid() = user_id and not public.is_anonymous_auth_user());
+
+-- ============================================================
 -- migrations/022_revenuecat_tier.sql
 -- ============================================================
 -- RevenueCat's verified entitlement is separate from `tier`, which is also
@@ -1426,140 +1482,3 @@ revoke all on function public.payout_evaluation_summary() from public, anon;
 revoke all on function public.request_evaluation_payout() from public, anon;
 grant execute on function public.payout_evaluation_summary() to authenticated;
 grant execute on function public.request_evaluation_payout() to authenticated;
-
--- ============================================================
--- migrations/024_god_admin_role.sql
--- ============================================================
--- Forward-only role upgrade for the mobile administration surface.
--- This does not elevate any account; it only allows an operator to assign the
--- exact god_admin value through trusted server-side/Supabase tooling.
-alter table if exists public.profiles
-  drop constraint if exists profiles_role_check;
-
-alter table if exists public.profiles
-  add constraint profiles_role_check
-  check (role in ('user', 'admin', 'god_admin'));
-
--- The role column remains server-owned. Authenticated clients retain only the
--- column-scoped profile UPDATE grants established by the earlier RLS migration.
-
--- ============================================================
--- migrations/025_subscription_update_rpc.sql
--- ============================================================
--- Verified Stripe fulfillment must cross one database-owned boundary. This
--- function updates only the paid entitlement tier and records provider event
--- IDs so a replayed PaymentIntent cannot grant access twice.
-
-create table if not exists public.subscription_webhook_events (
-  provider text not null,
-  event_id text not null,
-  user_id uuid not null references public.profiles(id) on delete cascade,
-  tier text not null,
-  event_at timestamptz not null,
-  processed_at timestamptz not null default now(),
-  primary key (provider, event_id),
-  constraint subscription_webhook_events_provider_check
-    check (provider in ('stripe')),
-  constraint subscription_webhook_events_tier_check
-    check (tier in ('free', 'pro', 'elite'))
-);
-
-alter table public.subscription_webhook_events enable row level security;
-revoke all on public.subscription_webhook_events from public, anon, authenticated;
-
-comment on table public.subscription_webhook_events is
-  'Service-owned idempotency ledger for verified paid-entitlement webhooks.';
-
-create or replace function public.handle_subscription_update(
-  p_user_id uuid,
-  p_tier text,
-  p_provider text,
-  p_event_id text,
-  p_event_at timestamptz
-)
-returns boolean
-language plpgsql
-security definer
-set search_path = ''
-as $$
-declare
-  inserted_rows integer := 0;
-  updated_rows integer := 0;
-  newest_prior_event timestamptz;
-begin
-  if coalesce(auth.role(), '') <> 'service_role' then
-    raise exception 'service role required' using errcode = '42501';
-  end if;
-  if p_user_id is null then
-    raise exception 'user id is required' using errcode = '22023';
-  end if;
-  if p_tier not in ('free', 'pro', 'elite') then
-    raise exception 'invalid subscription tier' using errcode = '22023';
-  end if;
-  if p_provider <> 'stripe' then
-    raise exception 'invalid subscription provider' using errcode = '22023';
-  end if;
-  if p_event_id is null or length(p_event_id) < 3 or length(p_event_id) > 255 then
-    raise exception 'invalid subscription event id' using errcode = '22023';
-  end if;
-  if p_event_at is null then
-    raise exception 'subscription event timestamp is required' using errcode = '22023';
-  end if;
-
-  perform 1
-    from public.profiles
-   where id = p_user_id
-   for update;
-  if not found then
-    raise exception 'subscription profile not found' using errcode = 'P0002';
-  end if;
-
-  insert into public.subscription_webhook_events (
-    provider,
-    event_id,
-    user_id,
-    tier,
-    event_at
-  )
-  values (
-    p_provider,
-    p_event_id,
-    p_user_id,
-    p_tier,
-    p_event_at
-  )
-  on conflict (provider, event_id) do nothing;
-
-  get diagnostics inserted_rows = row_count;
-  if inserted_rows = 0 then
-    return false;
-  end if;
-
-  select max(event_at)
-    into newest_prior_event
-    from public.subscription_webhook_events
-   where provider = p_provider
-     and user_id = p_user_id
-     and event_id <> p_event_id;
-
-  if newest_prior_event is not null and newest_prior_event >= p_event_at then
-    return false;
-  end if;
-
-  update public.profiles
-     set tier = p_tier
-   where id = p_user_id;
-
-  get diagnostics updated_rows = row_count;
-  if updated_rows <> 1 then
-    raise exception 'subscription profile update failed' using errcode = 'P0002';
-  end if;
-
-  return true;
-end;
-$$;
-
-revoke all on function public.handle_subscription_update(uuid, text, text, text, timestamptz)
-  from public, anon, authenticated;
-grant execute on function public.handle_subscription_update(uuid, text, text, text, timestamptz)
-  to service_role;
