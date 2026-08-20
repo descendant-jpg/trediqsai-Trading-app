@@ -20,6 +20,7 @@ import { useRouter } from 'expo-router';
 import colors from '@/constants/colors';
 import {
   useSendOracleChat,
+  customFetch,
   type OracleChatMessage,
   type OracleTradingContext,
 } from '@workspace/api-client-react';
@@ -127,10 +128,18 @@ export default function OracleScreen() {
   // saved" notice once it crosses the threshold.
   const persistFailuresRef = useRef(0);
   const [persistWarning, setPersistWarning] = useState(false);
+  const [quota, setQuota] = useState<{ tier: string; limit: number; usage: number; remaining: number } | null>(null);
 
   const { mutate: sendOracleChat, isPending: isTyping } = useSendOracleChat();
   const { balance, equity, position, unrealizedPnl, drawdownUsed, distanceToPayout } =
     useTrading();
+
+  const refreshQuota = useCallback(() => {
+    void customFetch<{ tier: string; limit: number; usage: number; remaining: number }>('/api/oracle/quota')
+      .then(setQuota)
+      .catch(() => setQuota(null));
+  }, []);
+  useEffect(() => { refreshQuota(); }, [refreshQuota]);
 
   // Snapshot of the trading account, kept in a ref so `deliver` doesn't
   // re-create on every 1s price tick.
@@ -224,6 +233,8 @@ export default function OracleScreen() {
         { data: { messages: history, tradingContext: tradingContextRef.current } },
         {
           onSuccess: (res) => {
+            const responseQuota = (res as typeof res & { quota?: typeof quota }).quota;
+            if (responseQuota) setQuota(responseQuota);
             setMessages((cur) => [
               ...cur,
               { id: `a-${Date.now()}`, role: 'ai', text: res.reply },
@@ -231,6 +242,9 @@ export default function OracleScreen() {
             scrollToEnd();
           },
           onError: (err) => {
+            if ((err as { status?: number }).status === 429) {
+              setQuota((current) => current ? { ...current, remaining: 0, usage: current.limit } : current);
+            }
             setLastFailedText(trimmed);
             setMessages((cur) => [
               ...cur,
@@ -247,7 +261,7 @@ export default function OracleScreen() {
   const sendMessage = useCallback(
     (text: string) => {
       const trimmed = text.trim();
-      if (!trimmed || isTyping) return;
+      if (!trimmed || isTyping || quota?.remaining === 0) return;
       setInput('');
       setLastFailedText(null);
       deliver(trimmed, [
@@ -255,7 +269,7 @@ export default function OracleScreen() {
         { id: `u-${Date.now()}`, role: 'user', text: trimmed },
       ]);
     },
-    [isTyping, messages, deliver],
+    [isTyping, messages, deliver, quota?.remaining],
   );
 
   /** Wipe the stored conversation and reset to the welcome message. */
@@ -387,7 +401,7 @@ export default function OracleScreen() {
               style={styles.chip}
               onPress={() => sendMessage(prompt)}
               activeOpacity={0.8}
-              disabled={isTyping}
+              disabled={isTyping || quota?.remaining === 0}
               testID={`chip-${prompt}`}
             >
               <Text style={styles.chipText}>{prompt}</Text>
@@ -395,6 +409,11 @@ export default function OracleScreen() {
           ))}
         </ScrollView>
 
+        {quota ? (
+          <Text style={styles.quotaText} testID="oracle-quota">
+            {quota.remaining}/{quota.limit} {quota.tier === 'free' ? 'Free' : quota.tier === 'pro' ? 'Pro' : 'Elite'} Messages Remaining
+          </Text>
+        ) : null}
         {/* Input bar */}
         <View style={styles.inputBar}>
           <TextInput
@@ -405,9 +424,14 @@ export default function OracleScreen() {
             placeholderTextColor="#8A8D93"
             onSubmitEditing={() => sendMessage(input)}
             returnKeyType="send"
+            editable={quota?.remaining !== 0}
             testID="oracle-input"
           />
-          <TouchableOpacity
+          {quota?.remaining === 0 ? (
+            <TouchableOpacity style={styles.upgradeButton} onPress={() => router.push('/shop')} testID="oracle-upgrade">
+              <Text style={styles.upgradeButtonText}>Upgrade to {quota.tier === 'pro' ? 'Elite' : 'Pro'}</Text>
+            </TouchableOpacity>
+          ) : <TouchableOpacity
             style={[styles.sendButton, (!input.trim() || isTyping) && styles.sendDisabled]}
             onPress={() => sendMessage(input)}
             disabled={!input.trim() || isTyping}
@@ -415,7 +439,7 @@ export default function OracleScreen() {
             testID="oracle-send"
           >
             <Feather name="arrow-up" size={18} color="#0A0B0E" />
-          </TouchableOpacity>
+          </TouchableOpacity>}
         </View>
       </KeyboardAvoidingView>
     </View>
@@ -594,6 +618,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 14,
   },
+  quotaText: { color: '#8A8D93', fontSize: 12, fontFamily: 'Inter_500Medium', paddingHorizontal: 20, paddingBottom: 8 },
+  upgradeButton: { backgroundColor: '#00F0FF', borderRadius: 18, paddingHorizontal: 14, height: 40, justifyContent: 'center' },
+  upgradeButtonText: { color: '#0A0B0E', fontFamily: 'Inter_700Bold', fontSize: 12 },
   input: {
     flex: 1,
     height: 48,

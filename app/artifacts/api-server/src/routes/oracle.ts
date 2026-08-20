@@ -18,6 +18,42 @@ const STRATEGY_BRIEF_CACHE_TTL_MS = 15 * 60_000;
 const SUPABASE_URL =
   process.env["SUPABASE_URL"] ?? process.env["EXPO_PUBLIC_SUPABASE_URL"] ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = process.env["SUPABASE_SERVICE_ROLE_KEY"] ?? "";
+const ORACLE_LIMITS = { free: 3, pro: 20, elite: 60 } as const;
+
+type OracleProfile = {
+  tier?: string | null;
+  revenuecat_tier?: string | null;
+  manual_tier_override?: string | null;
+  oracle_daily_usage?: number | null;
+  oracle_last_reset?: string | null;
+};
+
+function oracleTier(profile: OracleProfile): keyof typeof ORACLE_LIMITS {
+  const tier = (profile.manual_tier_override ?? profile.revenuecat_tier ?? profile.tier ?? "free").trim().toLowerCase();
+  return ["elite", "vip", "whale"].includes(tier) ? "elite" : tier === "pro" ? "pro" : "free";
+}
+async function readOracleProfile(userId: string): Promise<OracleProfile | null> {
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/profiles?${new URLSearchParams({ id: `eq.${userId}`, select: "tier,revenuecat_tier,manual_tier_override,oracle_daily_usage,oracle_last_reset", limit: "1" })}`, { headers: cacheHeaders() });
+  if (!response.ok) throw new Error("Oracle quota profile lookup failed");
+  return ((await response.json()) as OracleProfile[])[0] ?? null;
+}
+async function oracleQuota(userId: string) {
+  const profile = await readOracleProfile(userId);
+  if (!profile) throw new Error("Oracle quota profile missing");
+  const resetAt = profile.oracle_last_reset ? Date.parse(profile.oracle_last_reset) : 0;
+  const expired = !Number.isFinite(resetAt) || Date.now() - resetAt >= 86_400_000;
+  const usage = expired ? 0 : Math.max(0, profile.oracle_daily_usage ?? 0);
+  if (expired) await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}`, { method: "PATCH", headers: cacheHeaders({ "content-type": "application/json" }), body: JSON.stringify({ oracle_daily_usage: 0, oracle_last_reset: new Date().toISOString() }) });
+  const tier = oracleTier(profile);
+  return { tier, limit: ORACLE_LIMITS[tier], usage, remaining: Math.max(0, ORACLE_LIMITS[tier] - usage) };
+}
+async function isAnonymousSession(req: import("express").Request): Promise<boolean> {
+  const token = req.headers.authorization?.startsWith("Bearer ") ? req.headers.authorization.slice(7) : "";
+  if (!token || !SUPABASE_URL) return true;
+  const response = await fetch(`${SUPABASE_URL}/auth/v1/user`, { headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, authorization: `Bearer ${token}` } });
+  if (!response.ok) return true;
+  return (await response.json() as { is_anonymous?: boolean }).is_anonymous === true;
+}
 
 const oracleRateLimit = rateLimit({
   max: 20,
@@ -202,8 +238,8 @@ function normalizeMessages(
 
 router.post("/oracle/chat", identity(), oracleRateLimit, async (req, res) => {
   const userId = requestUserId(res);
-  if (userId === ANONYMOUS_USER) {
-    res.status(401).json({ error: "Sign in required." });
+  if (userId === ANONYMOUS_USER || await isAnonymousSession(req)) {
+    res.status(403).json({ error: "Create an account to use the Oracle." });
     return;
   }
   const parsed = SendOracleChatBody.safeParse(req.body);
@@ -227,10 +263,11 @@ router.post("/oracle/chat", identity(), oracleRateLimit, async (req, res) => {
     res.status(400).json({ error: "No user message to respond to." });
     return;
   }
+  let quota: Awaited<ReturnType<typeof oracleQuota>>;
   try {
-    const quota = await reserveAiQuota(userId, "oracle_chat", 1_200);
-    if (!quota.allowed) {
-      res.status(429).json({ error: "Daily AI request quota reached. Please try again tomorrow." });
+    quota = await oracleQuota(userId);
+    if (quota.remaining <= 0) {
+      res.status(429).json({ error: "Daily Oracle message limit reached. Upgrade or try again tomorrow.", quota });
       return;
     }
   } catch (err) {
@@ -260,12 +297,20 @@ router.post("/oracle/chat", identity(), oracleRateLimit, async (req, res) => {
       res.status(502).json({ error: "The Oracle returned an empty response." });
       return;
     }
-
-    res.json(SendOracleChatResponse.parse({ reply }));
+    const updated = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}`, { method: "PATCH", headers: cacheHeaders({ "content-type": "application/json", prefer: "return=representation" }), body: JSON.stringify({ oracle_daily_usage: quota.usage + 1 }) });
+    if (!updated.ok) throw new Error("Oracle quota update failed");
+    res.json({ ...SendOracleChatResponse.parse({ reply }), quota: { ...quota, usage: quota.usage + 1, remaining: quota.remaining - 1 } });
   } catch (err) {
     logger.error({ err }, "Oracle chat completion failed");
     res.status(502).json({ error: "The Oracle couldn't reach its AI model." });
   }
+});
+
+router.get("/oracle/quota", identity(), async (req, res) => {
+  const userId = requestUserId(res);
+  if (userId === ANONYMOUS_USER || await isAnonymousSession(req)) return res.status(403).json({ error: "Create an account to use the Oracle." });
+  try { return res.json(await oracleQuota(userId)); }
+  catch (err) { logger.error({ err, userId }, "Oracle quota lookup failed"); return res.status(503).json({ error: "Oracle quota is unavailable." }); }
 });
 
 router.post("/oracle/chart-analysis", identity(), chartAnalysisRateLimit, async (req, res) => {

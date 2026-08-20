@@ -3,6 +3,16 @@
 -- Every section is written to be safe to run more than once.
 
 -- ============================================================
+-- migrations/025_oracle_daily_usage.sql
+-- ============================================================
+alter table public.profiles
+  add column if not exists oracle_daily_usage integer not null default 0,
+  add column if not exists oracle_last_reset timestamptz not null default now();
+alter table public.profiles drop constraint if exists profiles_oracle_daily_usage_nonnegative;
+alter table public.profiles add constraint profiles_oracle_daily_usage_nonnegative
+  check (oracle_daily_usage >= 0);
+
+-- ============================================================
 -- migrations/007_autopilot_profiles.sql
 -- ============================================================
 alter table if exists public.profiles
