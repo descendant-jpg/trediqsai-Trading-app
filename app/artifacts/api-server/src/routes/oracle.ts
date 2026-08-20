@@ -215,13 +215,25 @@ type ChatTurn = { role: "user" | "assistant"; content: string };
 
 /**
  * Anthropic requires strictly alternating user/assistant turns starting with
- * "user". Keep the most recent turns to bound token usage, merge adjacent
- * same-role messages, and drop a leading assistant turn.
+ * "user". Keep at most the latest three user and three assistant messages to
+ * cap the payload at six conversation entries, merge adjacent same-role
+ * messages, and drop a leading assistant turn.
  */
 function normalizeMessages(
   messages: Array<{ role: string; content: string }>,
 ): ChatTurn[] {
-  const recent = messages.slice(-20);
+  const recent = messages
+    .map((message, index) => ({ message, index }))
+    .filter(({ message }) => message.role === "user")
+    .slice(-3)
+    .concat(
+      messages
+        .map((message, index) => ({ message, index }))
+        .filter(({ message }) => message.role === "assistant")
+        .slice(-3),
+    )
+    .sort((a, b) => a.index - b.index)
+    .map(({ message }) => message);
   const out: ChatTurn[] = [];
   for (const m of recent) {
     const role = m.role === "assistant" ? ("assistant" as const) : ("user" as const);
@@ -278,7 +290,7 @@ router.post("/oracle/chat", identity(), oracleRateLimit, async (req, res) => {
 
   try {
     const message = await client.messages.create({
-      model: process.env["ORACLE_MODEL"] ?? "claude-sonnet-5",
+       model: "claude-3-haiku-20240307",
       max_tokens: 1200,
       system: parsed.data.tradingContext
         ? `${SYSTEM_PROMPT}\n\n${buildContextPrompt(parsed.data.tradingContext)}`
