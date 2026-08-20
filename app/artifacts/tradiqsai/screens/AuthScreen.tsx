@@ -11,7 +11,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import * as AppleAuthentication from 'expo-apple-authentication';
 import { makeRedirectUri } from 'expo-auth-session';
 import * as QueryParams from 'expo-auth-session/build/QueryParams';
 import * as Linking from 'expo-linking';
@@ -38,7 +37,10 @@ function showAlert(title: string, message: string) {
   }
 }
 
-const redirectTo = makeRedirectUri();
+const redirectTo = makeRedirectUri({
+  scheme: 'tradiqsai',
+  path: 'auth/callback',
+});
 
 /** Extract Supabase tokens from an OAuth redirect URL and set the session. */
 async function createSessionFromUrl(url: string) {
@@ -58,15 +60,18 @@ async function createSessionFromUrl(url: string) {
  * Sign In (email OR username) / Create Account modes, forgot password,
  * and Apple + Google social auth. Terminal Black aesthetic.
  */
-export default function AuthScreen() {
-  const [isLoginMode, setIsLoginMode] = useState(true);
+export default function AuthScreen({ initialMode = 'signin' }: { initialMode?: 'signin' | 'signup' }) {
+  const [isLoginMode, setIsLoginMode] = useState(initialMode !== 'signup');
   const [emailOrUsername, setEmailOrUsername] = useState('');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [referralCode, setReferralCode] = useState('');
   const [loading, setLoading] = useState(false);
-  const [appleAvailable, setAppleAvailable] = useState(false);
+
+  useEffect(() => {
+    setIsLoginMode(initialMode !== 'signup');
+  }, [initialMode]);
 
   // Referral deep links: opening https://tradiqsai.com/r/<code> (or the
   // tradiqsai:// scheme, or ?ref= on web) pre-fills the code and jumps to
@@ -88,15 +93,6 @@ export default function AuthScreen() {
       Linking.getInitialURL().then(applyFromUrl).catch(() => {});
     }
   }, [incomingUrl]);
-
-  useEffect(() => {
-    // Native Apple sign-in exists only on iOS devices that support it.
-    if (Platform.OS === 'ios') {
-      AppleAuthentication.isAvailableAsync()
-        .then(setAppleAvailable)
-        .catch(() => setAppleAvailable(false));
-    }
-  }, []);
 
   const switchMode = () => {
     setIsLoginMode((m) => !m);
@@ -213,55 +209,50 @@ export default function AuthScreen() {
     }
   };
 
-  const handleAppleLogin = async () => {
-    try {
-      const credential = await AppleAuthentication.signInAsync({
-        requestedScopes: [
-          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-          AppleAuthentication.AppleAuthenticationScope.EMAIL,
-        ],
-      });
-      if (!credential.identityToken) {
-        throw new Error('Apple did not return an identity token.');
-      }
-      const { error } = await supabase.auth.signInWithIdToken({
-        provider: 'apple',
-        token: credential.identityToken,
-      });
-      if (error) throw error;
-    } catch (err: any) {
-      if (err?.code === 'ERR_REQUEST_CANCELED') return; // user dismissed
-      showAlert('Apple sign in failed', err?.message ?? 'Unknown error');
-    }
-  };
-
-  const handleGoogleLogin = async () => {
+  const handleOAuthLogin = async (provider: 'apple' | 'google') => {
+    if (loading) return;
+    setLoading(true);
     try {
       if (Platform.OS === 'web') {
-        // On web the full-page redirect flow works out of the box.
         const { error } = await supabase.auth.signInWithOAuth({
-          provider: 'google',
+          provider,
           options: { redirectTo },
         });
         if (error) throw error;
         return;
       }
-      // Native: open the auth URL in an in-app browser session, then
-      // exchange the tokens from the redirect URL for a Supabase session.
+
       const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
+        provider,
         options: { redirectTo, skipBrowserRedirect: true },
       });
       if (error) throw error;
-      const result = await WebBrowser.openAuthSessionAsync(
-        data.url,
-        redirectTo,
-      );
+      if (!data.url) throw new Error('Could not start the secure sign-in session.');
+
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
       if (result.type === 'success' && result.url) {
         await createSessionFromUrl(result.url);
       }
     } catch (err: any) {
-      showAlert('Google sign in failed', err?.message ?? 'Unknown error');
+      showAlert(
+        `${provider === 'apple' ? 'Apple' : 'Google'} sign in failed`,
+        err?.message ?? 'Unknown error',
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGuestLogin = async () => {
+    if (loading) return;
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.signInAnonymously();
+      if (error) throw error;
+    } catch (err: any) {
+      showAlert('Guest access failed', err?.message ?? 'Unknown error');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -398,26 +389,39 @@ export default function AuthScreen() {
           </View>
 
           {/* Social auth */}
-          {appleAvailable && (
-            <TouchableOpacity
-              style={styles.appleButton}
-              onPress={handleAppleLogin}
-              activeOpacity={0.85}
-              testID="auth-apple"
-            >
-              <Text style={styles.appleIcon}></Text>
+          <TouchableOpacity
+            style={[styles.appleButton, loading && styles.disabled]}
+            onPress={() => void handleOAuthLogin('apple')}
+            disabled={loading}
+            activeOpacity={0.85}
+            testID="auth-apple"
+          >
+            {loading ? <ActivityIndicator color="#FFFFFF" /> : (
               <Text style={styles.appleButtonText}>Continue with Apple</Text>
-            </TouchableOpacity>
-          )}
+            )}
+          </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.googleButton}
-            onPress={handleGoogleLogin}
+            style={[styles.googleButton, loading && styles.disabled]}
+            onPress={() => void handleOAuthLogin('google')}
+            disabled={loading}
             activeOpacity={0.85}
             testID="auth-google"
           >
-            <Text style={styles.googleIcon}>G</Text>
-            <Text style={styles.googleButtonText}>Continue with Google</Text>
+            {loading ? <ActivityIndicator color="#FFFFFF" /> : (
+              <>
+                <Text style={styles.googleIcon}>G</Text>
+                <Text style={styles.googleButtonText}>Continue with Google</Text>
+              </>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => void handleGuestLogin()}
+            disabled={loading}
+            style={styles.guestButton}
+            testID="auth-guest"
+          >
+            <Text style={styles.guestButtonText}>Continue as Guest</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -526,19 +530,16 @@ const styles = StyleSheet.create({
   appleButton: {
     height: 54,
     borderRadius: colors.radius,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#000000',
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
-  appleIcon: {
-    color: '#000000',
-    fontSize: 18,
-    marginTop: -2,
-  },
   appleButtonText: {
-    color: '#000000',
+    color: '#FFFFFF',
     fontSize: 16,
     fontFamily: 'Inter_600SemiBold',
   },
@@ -562,6 +563,16 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontFamily: 'Inter_600SemiBold',
+  },
+  guestButton: {
+    alignSelf: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  guestButtonText: {
+    color: '#8A8D93',
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
   },
   disabled: {
     opacity: 0.6,

@@ -217,7 +217,7 @@ export default function ProfileScreen() {
   const router = useRouter();
   const { mfa } = useLocalSearchParams<{ mfa?: string }>();
   const queryClient = useQueryClient();
-  const { session, signOut } = useAuth();
+  const { session, signOut, startAccountCreation } = useAuth();
   const { isSubscribed, isAdmin, refreshProfileEntitlement } = useSubscription();
   const { tradingDayTz, setTradingDayTz } = useTrading();
   const {
@@ -264,7 +264,18 @@ export default function ProfileScreen() {
   const [deleting, setDeleting] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
-  const userEmail = session?.user?.email ?? "";
+  const isGuest = session?.user?.is_anonymous === true;
+  const userMetadata = session?.user?.user_metadata ?? {};
+  const metadataName =
+    typeof userMetadata.full_name === "string"
+      ? userMetadata.full_name.trim()
+      : typeof userMetadata.name === "string"
+        ? userMetadata.name.trim()
+        : "";
+  const userEmail = isGuest ? "" : (session?.user?.email ?? "");
+  const displayName = isGuest
+    ? "Guest Trader"
+    : (metadataName || username || userEmail || "Trader");
   const userId = session?.user.id ?? null;
   const activeProfileUserId = useRef(userId);
   const profileRequestGeneration = useRef(0);
@@ -540,6 +551,7 @@ export default function ProfileScreen() {
   // Fail closed: anything other than a validated, eligible, non-zero server
   // result keeps the button disabled.
   const payoutEnabled =
+    !isGuest &&
     !!evaluation &&
     evaluation.eligible &&
     !evaluation.violated &&
@@ -638,13 +650,13 @@ export default function ProfileScreen() {
         <View style={styles.identityHeader}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>
-              {(username ?? userEmail ?? "T").charAt(0).toUpperCase()}
+              {displayName.charAt(0).toUpperCase()}
             </Text>
           </View>
           <View style={styles.userInfo}>
             <View style={styles.nameRow}>
-              <Text style={styles.username}>{username ?? "Trader"}</Text>
-              <Text style={styles.verified}>✓ Verified</Text>
+              <Text style={styles.username}>{displayName}</Text>
+              {!isGuest && <Text style={styles.verified}>✓ Verified</Text>}
             </View>
             {!!userEmail && <Text style={styles.email}>{userEmail}</Text>}
             <View style={styles.planBadge}>
@@ -669,6 +681,23 @@ export default function ProfileScreen() {
             <Text style={styles.upgradeText}>Upgrade to Pro</Text>
           </TouchableOpacity>
         )}
+        {isGuest ? (
+          <View style={styles.guestLockedCard} testID="profile-guest-evaluation-locked">
+            <Feather name="lock" size={22} color={c.primary} />
+            <Text style={styles.guestLockedTitle}>$10,000 evaluation locked</Text>
+            <Text style={styles.guestLockedBody}>
+              Create an account to start your $10,000 evaluation.
+            </Text>
+            <TouchableOpacity
+              style={styles.guestCreateButton}
+              onPress={() => void startAccountCreation()}
+              testID="profile-guest-create-account"
+            >
+              <Text style={styles.guestCreateButtonText}>Create an account</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <>
         <View style={styles.walletCard}>
           <View style={styles.walletTop}>
             <View style={styles.walletColumn}>
@@ -838,6 +867,8 @@ export default function ProfileScreen() {
             </Text>
           )}
         </View>
+          </>
+        )}
         {(role === "god_admin" || userEmail === "nextgensynthex@gmail.com") && (
           <TouchableOpacity
             style={styles.commandCenterCard}
@@ -1742,6 +1773,41 @@ const styles = StyleSheet.create({
     color: "#0A0B0E",
     fontSize: 15,
     fontFamily: "Inter_700Bold",
+  },
+  guestLockedCard: {
+    alignItems: "center",
+    backgroundColor: "#16181D",
+    borderColor: "#B026FF",
+    borderRadius: colors.radius,
+    borderWidth: 1,
+    gap: 10,
+    marginTop: 16,
+    padding: 22,
+  },
+  guestLockedTitle: {
+    color: "#FFFFFF",
+    fontFamily: "Inter_700Bold",
+    fontSize: 17,
+  },
+  guestLockedBody: {
+    color: "#C7C9CE",
+    fontFamily: "Inter_400Regular",
+    fontSize: 14,
+    lineHeight: 21,
+    textAlign: "center",
+  },
+  guestCreateButton: {
+    alignItems: "center",
+    backgroundColor: c.primary,
+    borderRadius: 8,
+    marginTop: 4,
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+  },
+  guestCreateButtonText: {
+    color: c.primaryForeground,
+    fontFamily: "Inter_700Bold",
+    fontSize: 13,
   },
   section: {
     marginTop: 24,

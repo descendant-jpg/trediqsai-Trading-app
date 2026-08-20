@@ -8,10 +8,8 @@ import React, {
 } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Session } from '@supabase/supabase-js';
-import { customFetch } from '@workspace/api-client-react';
 import { isSupabaseConfigured, supabase } from '@/utils/supabase';
 import { resolveUsername } from '@/lib/usernameResolution';
-import { canAccessMobileAdmin, normalizeProfileRole } from '@/lib/adminAccess';
 
 /**
  * Local record of a successfully claimed username, keyed per user id.
@@ -44,12 +42,8 @@ interface AuthContextValue {
   loading: boolean;
   /** Whether Supabase env vars are configured at all. */
   configured: boolean;
-  /** Server-owned profile role. Null includes signed-out and failed lookups. */
-  profileRole: string | null;
-  /** True while the current user's profile role is being resolved. */
-  roleLoading: boolean;
-  /** Exact privileged capability used only for admin navigation visibility. */
-  isGodAdmin: boolean;
+  /** Preferred mode for the signed-out authentication screen. */
+  authScreenMode: 'signin' | 'signup';
   /**
    * True when the signed-in user's profile has no username yet (e.g. a
    * Google/Apple sign-up) and they haven't skipped the prompt this session.
@@ -59,6 +53,8 @@ interface AuthContextValue {
   setUsernameClaimed: (username: string) => void;
   /** Dismiss the username prompt for this session only (re-prompts on relaunch). */
   skipUsernamePrompt: () => void;
+  /** Makes the signed-out screen open directly in account-creation mode. */
+  startAccountCreation: () => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -75,8 +71,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // undefined = not checked yet; null = profile has no username.
   const [username, setUsername] = useState<string | null | undefined>(undefined);
   const [skippedPrompt, setSkippedPrompt] = useState(false);
-  const [profileRole, setProfileRole] = useState<string | null>(null);
-  const [roleLoading, setRoleLoading] = useState(false);
+  const [authScreenMode, setAuthScreenMode] = useState<'signin' | 'signup'>('signin');
 
   // Whenever the signed-in user changes, look up their profile username so
   // social sign-ups (no username in metadata) can be prompted to pick one.
@@ -114,37 +109,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isCancelled: () => cancelled,
       warn: (message) => console.warn(message),
     });
-    return () => {
-      cancelled = true;
-    };
-  }, [userId]);
-
-  useEffect(() => {
-    if (!isSupabaseConfigured || !userId) {
-      setProfileRole(null);
-      setRoleLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-    setProfileRole(null);
-    setRoleLoading(true);
-    void (async () => {
-      try {
-        const data = await customFetch<{ isGodAdmin: boolean; role: string | null }>(
-          '/api/mobile-admin/access',
-        );
-        if (cancelled) return;
-        setProfileRole(data.isGodAdmin ? normalizeProfileRole(data.role) : null);
-      } catch (error: unknown) {
-        if (cancelled) return;
-        console.warn('Profile role lookup failed; admin access remains disabled.', error);
-        setProfileRole(null);
-      } finally {
-        if (!cancelled) setRoleLoading(false);
-      }
-    })();
-
     return () => {
       cancelled = true;
     };
@@ -213,13 +177,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       session,
       loading,
       configured: isSupabaseConfigured,
-      profileRole,
-      roleLoading,
-      isGodAdmin: canAccessMobileAdmin(profileRole),
+      authScreenMode,
       needsUsername: !!session && username === null && !skippedPrompt,
       setUsernameClaimed,
       skipUsernamePrompt,
+      startAccountCreation: async () => {
+        setAuthScreenMode('signup');
+        if (isSupabaseConfigured) await supabase.auth.signOut();
+      },
       signOut: async () => {
+        setAuthScreenMode('signin');
         if (!isSupabaseConfigured) return;
         await supabase.auth.signOut();
       },
@@ -227,10 +194,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [
       session,
       loading,
-      profileRole,
-      roleLoading,
       username,
       skippedPrompt,
+      authScreenMode,
       setUsernameClaimed,
       skipUsernamePrompt,
     ],

@@ -104,7 +104,7 @@ function useAutoPilotDependencyWarning() {
 }
 
 function RootLayoutNav() {
-  const { session, loading } = useAuth();
+  const { session, loading, authScreenMode } = useAuth();
   const router = useRouter();
 
   // Server-side state is per-user: drop cached API data whenever the
@@ -182,7 +182,7 @@ function RootLayoutNav() {
   // so signed-in users don't flash the sign-in screen on launch.
   if (loading) return null;
 
-  if (!session) return <AuthScreen />;
+  if (!session) return <AuthScreen initialMode={authScreenMode} />;
 
   // Usernames are now assigned server-side (from the email prefix) — no
   // manual username prompt; signed-in users go straight to the app.
