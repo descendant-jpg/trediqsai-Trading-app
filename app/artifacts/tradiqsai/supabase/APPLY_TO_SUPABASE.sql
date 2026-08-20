@@ -2,6 +2,13 @@
 -- Bundles the AutoPilot migrations that were never applied to the live project.
 -- Every section is written to be safe to run more than once.
 
+-- migrations/026_onboarding_experience.sql
+alter table public.profiles
+  add column if not exists trading_experience text,
+  add column if not exists has_completed_onboarding boolean not null default false;
+grant update (trading_experience, has_completed_onboarding)
+  on public.profiles to authenticated;
+
 -- ============================================================
 -- migrations/025_oracle_daily_usage.sql
 -- ============================================================
@@ -1065,6 +1072,13 @@ revoke all on function public.payout_evaluation_summary() from public, anon;
 revoke all on function public.request_evaluation_payout() from public, anon;
 grant execute on function public.payout_evaluation_summary() to authenticated;
 grant execute on function public.request_evaluation_payout() to authenticated;
+
+-- ============================================================
+-- migrations/026_onboarding_experience.sql privileges
+-- ============================================================
+-- This must remain after the migration 009 privilege reset above.
+grant update (trading_experience, has_completed_onboarding)
+  on public.profiles to authenticated;
 
 -- ============================================================
 -- migrations/024_reject_anonymous_payout_access.sql
