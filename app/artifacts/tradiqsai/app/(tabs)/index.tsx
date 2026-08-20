@@ -18,6 +18,7 @@ import { useLiveMarket } from '@/hooks/useLiveMarket';
 import * as TradeService from '@/services/TradeService';
 import { useTrading, type TradeResult } from '@/context/TradingContext';
 import colors from '@/constants/colors';
+import { RiskDisclaimer } from '@/components/RiskDisclaimer';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PaywallModal } from '@/components/PaywallModal';
@@ -528,12 +529,7 @@ export default function HomeScreen() {
           <Feather name="chevron-right" size={20} color={c.secondary} />
         </TouchableOpacity>
 
-        <View style={styles.riskCard}>
-          <View style={styles.riskHeader}><Text style={styles.riskIcon}>⚠</Text><Text style={styles.riskTitle}>RISK DISCLAIMER</Text></View>
-          <Text style={styles.riskDisclaimer}>
-          Trading involves substantial risk of loss. Past performance does not guarantee future results. This content is for educational and informational purposes only and does not constitute financial advice. Always do your own research.
-          </Text>
-        </View>
+        <RiskDisclaimer />
       </ScrollView>
       <ErrorBoundary
         FallbackComponent={HomeWidgetFallback}
