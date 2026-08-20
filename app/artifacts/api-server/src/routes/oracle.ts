@@ -228,7 +228,11 @@ function normalizeMessages(
       role: role === "assistant" ? ("assistant" as const) : ("user" as const),
       content: content.trim(),
     }))
-    .filter((message) => message.content.length > 0)
+    .filter(
+      (message) =>
+        message.content.length > 0 &&
+        !message.content.includes("I couldn't reach my AI brain"),
+    )
     .filter((message) => message.role === "user")
     .slice(-3)
     .concat(
@@ -238,7 +242,12 @@ function normalizeMessages(
           role: role === "assistant" ? ("assistant" as const) : ("user" as const),
           content: content.trim(),
         }))
-        .filter((message) => message.content.length > 0 && message.role === "assistant")
+        .filter(
+          (message) =>
+            message.content.length > 0 &&
+            !message.content.includes("I couldn't reach my AI brain") &&
+            message.role === "assistant",
+        )
         .slice(-3),
     )
     .sort((a, b) => a.index - b.index)
@@ -323,6 +332,11 @@ router.post("/oracle/chat", identity(), oracleRateLimit, async (req, res) => {
     }
     res.json(SendOracleChatResponse.parse({ reply }));
   } catch (err) {
+    const error = err as { response?: { data?: unknown }; message?: string };
+    console.error(
+      "Anthropic API Error Details:",
+      JSON.stringify(error.response?.data || error.message || error, null, 2),
+    );
     logger.error({ err }, "Oracle chat completion failed");
     res.status(502).json({ error: "The Oracle couldn't reach its AI model." });
   }
