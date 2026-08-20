@@ -29,6 +29,7 @@ export type Post = {
   title: string;
   content: string;
   category: string;
+  status?: "draft" | "published" | "archived";
   created_at: string;
   updated_at?: string;
 };
@@ -49,6 +50,7 @@ export async function createPost(body: {
   title: string;
   content: string;
   category: string;
+  status?: Post["status"];
 }): Promise<Post> {
   const response = await customFetch<{ post: Post }>("/api/admin/posts", {
     method: "POST",
@@ -60,7 +62,7 @@ export async function createPost(body: {
 
 export async function updatePost(
   id: number | string,
-  body: { title: string; content: string; category: string },
+  body: { title: string; content: string; category: string; status?: Post["status"] },
 ): Promise<Post> {
   const response = await customFetch<{ post: Post }>(`/api/admin/posts/${id}`, {
     method: "PUT",

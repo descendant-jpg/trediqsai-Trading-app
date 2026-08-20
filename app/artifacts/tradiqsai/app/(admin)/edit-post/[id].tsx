@@ -28,6 +28,7 @@ export default function EditPostScreen() {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [category, setCategory] = useState("General");
+  const [status, setStatus] = useState<"draft" | "published" | "archived">("draft");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -41,6 +42,7 @@ export default function EditPostScreen() {
       setTitle(post.title);
       setContent(post.content);
       setCategory(post.category ?? "General");
+      setStatus(post.status ?? "draft");
     } catch (err: unknown) {
       setErrorMessage(err instanceof Error ? err.message : "Failed to load post.");
     } finally {
@@ -66,7 +68,7 @@ export default function EditPostScreen() {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     setSaving(true);
     try {
-      await updatePost(id, { title: title.trim(), content: content.trim(), category });
+      await updatePost(id, { title: title.trim(), content: content.trim(), category, status });
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       router.back();
     } catch (err: unknown) {

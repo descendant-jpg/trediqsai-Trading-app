@@ -41,7 +41,7 @@ export default function WritePostScreen() {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     setSaving(true);
     try {
-      await createPost({ title: title.trim(), content: content.trim(), category });
+      await createPost({ title: title.trim(), content: content.trim(), category, status: "published" });
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       router.back();
     } catch (err: unknown) {

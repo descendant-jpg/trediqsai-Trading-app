@@ -281,13 +281,16 @@ export function createAdminRouter(
       res.status(422).json({ error: "Post id, title, and content are required" });
       return;
     }
-    const status: PostStatus = POST_STATUSES.includes(req.body?.status) ? req.body.status : "draft";
-    const update = {
+    const requestedStatus: PostStatus | undefined = POST_STATUSES.includes(req.body?.status) ? req.body.status : undefined;
+    const update: Record<string, unknown> = {
       title, content, slug: postSlug(title), excerpt: content.slice(0, 180),
       category: typeof req.body?.category === "string" ? req.body.category.trim().slice(0, 50) || "Analysis" : "Analysis",
-      status, read_time: readTime(content), updated_at: new Date().toISOString(),
-      published_at: status === "published" ? new Date().toISOString() : null,
+      read_time: readTime(content), updated_at: new Date().toISOString(),
     };
+    if (requestedStatus) {
+      update.status = requestedStatus;
+      update.published_at = requestedStatus === "published" ? new Date().toISOString() : null;
+    }
     try {
       const { data, error } = await adminClient().from("blog_posts").update(update).eq("id", id).select(POST_FIELDS).maybeSingle();
       if (error) throw error;
