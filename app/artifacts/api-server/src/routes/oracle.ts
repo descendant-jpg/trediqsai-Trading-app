@@ -223,25 +223,33 @@ function normalizeMessages(
   messages: Array<{ role: string; content: string }>,
 ): ChatTurn[] {
   const recent = messages
-    .map((message, index) => ({ message, index }))
-    .filter(({ message }) => message.role === "user")
+    .map(({ role, content }, index) => ({
+      index,
+      role: role === "assistant" ? ("assistant" as const) : ("user" as const),
+      content: content.trim(),
+    }))
+    .filter((message) => message.content.length > 0)
+    .filter((message) => message.role === "user")
     .slice(-3)
     .concat(
       messages
-        .map((message, index) => ({ message, index }))
-        .filter(({ message }) => message.role === "assistant")
+        .map(({ role, content }, index) => ({
+          index,
+          role: role === "assistant" ? ("assistant" as const) : ("user" as const),
+          content: content.trim(),
+        }))
+        .filter((message) => message.content.length > 0 && message.role === "assistant")
         .slice(-3),
     )
     .sort((a, b) => a.index - b.index)
-    .map(({ message }) => message);
+    .map(({ role, content }) => ({ role, content }));
   const out: ChatTurn[] = [];
   for (const m of recent) {
-    const role = m.role === "assistant" ? ("assistant" as const) : ("user" as const);
     const prev = out[out.length - 1];
-    if (prev && prev.role === role) {
+    if (prev && prev.role === m.role) {
       prev.content = `${prev.content}\n\n${m.content}`;
     } else {
-      out.push({ role, content: m.content });
+      out.push(m);
     }
   }
   while (out.length > 0 && out[0]!.role === "assistant") out.shift();
@@ -275,7 +283,7 @@ router.post("/oracle/chat", identity(), oracleRateLimit, async (req, res) => {
     res.status(400).json({ error: "No user message to respond to." });
     return;
   }
-  let quota: Awaited<ReturnType<typeof oracleQuota>>;
+  let quota: Awaited<ReturnType<typeof oracleQuota>> | null = null;
   try {
     quota = await oracleQuota(userId);
     if (quota.remaining <= 0) {
@@ -283,14 +291,12 @@ router.post("/oracle/chat", identity(), oracleRateLimit, async (req, res) => {
       return;
     }
   } catch (err) {
-    logger.error({ err, userId }, "Oracle chat quota check unavailable");
-    res.status(503).json({ error: "AI quota verification is temporarily unavailable." });
-    return;
+    logger.warn({ err, userId }, "Oracle chat quota check unavailable; allowing chat without quota tracking");
   }
 
   try {
     const message = await client.messages.create({
-       model: "claude-3-haiku-20240307",
+      model: "claude-haiku-4-5-20251001",
       max_tokens: 1200,
       system: parsed.data.tradingContext
         ? `${SYSTEM_PROMPT}\n\n${buildContextPrompt(parsed.data.tradingContext)}`
@@ -309,9 +315,13 @@ router.post("/oracle/chat", identity(), oracleRateLimit, async (req, res) => {
       res.status(502).json({ error: "The Oracle returned an empty response." });
       return;
     }
-    const updated = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}`, { method: "PATCH", headers: cacheHeaders({ "content-type": "application/json", prefer: "return=representation" }), body: JSON.stringify({ oracle_daily_usage: quota.usage + 1 }) });
-    if (!updated.ok) throw new Error("Oracle quota update failed");
-    res.json({ ...SendOracleChatResponse.parse({ reply }), quota: { ...quota, usage: quota.usage + 1, remaining: quota.remaining - 1 } });
+    if (quota) {
+      const updated = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}`, { method: "PATCH", headers: cacheHeaders({ "content-type": "application/json", prefer: "return=representation" }), body: JSON.stringify({ oracle_daily_usage: quota.usage + 1 }) });
+      if (!updated.ok) logger.warn({ userId, status: updated.status }, "Oracle quota update failed after chat completion");
+      res.json({ ...SendOracleChatResponse.parse({ reply }), quota: { ...quota, usage: quota.usage + 1, remaining: quota.remaining - 1 } });
+      return;
+    }
+    res.json(SendOracleChatResponse.parse({ reply }));
   } catch (err) {
     logger.error({ err }, "Oracle chat completion failed");
     res.status(502).json({ error: "The Oracle couldn't reach its AI model." });
