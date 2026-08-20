@@ -13,6 +13,7 @@ import notificationsRouter from "./notifications";
 import autopilotRouter from "./autopilot";
 import revenueCatRouter from "./revenuecat";
 import mobileAdminRouter from "./mobileAdmin";
+import adminRouter from "./admin";
 
 const router: IRouter = Router();
 
@@ -30,5 +31,6 @@ router.use(notificationsRouter);
 router.use(autopilotRouter);
 router.use(revenueCatRouter);
 router.use(mobileAdminRouter);
+router.use(adminRouter);
 
 export default router;
