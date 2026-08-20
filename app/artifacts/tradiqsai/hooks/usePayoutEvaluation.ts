@@ -27,10 +27,28 @@ export function usePayoutEvaluation() {
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const mounted = useRef(true);
+  const accessScope = `${userId ?? 'signed-out'}:${payoutAccessAllowed ? 'account' : 'locked'}`;
+  const activeAccessScope = useRef(accessScope);
+  const accessGeneration = useRef(0);
+
+  // Invalidate stale account requests during render, before a guest screen can
+  // consume their completion. Effect cleanup alone is insufficient because a
+  // new effect can set a shared mounted flag back to true before the old RPC
+  // settles.
+  if (activeAccessScope.current !== accessScope) {
+    activeAccessScope.current = accessScope;
+    accessGeneration.current += 1;
+  }
 
   const refreshEvaluation = useCallback(async () => {
+    const generation = accessGeneration.current;
+    const isCurrent = () =>
+      mounted.current &&
+      generation === accessGeneration.current &&
+      activeAccessScope.current === accessScope;
+
     if (!payoutAccessAllowed || !isSupabaseConfigured) {
-      if (mounted.current) {
+      if (isCurrent()) {
         setEvaluation(null);
         setError(
           isGuest
@@ -50,19 +68,19 @@ export function usePayoutEvaluation() {
       if (rpcError) throw rpcError;
       const parsed = parsePayoutEvaluation(data);
       if (!parsed) throw new Error('Payout evaluation data is incomplete.');
-      if (mounted.current) {
+      if (isCurrent()) {
         setEvaluation(parsed);
         setError(null);
       }
     } catch (err) {
-      if (mounted.current) {
+      if (isCurrent()) {
         setEvaluation(null);
         setError(err instanceof Error ? err.message : 'Payout evaluation is unavailable.');
       }
     } finally {
-      if (mounted.current) setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
-  }, [userId, isGuest, payoutAccessAllowed]);
+  }, [accessScope, userId, isGuest, payoutAccessAllowed]);
 
   /**
    * Reads only the signed-in user's rows. The table policy is the authority:
@@ -71,8 +89,14 @@ export function usePayoutEvaluation() {
    * that history is unavailable instead of impersonating an empty ledger.
    */
   const refreshHistory = useCallback(async () => {
+    const generation = accessGeneration.current;
+    const isCurrent = () =>
+      mounted.current &&
+      generation === accessGeneration.current &&
+      activeAccessScope.current === accessScope;
+
     if (!payoutAccessAllowed || !isSupabaseConfigured) {
-      if (mounted.current) {
+      if (isCurrent()) {
         setHistory(null);
         setHistoryError(
           isGuest
@@ -96,19 +120,19 @@ export function usePayoutEvaluation() {
       if (queryError) throw queryError;
       const parsed = parsePayoutRequests(data);
       if (!parsed) throw new Error('Payout history data is incomplete.');
-      if (mounted.current) {
+      if (isCurrent()) {
         setHistory(parsed);
         setHistoryError(null);
       }
     } catch (err) {
-      if (mounted.current) {
+      if (isCurrent()) {
         setHistory(null);
         setHistoryError(err instanceof Error ? err.message : 'Payout history is unavailable.');
       }
     } finally {
-      if (mounted.current) setHistoryLoading(false);
+      if (isCurrent()) setHistoryLoading(false);
     }
-  }, [userId, isGuest, payoutAccessAllowed]);
+  }, [accessScope, userId, isGuest, payoutAccessAllowed]);
 
   const refresh = useCallback(async () => {
     await Promise.all([refreshEvaluation(), refreshHistory()]);
@@ -129,11 +153,17 @@ export function usePayoutEvaluation() {
     if (!payoutAccessAllowed || !isSupabaseConfigured) {
       throw new Error('Payout evaluation is unavailable.');
     }
+    const generation = accessGeneration.current;
+    const isCurrent = () =>
+      mounted.current &&
+      generation === accessGeneration.current &&
+      activeAccessScope.current === accessScope;
     const { data, error: rpcError } = await supabase.rpc('request_evaluation_payout');
     if (rpcError) throw rpcError;
     const parsed = parsePayoutEvaluation(data);
     if (!parsed) throw new Error('Payout request returned incomplete data.');
-    if (mounted.current) {
+    if (!isCurrent()) throw new Error('Payout request is unavailable.');
+    if (isCurrent()) {
       setEvaluation(parsed);
       setError(null);
     }
@@ -141,7 +171,7 @@ export function usePayoutEvaluation() {
     // so the history card shows the reservation immediately.
     await refreshHistory();
     return parsed;
-  }, [isGuest, payoutAccessAllowed, refreshHistory]);
+  }, [accessScope, isGuest, payoutAccessAllowed, refreshHistory]);
 
   return {
     evaluation,

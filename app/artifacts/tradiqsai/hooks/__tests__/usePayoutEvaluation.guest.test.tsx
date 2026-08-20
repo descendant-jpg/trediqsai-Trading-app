@@ -43,6 +43,12 @@ function HookProbe({ onValue }: { onValue: (value: ReturnType<typeof usePayoutEv
   return null;
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((res) => { resolve = res; });
+  return { promise, resolve };
+}
+
 describe('usePayoutEvaluation guest isolation', () => {
   let latest: ReturnType<typeof usePayoutEvaluation>;
 
@@ -89,5 +95,38 @@ describe('usePayoutEvaluation guest isolation', () => {
       expect(latest.history).toBeNull();
       expect(latest.error).toContain('Create an account');
     });
+  });
+
+  it('ignores account RPC and history responses that settle after a guest transition', async () => {
+    const evaluationResponse = deferred<any>();
+    const historyResponse = deferred<any>();
+    rpc.mockResolvedValueOnce(evaluationResponse.promise);
+    from.mockReturnValueOnce({
+      select: () => ({
+        order: () => ({
+          limit: () => historyResponse.promise,
+        }),
+      }),
+    });
+
+    const view = render(<HookProbe onValue={(value) => { latest = value; }} />);
+    await waitFor(() => {
+      expect(rpc).toHaveBeenCalledWith('payout_evaluation_summary');
+      expect(from).toHaveBeenCalledWith('payout_requests');
+    });
+
+    authState.session = { user: { id: 'guest-user', is_anonymous: true } };
+    view.rerender(<HookProbe onValue={(value) => { latest = value; }} />);
+    await waitFor(() => expect(latest.error).toContain('Create an account'));
+
+    await act(async () => {
+      evaluationResponse.resolve({ data: validEvaluation, error: null });
+      historyResponse.resolve({ data: [], error: null });
+    });
+
+    expect(latest.evaluation).toBeNull();
+    expect(latest.history).toBeNull();
+    expect(latest.error).toContain('Create an account');
+    expect(latest.historyError).toContain('Create an account');
   });
 });
