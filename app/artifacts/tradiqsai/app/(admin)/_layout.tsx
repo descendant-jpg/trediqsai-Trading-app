@@ -1,59 +1,19 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { Redirect, Stack } from 'expo-router';
-import { supabase } from '@/utils/supabase';
+import { useAuth } from '@/context/AuthContext';
 
-const MASTER_EMAIL = 'nextgensynthex@gmail.com';
-const ADMIN_ROLES = new Set(['admin', 'god_admin']);
-
+/**
+ * Non-blocking client gate for the CMS route. Entry is decided solely from
+ * the in-memory auth state — no network call (and therefore no timeout) may
+ * hold or bounce navigation. Role verification happens asynchronously inside
+ * the dashboard view, and every privileged read remains enforced server-side
+ * (401/403), so a slow network can never eject an administrator.
+ */
 export default function AdminRouteLayout() {
-  const [access, setAccess] = useState<'checking' | 'allowed' | 'denied'>(
-    'checking',
-  );
+  const { session, loading } = useAuth();
 
-  useEffect(() => {
-    let active = true;
-
-    const checkAccess = async () => {
-      try {
-        const {
-          data: { session },
-          error: sessionError,
-        } = await supabase.auth.getSession();
-        if (sessionError || !session?.user) {
-          throw sessionError ?? new Error('No session');
-        }
-
-        const email = session.user.email?.trim().toLowerCase() ?? '';
-        if (email === MASTER_EMAIL) {
-          if (active) setAccess('allowed');
-          return;
-        }
-
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', session.user.id)
-          .maybeSingle();
-        if (profileError) throw profileError;
-
-        const role =
-          typeof profile?.role === 'string'
-            ? profile.role.trim().toLowerCase()
-            : '';
-        if (active) setAccess(ADMIN_ROLES.has(role) ? 'allowed' : 'denied');
-      } catch {
-        if (active) setAccess('denied');
-      }
-    };
-
-    void checkAccess();
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  if (access === 'checking') {
+  if (loading) {
     return (
       <View style={styles.loading}>
         <ActivityIndicator color="#00F0FF" />
@@ -61,7 +21,7 @@ export default function AdminRouteLayout() {
     );
   }
 
-  if (access === 'denied') return <Redirect href="/(tabs)" />;
+  if (!session) return <Redirect href="/(tabs)" />;
 
   return (
     <Stack

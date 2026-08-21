@@ -22,6 +22,37 @@ import {
 
 const CYAN = '#00F0FF';
 
+// Emulator and tunnelled preview environments can be slow; 15s is generous
+// without letting a dead network spin the dashboard forever.
+const CMS_TIMEOUT_MS = 15_000;
+
+class CmsTimeoutError extends Error {
+  readonly name = 'CmsTimeoutError';
+}
+
+function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  label: string,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new CmsTimeoutError(`${label} exceeded ${ms}ms timeout`)),
+      ms,
+    );
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 type StatCard = {
   label: string;
   value: number;
@@ -36,6 +67,9 @@ function formatDate(value: string) {
 }
 
 function dashboardErrorMessage(error: unknown): string {
+  if (error instanceof CmsTimeoutError) {
+    return 'Connection timed out. The server did not respond in time — check your connection and retry.';
+  }
   if (!(error instanceof ApiError)) {
     const detail = error instanceof Error ? error.message : String(error);
     return `CMS request failed before reaching the server (network/transport). ${detail}`;
@@ -109,8 +143,20 @@ export default function MobileCmsDashboard() {
     setErrorMessage(null);
 
     try {
-      await refreshCmsSession();
-      const nextDashboard = await fetchAdminMetrics();
+      // A hung session refresh must not block the dashboard: customFetch
+      // still attaches the cached token and refreshes once on 401.
+      await withTimeout(
+        refreshCmsSession(),
+        CMS_TIMEOUT_MS,
+        'session refresh',
+      ).catch((refreshError) => {
+        console.warn('[CMS] Session refresh did not complete:', refreshError);
+      });
+      const nextDashboard = await withTimeout(
+        fetchAdminMetrics(),
+        CMS_TIMEOUT_MS,
+        'dashboard fetch',
+      );
       if (requestGeneration.current !== generation) return;
       setDashboard(nextDashboard);
     } catch (error) {
@@ -208,9 +254,19 @@ export default function MobileCmsDashboard() {
         {errorMessage ? (
           <View style={styles.errorBanner}>
             <Feather name="alert-circle" size={17} color="#FFB4B4" />
-            <Text accessibilityRole="alert" style={styles.errorText}>
-              {errorMessage}
-            </Text>
+            <View style={styles.errorBody}>
+              <Text accessibilityRole="alert" style={styles.errorText}>
+                {errorMessage}
+              </Text>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Retry loading the CMS dashboard"
+                onPress={() => void refresh()}
+                style={styles.retryButton}
+              >
+                <Text style={styles.retryText}>Tap to Retry</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         ) : null}
 
@@ -399,12 +455,27 @@ const styles = StyleSheet.create({
     marginTop: 18,
     padding: 12,
   },
+  errorBody: {
+    flex: 1,
+    gap: 10,
+  },
   errorText: {
     color: '#FFCECE',
-    flex: 1,
     fontFamily: 'Inter_400Regular',
     fontSize: 12,
     lineHeight: 18,
+  },
+  retryButton: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#7A343F',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  retryText: {
+    color: '#FFFFFF',
+    fontFamily: 'Inter_700Bold',
+    fontSize: 12,
   },
   statGrid: {
     flexDirection: 'row',
