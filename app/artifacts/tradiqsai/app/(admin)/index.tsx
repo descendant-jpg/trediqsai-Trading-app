@@ -14,6 +14,7 @@ import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ApiError } from '@workspace/api-client-react';
+import { supabase } from '@/utils/supabase';
 import {
   fetchAdminMetrics,
   type AdminMetrics,
@@ -36,18 +37,52 @@ function formatDate(value: string) {
 
 function dashboardErrorMessage(error: unknown): string {
   if (!(error instanceof ApiError)) {
-    return 'CMS data is unavailable. Check your connection and try again.';
+    const detail = error instanceof Error ? error.message : String(error);
+    return `CMS request failed before reaching the server (network/transport). ${detail}`;
   }
+  // Surface the exact failure so administrators can see whether the request
+  // was unauthorized (401), forbidden (403), misrouted (404), or a server
+  // fault (5xx) instead of guessing behind a generic message.
+  const diagnostic = `HTTP ${error.status} · ${error.method} ${error.url}`;
   if (error.status === 401) {
-    return 'Your administrator session expired. Sign in again to reload the CMS.';
+    return `Session rejected by the server. Sign in again to reload the CMS. [${diagnostic}]`;
   }
   if (error.status === 403) {
-    return 'This account does not have permission to read the CMS dashboard.';
+    return `This account was authenticated but lacks the CMS admin role. [${diagnostic}]`;
   }
-  if (error.status === 503) {
-    return 'CMS dashboard data is temporarily unavailable. Confirm the CMS database setup is applied, then try again.';
+  if (error.status === 404) {
+    return `CMS endpoint not found on the server — client/server route mismatch. [${diagnostic}]`;
   }
-  return 'CMS data is unavailable. Pull down to try again.';
+  if (error.status >= 500) {
+    return `CMS server fault — dashboard data could not be loaded. [${diagnostic}]`;
+  }
+  return `CMS data is unavailable. Pull down to try again. [${diagnostic}]`;
+}
+
+/**
+ * Never trust a cached JWT for privileged reads. Supabase's getSession()
+ * serves the token from local storage without verifying it, so force a
+ * refresh before hitting the CMS API. Returns the live user, or null when
+ * the session cannot be refreshed.
+ */
+async function refreshCmsSession() {
+  const { data, error } = await supabase.auth.refreshSession();
+  if (error || !data.session) {
+    console.warn('[CMS] Session refresh failed:', error?.message ?? 'no session');
+    return null;
+  }
+  const user = data.session.user;
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .maybeSingle();
+  console.log(
+    `[CMS] Session refreshed for ${user.email ?? user.id} — profiles.role =`,
+    profile?.role ?? '(none)',
+    profileError ? `(profile lookup error: ${profileError.message})` : '',
+  );
+  return user;
 }
 
 export default function MobileCmsDashboard() {
@@ -74,11 +109,20 @@ export default function MobileCmsDashboard() {
     setErrorMessage(null);
 
     try {
+      await refreshCmsSession();
       const nextDashboard = await fetchAdminMetrics();
       if (requestGeneration.current !== generation) return;
       setDashboard(nextDashboard);
     } catch (error) {
       if (requestGeneration.current !== generation) return;
+      if (error instanceof ApiError) {
+        console.error(
+          `[CMS] Dashboard fetch failed: HTTP ${error.status} ${error.method} ${error.url}`,
+          error.data ?? '',
+        );
+      } else {
+        console.error('[CMS] Dashboard fetch failed:', error);
+      }
       setErrorMessage(dashboardErrorMessage(error));
     } finally {
       if (requestGeneration.current === generation) {
