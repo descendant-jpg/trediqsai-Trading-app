@@ -282,7 +282,7 @@ export function createMobileAdminRouter(
   }): boolean {
     const role = profile.role?.trim().toLowerCase() ?? "";
     const email = profile.email?.trim().toLowerCase() ?? "";
-    return role === "god_admin" || email === MASTER_EMAIL;
+    return role === "admin" || role === "god_admin" || email === MASTER_EMAIL;
   }
 
   // ---------------------------------------------------------------------------

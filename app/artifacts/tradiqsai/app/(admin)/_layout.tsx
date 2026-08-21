@@ -1,14 +1,59 @@
-import { Redirect, Stack } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
-import { useAuth } from '@/context/AuthContext';
+import { Redirect, Stack } from 'expo-router';
+import { supabase } from '@/utils/supabase';
+
+const MASTER_EMAIL = 'nextgensynthex@gmail.com';
+const ADMIN_ROLES = new Set(['admin', 'god_admin']);
 
 export default function AdminRouteLayout() {
-  const { isGodAdmin, roleLoading, session } = useAuth();
-  const isMasterEmail =
-    session?.user?.email?.trim().toLowerCase() ===
-    'nextgensynthex@gmail.com';
+  const [access, setAccess] = useState<'checking' | 'allowed' | 'denied'>(
+    'checking',
+  );
 
-  if (roleLoading && !isMasterEmail) {
+  useEffect(() => {
+    let active = true;
+
+    const checkAccess = async () => {
+      try {
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession();
+        if (sessionError || !session?.user) {
+          throw sessionError ?? new Error('No session');
+        }
+
+        const email = session.user.email?.trim().toLowerCase() ?? '';
+        if (email === MASTER_EMAIL) {
+          if (active) setAccess('allowed');
+          return;
+        }
+
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', session.user.id)
+          .maybeSingle();
+        if (profileError) throw profileError;
+
+        const role =
+          typeof profile?.role === 'string'
+            ? profile.role.trim().toLowerCase()
+            : '';
+        if (active) setAccess(ADMIN_ROLES.has(role) ? 'allowed' : 'denied');
+      } catch {
+        if (active) setAccess('denied');
+      }
+    };
+
+    void checkAccess();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  if (access === 'checking') {
     return (
       <View style={styles.loading}>
         <ActivityIndicator color="#00F0FF" />
@@ -16,7 +61,7 @@ export default function AdminRouteLayout() {
     );
   }
 
-  if (!isGodAdmin && !isMasterEmail) return <Redirect href="/(tabs)" />;
+  if (access === 'denied') return <Redirect href="/(tabs)" />;
 
   return (
     <Stack

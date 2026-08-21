@@ -15,6 +15,7 @@ import {
 // ---------------------------------------------------------------------------
 
 const GOD_ADMIN_TOKEN = "token-god-admin";
+const ADMIN_TOKEN = "token-admin";
 const MASTER_EMAIL_TOKEN = "token-master-email";
 const PLAIN_USER_TOKEN = "token-plain-user";
 const INVALID_TOKEN = "token-invalid";
@@ -22,6 +23,7 @@ const INVALID_TOKEN = "token-invalid";
 /** Token → userId map for hermetic tests. */
 const stubVerifier: TokenVerifier = async (token) => {
   if (token === GOD_ADMIN_TOKEN) return "user-god-admin";
+  if (token === ADMIN_TOKEN) return "user-admin";
   if (token === MASTER_EMAIL_TOKEN) return "user-master-email";
   if (token === PLAIN_USER_TOKEN) return "user-plain";
   return null;
@@ -31,6 +33,7 @@ const stubVerifier: TokenVerifier = async (token) => {
  * Profile lookup stub: returns the row for known users, null for unknowns.
  */
 const godAdminProfile = { role: "god_admin", email: "other@example.com" };
+const adminProfile = { role: "admin", email: "admin@example.com" };
 const masterEmailProfile = {
   role: "user",
   email: "NEXTGENSYNTHEX@GMAIL.COM",
@@ -43,6 +46,7 @@ function makeProfileLookup(
   return async (userId) => {
     if (userId in overrides) return overrides[userId];
     if (userId === "user-god-admin") return godAdminProfile;
+    if (userId === "user-admin") return adminProfile;
     if (userId === "user-master-email") return masterEmailProfile;
     if (userId === "user-plain") return plainUserProfile;
     return null;
@@ -185,6 +189,16 @@ describe("non-god-admin rejection", () => {
 // ---------------------------------------------------------------------------
 
 describe("GET /api/mobile-admin/access", () => {
+  it("returns isGodAdmin=true for the canonical admin role", async () => {
+    const app = buildApp();
+    const res = await request(app)
+      .get("/api/mobile-admin/access")
+      .set("Authorization", authed(ADMIN_TOKEN));
+    expect(res.status).toBe(200);
+    expect(res.body.isGodAdmin).toBe(true);
+    expect(res.body.role).toBe("admin");
+  });
+
   it("returns isGodAdmin=true for a god_admin caller", async () => {
     const app = buildApp();
     const res = await request(app)
@@ -240,6 +254,15 @@ describe("GET /api/mobile-admin/access", () => {
 // ---------------------------------------------------------------------------
 
 describe("GET /api/mobile-admin/dashboard", () => {
+  it("returns dashboard data for the canonical admin role", async () => {
+    const app = buildApp();
+    const res = await request(app)
+      .get("/api/mobile-admin/dashboard")
+      .set("Authorization", authed(ADMIN_TOKEN));
+    expect(res.status).toBe(200);
+    expect(res.body.waitlistCount).toBe(3);
+  });
+
   it("returns waitlist and blog post counts for god_admin", async () => {
     const app = buildApp();
     const res = await request(app)

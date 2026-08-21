@@ -22,6 +22,61 @@ export async function fetchAdminMetrics(): Promise<AdminMetrics> {
   };
 }
 
+// ─── Mobile CMS quick actions ────────────────────────────────────────────────
+
+export type AdminInsight = {
+  id: number | string;
+  title: string;
+  excerpt?: string;
+  category?: string;
+  status?: "draft" | "published" | "archived";
+  created_at: string;
+};
+
+export async function fetchAdminInsights(): Promise<AdminInsight[]> {
+  const response = await customFetch<{ posts: AdminInsight[] }>(
+    "/api/mobile-admin/insights",
+  );
+  return Array.isArray(response.posts) ? response.posts : [];
+}
+
+export async function createAdminInsight(body: {
+  title: string;
+  summary: string;
+  content: string;
+}): Promise<AdminInsight> {
+  const response = await customFetch<{ draft: AdminInsight }>(
+    "/api/mobile-admin/insights",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  );
+  return response.draft;
+}
+
+export type WaitlistLead = {
+  id: number | string;
+  email: string;
+  name?: string;
+  status?: string;
+  created_at: string;
+};
+
+export async function fetchWaitlistLeads(): Promise<WaitlistLead[]> {
+  const response = await customFetch<{ leads: WaitlistLead[] }>(
+    "/api/mobile-admin/waitlist",
+  );
+  return Array.isArray(response.leads) ? response.leads : [];
+}
+
+export async function deleteWaitlistLead(id: number | string): Promise<void> {
+  await customFetch<unknown>(`/api/mobile-admin/waitlist/${id}`, {
+    method: "DELETE",
+  });
+}
+
 // ─── Posts ────────────────────────────────────────────────────────────────────
 
 export type Post = {

@@ -83,8 +83,12 @@ const lookupAdminIdentity: AdminIdentityLookup = async (userId) => {
 };
 
 export function isAuthorizedAdmin(identity: AdminIdentity): boolean {
+  const role = identity.role?.trim().toLowerCase();
   return (
-    identity.role?.trim().toLowerCase() === "god_admin" ||
+    role === "admin" ||
+    // Preserve access for any profile assigned before the canonical role was
+    // standardized as `admin`.
+    role === "god_admin" ||
     identity.email?.trim().toLowerCase() === MASTER_EMAIL
   );
 }

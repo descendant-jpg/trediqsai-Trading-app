@@ -13,6 +13,7 @@ import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ApiError } from '@workspace/api-client-react';
 import {
   fetchAdminMetrics,
   type AdminMetrics,
@@ -31,6 +32,22 @@ function formatDate(value: string) {
   return Number.isNaN(timestamp)
     ? 'Date unavailable'
     : new Date(timestamp).toLocaleDateString();
+}
+
+function dashboardErrorMessage(error: unknown): string {
+  if (!(error instanceof ApiError)) {
+    return 'CMS data is unavailable. Check your connection and try again.';
+  }
+  if (error.status === 401) {
+    return 'Your administrator session expired. Sign in again to reload the CMS.';
+  }
+  if (error.status === 403) {
+    return 'This account does not have permission to read the CMS dashboard.';
+  }
+  if (error.status === 503) {
+    return 'CMS dashboard data is temporarily unavailable. Confirm the CMS database setup is applied, then try again.';
+  }
+  return 'CMS data is unavailable. Pull down to try again.';
 }
 
 export default function MobileCmsDashboard() {
@@ -62,11 +79,7 @@ export default function MobileCmsDashboard() {
       setDashboard(nextDashboard);
     } catch (error) {
       if (requestGeneration.current !== generation) return;
-      setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : 'CMS data is unavailable right now.',
-      );
+      setErrorMessage(dashboardErrorMessage(error));
     } finally {
       if (requestGeneration.current === generation) {
         setLoading(false);
