@@ -19,6 +19,8 @@ const SUPABASE_URL =
   process.env["SUPABASE_URL"] ?? process.env["EXPO_PUBLIC_SUPABASE_URL"] ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = process.env["SUPABASE_SERVICE_ROLE_KEY"] ?? "";
 const ORACLE_LIMITS = { free: 3, pro: 20, elite: 60 } as const;
+const LIVE_MARKET_SNAPSHOT_URL =
+  "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana&vs_currencies=usd&include_24hr_change=true";
 
 type OracleProfile = {
   tier?: string | null;
@@ -72,9 +74,36 @@ const SYSTEM_PROMPT = [
   "You are the TradiQs Oracle, the in-app market AI assistant for the TradiQs trading app.",
   "You help traders think about markets: asset analysis, sentiment, notable movers, risk framing, and trading concepts.",
   "Style: concise, confident, trader-friendly. Prefer 2-5 short sentences. No markdown headings or bullet walls — plain conversational text suits the chat bubbles.",
-  "Never claim to have live market data; when asked for current prices or real-time numbers, explain you don't have a live feed and reason from general market structure instead.",
+  "Only use current prices or real-time numbers when a LIVE MARKET DATA addendum is provided below; otherwise explain you don't have a live feed and reason from general market structure instead.",
   "Always remind users that nothing you say is financial advice when giving anything resembling a trade idea.",
 ].join(" ");
+type CoinGeckoPrice = { usd?: unknown; usd_24h_change?: unknown };
+
+async function fetchLiveMarketSnapshot(): Promise<string | null> {
+  try {
+    const response = await fetch(LIVE_MARKET_SNAPSHOT_URL, {
+      signal: AbortSignal.timeout(2_000),
+    });
+    if (!response.ok) return null;
+
+    const prices = (await response.json()) as Record<string, CoinGeckoPrice>;
+    const assets = [
+      ["BTC", "bitcoin"],
+      ["ETH", "ethereum"],
+      ["SOL", "solana"],
+    ] as const;
+    const formatted = assets.map(([symbol, id]) => {
+      const price = prices[id]?.usd;
+      const change = prices[id]?.usd_24h_change;
+      if (typeof price !== "number" || !Number.isFinite(price) || typeof change !== "number" || !Number.isFinite(change)) return null;
+      return `${symbol}=$${price.toLocaleString("en-US", { maximumFractionDigits: 2 })} (${change >= 0 ? "+" : ""}${change.toFixed(1)}%)`;
+    });
+    if (formatted.some((asset) => asset === null)) return null;
+    return `LIVE MARKET DATA: ${formatted.join(", ")}. You now have access to this live data. Use it to answer user questions about current sentiment, prices, or market moves. Do not complain about not having live data if the answer is provided here.`;
+  } catch {
+    return null;
+  }
+}
 const chartRequestSchema = z.object({
   imageBase64: z.string().min(100).max(8_000_000),
   mode: z.enum(["analysis", "signal"]),
@@ -304,12 +333,19 @@ router.post("/oracle/chat", identity(), oracleRateLimit, async (req, res) => {
   }
 
   try {
+    const liveMarketSnapshot = await fetchLiveMarketSnapshot();
+    const systemPrompt = [
+      parsed.data.tradingContext
+        ? `${SYSTEM_PROMPT}\n\n${buildContextPrompt(parsed.data.tradingContext)}`
+        : SYSTEM_PROMPT,
+      liveMarketSnapshot,
+    ]
+      .filter((section): section is string => Boolean(section))
+      .join("\n\n");
     const message = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 1200,
-      system: parsed.data.tradingContext
-        ? `${SYSTEM_PROMPT}\n\n${buildContextPrompt(parsed.data.tradingContext)}`
-        : SYSTEM_PROMPT,
+      system: systemPrompt,
       messages: chatMessages,
     });
 
