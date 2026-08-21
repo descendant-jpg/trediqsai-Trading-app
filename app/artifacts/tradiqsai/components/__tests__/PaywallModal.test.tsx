@@ -34,7 +34,7 @@ const monthlyPackage = {
 const annualPackage = {
   identifier: '$rc_annual',
   packageType: 'ANNUAL',
-  product: { priceString: '$199.99', identifier: 'pro_annual', title: 'Pro Annual' },
+  product: { priceString: '$309.99', identifier: 'pro_annual', title: 'Pro Annual' },
 };
 
 const subscription = vi.hoisted(() => ({
@@ -74,7 +74,7 @@ describe('PaywallModal', () => {
     const onClose = vi.fn();
     render(<PaywallModal visible onClose={onClose} />);
     expect(screen.getByText('Continue to Checkout')).toBeTruthy();
-    expect(screen.getAllByText('$199.99/year').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('$309.99/year').length).toBeGreaterThan(0);
 
     press('paywall-cta');
     await vi.waitFor(() => expect(onClose).toHaveBeenCalled());
@@ -124,13 +124,13 @@ describe('PaywallModal', () => {
 
     rerender(<PaywallModal visible={false} onClose={() => {}} />);
     rerender(<PaywallModal visible onClose={() => {}} />);
-    expect(screen.getAllByText('$199.99/year').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('$309.99/year').length).toBeGreaterThan(0);
   });
 
   it('falls back to spec prices when offerings are unavailable', () => {
     subscription.offerings = undefined;
     render(<PaywallModal visible onClose={() => {}} />);
     expect(screen.getByText('$29.99/mo')).toBeTruthy();
-    expect(screen.getByText('$199.99/yr')).toBeTruthy();
+    expect(screen.getByText('$309.99/yr')).toBeTruthy();
   });
 });

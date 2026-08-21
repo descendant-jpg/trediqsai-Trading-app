@@ -23,7 +23,7 @@ type BillingCycle = 'monthly' | 'annual';
 type SubscriptionTier = 'PRO' | 'ELITE';
 
 const MONTHLY_PRICE_FALLBACK = '$29.99';
-const ANNUAL_PRICE_FALLBACK = '$199.99';
+const ANNUAL_PRICE_FALLBACK = '$309.99';
 
 type Feature = { icon: keyof typeof Feather.glyphMap; title: string; body: string };
 
@@ -170,7 +170,7 @@ export function PaywallModal({
     [packages],
   );
   const monthlyPrice = monthlyPackage?.product.priceString ?? (selectedTier === 'ELITE' ? '$49.99' : MONTHLY_PRICE_FALLBACK);
-  const annualPrice = annualPackage?.product.priceString ?? (selectedTier === 'ELITE' ? '$399.99' : ANNUAL_PRICE_FALLBACK);
+  const annualPrice = annualPackage?.product.priceString ?? (selectedTier === 'ELITE' ? '$509.99' : ANNUAL_PRICE_FALLBACK);
   const selectedPackage = billingCycle === 'annual' ? annualPackage : monthlyPackage;
   const working = isPurchasing || isRestoring;
   const accent = selectedTier === 'ELITE' ? '#B026FF' : '#00F0FF';
@@ -299,7 +299,7 @@ export function PaywallModal({
               testID="billing-annual"
             >
               <View style={[styles.saveBadge, { backgroundColor: accent }]}>
-                <Text style={styles.saveBadgeText}>{selectedTier === 'ELITE' ? 'SAVE 33%' : 'SAVE 45%'}</Text>
+                <Text style={styles.saveBadgeText}>{selectedTier === 'ELITE' ? 'SAVE 15%' : 'SAVE 14%'}</Text>
               </View>
               <Text
                 style={[styles.togglePlan, billingCycle === 'annual' && styles.togglePlanActive]}
