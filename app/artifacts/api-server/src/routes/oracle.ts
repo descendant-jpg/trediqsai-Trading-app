@@ -78,14 +78,17 @@ const SYSTEM_PROMPT = [
   "Always remind users that nothing you say is financial advice when giving anything resembling a trade idea.",
 ].join(" ");
 type CoinCapAsset = { symbol?: unknown; priceUsd?: unknown; changePercent24Hr?: unknown };
+type DiaQuotation = { Price?: unknown };
+const LIVE_MARKET_INSTRUCTION =
+  "You are a real-time market AI. Live asset prices and 24h sentiment are provided below. **CRITICAL INSTRUCTION: If the user asks about an asset, you MUST start your response by explicitly quoting the current price and 24h change from the LIVE MARKET DATA (e.g., 'BTC is currently trading at $X, up Y% in the last 24h').** After quoting the exact data, provide your structural analysis.";
 
 async function fetchLiveMarketSnapshot(): Promise<string | null> {
   try {
     const response = await fetch(LIVE_MARKET_SNAPSHOT_URL, {
-      signal: AbortSignal.timeout(2_000),
+      signal: AbortSignal.timeout(5_000),
     });
     console.log("CoinCap Fetch Status:", response.status);
-    if (!response.ok) return null;
+    if (!response.ok) throw new Error(`CoinCap returned HTTP ${response.status}`);
 
     const payload = (await response.json()) as { data?: CoinCapAsset[] };
     const prices = new Map(
@@ -106,13 +109,31 @@ async function fetchLiveMarketSnapshot(): Promise<string | null> {
       const quote = prices.get(asset);
       const price = quote?.price;
       const change = quote?.change;
-      if (typeof price !== "number" || !Number.isFinite(price) || typeof change !== "number" || !Number.isFinite(change)) return null;
+      if (typeof price !== "number" || !Number.isFinite(price) || typeof change !== "number" || !Number.isFinite(change)) throw new Error(`CoinCap market data missing for ${symbol}`);
       return `${symbol}=$${price.toLocaleString("en-US", { maximumFractionDigits: 2 })} (${change >= 0 ? "+" : ""}${change.toFixed(1)}%)`;
     });
-    if (formatted.some((asset) => asset === null)) return null;
-    return `LIVE MARKET DATA: ${formatted.join(", ")}.\n\nYou are a real-time market AI. Live asset prices and 24h sentiment are provided below. **CRITICAL INSTRUCTION: If the user asks about an asset, you MUST start your response by explicitly quoting the current price and 24h change from the LIVE MARKET DATA (e.g., 'BTC is currently trading at $X, up Y% in the last 24h').** After quoting the exact data, provide your structural analysis.`;
-  } catch {
-    return null;
+    return `LIVE MARKET DATA: ${formatted.join(", ")}.\n\n${LIVE_MARKET_INSTRUCTION}`;
+  } catch (coinCapError) {
+    try {
+      const assets = ["BTC", "ETH", "SOL"] as const;
+      const quotations = await Promise.all(
+        assets.map(async (symbol) => {
+          const response = await fetch(`https://api.diadata.org/v1/quotation/${symbol}`, {
+            signal: AbortSignal.timeout(5_000),
+          });
+          if (!response.ok) throw new Error(`DIA ${symbol} returned HTTP ${response.status}`);
+          const quote = (await response.json()) as DiaQuotation;
+          const price = Number(quote.Price);
+          if (!Number.isFinite(price)) throw new Error(`DIA market data missing for ${symbol}`);
+          return `${symbol}=$${price.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+        }),
+      );
+      return `LIVE MARKET DATA: ${quotations.join(", ")}.\n\n${LIVE_MARKET_INSTRUCTION}`;
+    } catch (error) {
+      console.error("ALL MARKET APIs FAILED", error);
+      logger.warn({ err: coinCapError }, "CoinCap market data unavailable; DIA fallback also failed");
+      return null;
+    }
   }
 }
 const chartRequestSchema = z.object({
