@@ -20,7 +20,7 @@ const SUPABASE_URL =
 const SUPABASE_SERVICE_ROLE_KEY = process.env["SUPABASE_SERVICE_ROLE_KEY"] ?? "";
 const ORACLE_LIMITS = { free: 3, pro: 20, elite: 60 } as const;
 const LIVE_MARKET_SNAPSHOT_URL =
-  "https://api.binance.com/api/v3/ticker/24hr?symbols=%5B%22BTCUSDT%22%2C%22ETHUSDT%22%2C%22SOLUSDT%22%5D";
+  "https://api.coincap.io/v2/assets?ids=bitcoin,ethereum,solana";
 
 type OracleProfile = {
   tier?: string | null;
@@ -77,33 +77,33 @@ const SYSTEM_PROMPT = [
   "You are a real-time market AI. Live asset prices and 24h sentiment will be provided to you at the end of this prompt under 'LIVE MARKET DATA'. Base your analysis strictly on this provided live data.",
   "Always remind users that nothing you say is financial advice when giving anything resembling a trade idea.",
 ].join(" ");
-type BinanceTicker = { symbol?: unknown; lastPrice?: unknown; priceChangePercent?: unknown };
+type CoinCapAsset = { symbol?: unknown; priceUsd?: unknown; changePercent24Hr?: unknown };
 
 async function fetchLiveMarketSnapshot(): Promise<string | null> {
   try {
     const response = await fetch(LIVE_MARKET_SNAPSHOT_URL, {
       signal: AbortSignal.timeout(2_000),
     });
-    console.log("Market Data Fetch Status:", response.status);
+    console.log("CoinCap Fetch Status:", response.status);
     if (!response.ok) return null;
 
-    const tickers = (await response.json()) as BinanceTicker[];
+    const payload = (await response.json()) as { data?: CoinCapAsset[] };
     const prices = new Map(
-      tickers.map((ticker) => [
-        ticker.symbol,
+      (payload.data ?? []).map((asset) => [
+        asset.symbol,
         {
-          price: Number(ticker.lastPrice),
-          change: Number(ticker.priceChangePercent),
+          price: Number(asset.priceUsd),
+          change: Number(asset.changePercent24Hr),
         },
       ]),
     );
     const assets = [
-      ["BTC", "BTCUSDT"],
-      ["ETH", "ETHUSDT"],
-      ["SOL", "SOLUSDT"],
+      ["BTC", "BTC"],
+      ["ETH", "ETH"],
+      ["SOL", "SOL"],
     ] as const;
-    const formatted = assets.map(([symbol, ticker]) => {
-      const quote = prices.get(ticker);
+    const formatted = assets.map(([symbol, asset]) => {
+      const quote = prices.get(asset);
       const price = quote?.price;
       const change = quote?.change;
       if (typeof price !== "number" || !Number.isFinite(price) || typeof change !== "number" || !Number.isFinite(change)) return null;
