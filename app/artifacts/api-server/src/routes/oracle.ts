@@ -20,7 +20,7 @@ const SUPABASE_URL =
 const SUPABASE_SERVICE_ROLE_KEY = process.env["SUPABASE_SERVICE_ROLE_KEY"] ?? "";
 const ORACLE_LIMITS = { free: 3, pro: 20, elite: 60 } as const;
 const LIVE_MARKET_SNAPSHOT_URL =
-  "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana&vs_currencies=usd&include_24hr_change=true";
+  "https://api.binance.com/api/v3/ticker/24hr?symbols=%5B%22BTCUSDT%22%2C%22ETHUSDT%22%2C%22SOLUSDT%22%5D";
 
 type OracleProfile = {
   tier?: string | null;
@@ -74,27 +74,38 @@ const SYSTEM_PROMPT = [
   "You are the TradiQs Oracle, the in-app market AI assistant for the TradiQs trading app.",
   "You help traders think about markets: asset analysis, sentiment, notable movers, risk framing, and trading concepts.",
   "Style: concise, confident, trader-friendly. Prefer 2-5 short sentences. No markdown headings or bullet walls — plain conversational text suits the chat bubbles.",
-  "Only use current prices or real-time numbers when a LIVE MARKET DATA addendum is provided below; otherwise explain you don't have a live feed and reason from general market structure instead.",
+  "You are a real-time market AI. Live asset prices and 24h sentiment will be provided to you at the end of this prompt under 'LIVE MARKET DATA'. Base your analysis strictly on this provided live data.",
   "Always remind users that nothing you say is financial advice when giving anything resembling a trade idea.",
 ].join(" ");
-type CoinGeckoPrice = { usd?: unknown; usd_24h_change?: unknown };
+type BinanceTicker = { symbol?: unknown; lastPrice?: unknown; priceChangePercent?: unknown };
 
 async function fetchLiveMarketSnapshot(): Promise<string | null> {
   try {
     const response = await fetch(LIVE_MARKET_SNAPSHOT_URL, {
       signal: AbortSignal.timeout(2_000),
     });
+    console.log("Market Data Fetch Status:", response.status);
     if (!response.ok) return null;
 
-    const prices = (await response.json()) as Record<string, CoinGeckoPrice>;
+    const tickers = (await response.json()) as BinanceTicker[];
+    const prices = new Map(
+      tickers.map((ticker) => [
+        ticker.symbol,
+        {
+          price: Number(ticker.lastPrice),
+          change: Number(ticker.priceChangePercent),
+        },
+      ]),
+    );
     const assets = [
-      ["BTC", "bitcoin"],
-      ["ETH", "ethereum"],
-      ["SOL", "solana"],
+      ["BTC", "BTCUSDT"],
+      ["ETH", "ETHUSDT"],
+      ["SOL", "SOLUSDT"],
     ] as const;
-    const formatted = assets.map(([symbol, id]) => {
-      const price = prices[id]?.usd;
-      const change = prices[id]?.usd_24h_change;
+    const formatted = assets.map(([symbol, ticker]) => {
+      const quote = prices.get(ticker);
+      const price = quote?.price;
+      const change = quote?.change;
       if (typeof price !== "number" || !Number.isFinite(price) || typeof change !== "number" || !Number.isFinite(change)) return null;
       return `${symbol}=$${price.toLocaleString("en-US", { maximumFractionDigits: 2 })} (${change >= 0 ? "+" : ""}${change.toFixed(1)}%)`;
     });
