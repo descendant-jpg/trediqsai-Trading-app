@@ -110,7 +110,7 @@ async function fetchLiveMarketSnapshot(): Promise<string | null> {
       return `${symbol}=$${price.toLocaleString("en-US", { maximumFractionDigits: 2 })} (${change >= 0 ? "+" : ""}${change.toFixed(1)}%)`;
     });
     if (formatted.some((asset) => asset === null)) return null;
-    return `LIVE MARKET DATA: ${formatted.join(", ")}. You now have access to this live data. Use it to answer user questions about current sentiment, prices, or market moves. Do not complain about not having live data if the answer is provided here.`;
+    return `LIVE MARKET DATA: ${formatted.join(", ")}.\n\nYou are a real-time market AI. Live asset prices and 24h sentiment are provided below. **CRITICAL INSTRUCTION: If the user asks about an asset, you MUST start your response by explicitly quoting the current price and 24h change from the LIVE MARKET DATA (e.g., 'BTC is currently trading at $X, up Y% in the last 24h').** After quoting the exact data, provide your structural analysis.`;
   } catch {
     return null;
   }
