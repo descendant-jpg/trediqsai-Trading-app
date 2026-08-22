@@ -54,6 +54,7 @@ vi.mock('@workspace/api-client-react', () => ({
     refetch: vi.fn(),
   }),
   useSetAutopilotMaster: () => ({ mutate: vi.fn() }),
+  useSetAutopilotAsset: () => ({ mutate: vi.fn() }),
   useUpdateAutopilotBot: () => ({ mutate: vi.fn() }),
   useClearAutopilotLogs: () => ({ mutate: vi.fn() }),
 }));

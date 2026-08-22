@@ -62,6 +62,7 @@ const sendOracleChat = vi.hoisted(() =>
 );
 vi.mock('@workspace/api-client-react', () => ({
   useSendOracleChat: () => ({ mutate: sendOracleChat, isPending: false }),
+  customFetch: vi.fn(async () => ({ tier: 'starter', limit: 10, usage: 0 })),
 }));
 
 // The screen reads the trading account to personalise Oracle answers —

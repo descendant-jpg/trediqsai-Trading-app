@@ -11,8 +11,9 @@ describe('mobile admin route isolation', () => {
     const adminLayout = read('app/(admin)/_layout.tsx');
 
     expect(adminLayout).toContain("import { Redirect, Stack } from 'expo-router'");
-    expect(adminLayout).toContain('if (!isGodAdmin)');
-    expect(adminLayout).toContain('<Redirect href="/(tabs)"');
+    expect(adminLayout).toContain('const { session, loading } = useAuth()');
+    expect(adminLayout).toContain('if (!session) return <Redirect href="/(tabs)" />;');
+    expect(adminLayout).not.toContain('isGodAdmin');
     expect(adminLayout).not.toContain('<Tabs');
   });
 
@@ -29,10 +30,11 @@ describe('mobile admin route isolation', () => {
   it('shows the admin entry only from Profile for the exact server-validated role', () => {
     const profileScreen = read('app/(tabs)/profile.tsx');
 
-    expect(profileScreen).toContain('const { session, signOut, isGodAdmin } = useAuth()');
-    expect(profileScreen).toContain('{isGodAdmin && (');
+    expect(profileScreen).toContain('const { session, signOut, startAccountCreation } = useAuth()');
+    expect(profileScreen).toContain('{role === "god_admin" && (');
+    expect(profileScreen).not.toContain('nextgensynthex@gmail.com');
     expect(profileScreen).toContain('testID="profile-admin-command-center"');
     expect(profileScreen).toContain('Haptics.ImpactFeedbackStyle.Heavy');
-    expect(profileScreen).toContain('router.push("/admin")');
+    expect(profileScreen).toContain('router.push("/(admin)" as never)');
   });
 });

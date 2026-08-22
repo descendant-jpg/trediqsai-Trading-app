@@ -876,7 +876,7 @@ export default function ProfileScreen() {
         </View>
           </>
         )}
-        {(role === "god_admin" || userEmail === "nextgensynthex@gmail.com") && (
+        {role === "god_admin" && (
           <TouchableOpacity
             style={styles.commandCenterCard}
             onPress={() => {

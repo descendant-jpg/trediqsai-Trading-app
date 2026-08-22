@@ -33,6 +33,8 @@ const MockApiError = vi.hoisted(() => {
 });
 
 const customFetchMock = vi.hoisted(() => vi.fn());
+const imageFetchMock = vi.hoisted(() => vi.fn());
+vi.stubGlobal('fetch', imageFetchMock);
 
 // ---- Module mocks -----------------------------------------------------------
 
@@ -41,7 +43,7 @@ vi.mock('@workspace/api-client-react', () => ({
   ApiError: MockApiError,
 }));
 
-vi.mock('expo-file-system', () => ({
+vi.mock('expo-file-system/legacy', () => ({
   readAsStringAsync: vi.fn(async () => 'base64data'),
   EncodingType: { Base64: 'base64' },
 }));
@@ -87,6 +89,10 @@ beforeEach(() => {
   authState.loading = false;
   subscriptionState.isSubscribed = true;
   subscriptionState.isAdmin = false;
+  imageFetchMock.mockResolvedValue({
+    ok: true,
+    blob: async () => new Blob(['chart-data'], { type: 'image/jpeg' }),
+  });
 });
 
 afterEach(() => {

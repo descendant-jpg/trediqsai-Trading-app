@@ -19,6 +19,31 @@ vi.mock('expo-image-picker', () => ({
   MediaTypeOptions: { Images: 'Images' },
 }));
 
+vi.mock('expo-file-system/legacy', () => ({
+  EncodingType: { Base64: 'base64' },
+  getInfoAsync: vi.fn(async () => ({ exists: false })),
+  readAsStringAsync: vi.fn(async () => ''),
+}));
+
+vi.mock('expo-haptics', () => ({
+  impactAsync: vi.fn(async () => undefined),
+  selectionAsync: vi.fn(async () => undefined),
+  notificationAsync: vi.fn(async () => undefined),
+  ImpactFeedbackStyle: { Light: 'light', Medium: 'medium' },
+  NotificationFeedbackType: { Error: 'error', Warning: 'warning', Success: 'success' },
+}));
+
+vi.mock('expo-secure-store', () => ({
+  getItemAsync: vi.fn(async () => null),
+  setItemAsync: vi.fn(async () => undefined),
+  deleteItemAsync: vi.fn(async () => undefined),
+}));
+
+vi.mock('expo-web-browser', () => ({
+  openBrowserAsync: vi.fn(async () => ({ type: 'dismiss' })),
+  dismissBrowser: vi.fn(),
+}));
+
 vi.mock('expo', () => ({
   reloadAppAsync: vi.fn(),
 }));

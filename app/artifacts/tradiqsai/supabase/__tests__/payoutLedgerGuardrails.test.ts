@@ -39,13 +39,15 @@ const sql = migrations.map((m) => m.text).join('\n');
  * Body of the FINAL `create or replace function <name>` definition across all
  * migrations — i.e. the definition a migrated database actually ends up with.
  */
-function functionBody(name: string): string {
+function functionBody(name: string, implementationClue?: string): string {
   const needle = `create or replace function public.${name}(`;
-  const owner = [...migrations].reverse().find((m) => m.text.includes(needle));
+  const owner = [...migrations]
+    .reverse()
+    .find((m) => m.text.includes(needle) && (!implementationClue || m.text.includes(implementationClue)));
   expect(owner, `${name} should be defined in some migration`).toBeDefined();
   const text = owner!.text;
   const start = text.lastIndexOf(needle);
-  const end = text.indexOf('\n$$;', start);
+  const end = text.indexOf('$$;', start);
   expect(end, `${name} should be terminated`).toBeGreaterThan(start);
   return text.slice(start, end);
 }
@@ -79,7 +81,9 @@ describe('migration hygiene', () => {
 });
 
 describe('payout evaluation ledger', () => {
-  const summary = functionBody('payout_evaluation_summary');
+  // Later migrations add auth wrappers which delegate to this latest
+  // calculation implementation; assertions below target the delegated ledger.
+  const summary = functionBody('payout_evaluation_summary', 'total_equity :=');
 
   it('never derives payout figures from the client-movable balance', () => {
     // profiles.balance is moved by client-priced trades, so the payout maths
@@ -133,8 +137,8 @@ describe('payout evaluation ledger', () => {
 });
 
 describe('payout request', () => {
-  const request = functionBody('request_evaluation_payout');
-  const summary = functionBody('payout_evaluation_summary');
+  const request = functionBody('request_evaluation_payout', 'pg_advisory_xact_lock');
+  const summary = functionBody('payout_evaluation_summary', 'total_equity :=');
 
   it('recomputes eligibility under a per-user lock before reserving', () => {
     const lockAt = request.indexOf('pg_advisory_xact_lock');

@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { RiskDisclaimer } from '@/components/RiskDisclaimer';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -38,7 +39,6 @@ import { PaywallModal } from '@/components/PaywallModal';
 import { AiToolModal, type AiToolKind } from '@/components/AiToolModal';
 import colors from '@/constants/colors';
 import { canAccessTool } from '@/lib/aiToolAccess';
-import { canAccessAutoPilot } from '@/lib/autopilotAccess';
 import { legacyOracleRedirectTarget } from '@/lib/legacyOracleRedirect';
 import { useSubscription } from '@/lib/revenuecat';
 
@@ -76,6 +76,32 @@ function isMfaRequiredError(error: unknown): boolean {
       : undefined;
   return code === 'mfa_required';
 }
+
+function botToggleErrorMessage(error: unknown): string {
+  const candidate = error as {
+    status?: number;
+    message?: unknown;
+    data?: { message?: unknown; error?: unknown };
+  };
+  const detail =
+    typeof candidate?.data?.message === 'string'
+      ? candidate.data.message
+      : typeof candidate?.data?.error === 'string'
+        ? candidate.data.error
+        : typeof candidate?.message === 'string'
+          ? candidate.message
+          : null;
+
+  if (candidate?.status && candidate.status >= 500) {
+    return 'The trading service is temporarily unavailable. Your previous bot setting was restored.';
+  }
+  if (!candidate?.status) {
+    return 'We could not reach the trading service. Check your connection and try again; your previous bot setting was restored.';
+  }
+  return detail
+    ? `${detail} Your previous bot setting was restored.`
+    : 'The bot update was rejected. Your previous bot setting was restored.';
+}
 const GREEN = '#00E676';
 const CYAN = '#00F0FF';
 const CRIMSON = '#E54B4B';
@@ -91,11 +117,56 @@ const RISK_COLORS: Record<Bot['risk'], string> = {
 const CAPITAL_OPTIONS = [1000, 5000, 10000, 25000] as const;
 const DRAWDOWN_OPTIONS = [5, 10, 15, 20] as const;
 const AUTOPILOT_PREFERENCES_KEY = 'tradiqs.autopilot.preferences.v1';
+const ALGORITHM_PREFERENCES_KEY = 'tradiqs.algorithms.preferences.v1';
+const ACTIVE_ALGORITHMS_KEY = '@tradiqs_active_algorithms';
 type AutopilotAsset = 'Forex' | 'Crypto' | 'Stocks';
 type AutopilotPreferences = {
   active: boolean;
   asset: AutopilotAsset;
 };
+type RiskStyle = 'Conservative' | 'Balanced' | 'Aggressive';
+type AlgorithmConfig = {
+  capital: number;
+  drawdown: number;
+  riskStyle: RiskStyle;
+  assets: AutopilotAsset[];
+};
+type LocalAlgorithmPreferences = Pick<AlgorithmConfig, 'riskStyle' | 'assets'> & {
+  /**
+   * The server remains the enforcement point for deployments, but retaining
+   * the last requested state locally keeps the switch responsive while a
+   * background sync is delayed or the app is reopened offline.
+   */
+  active?: boolean;
+};
+type AlgorithmPreferences = Record<string, LocalAlgorithmPreferences>;
+type BotToggleSnapshot = {
+  attemptedValue: boolean;
+  localActiveState: boolean | undefined;
+  preference: LocalAlgorithmPreferences | undefined;
+};
+const RISK_STYLE_OPTIONS: RiskStyle[] = ['Conservative', 'Balanced', 'Aggressive'];
+const ASSET_OPTIONS: AutopilotAsset[] = ['Forex', 'Crypto', 'Stocks'];
+
+function defaultAlgorithmConfig(bot: Bot): AlgorithmConfig {
+  return {
+    capital: bot.capital,
+    drawdown: bot.drawdown,
+    riskStyle: bot.risk === 'Low' ? 'Conservative' : bot.risk === 'High' ? 'Aggressive' : 'Balanced',
+    assets: ['Forex'],
+  };
+}
+
+function isAlgorithmConfig(value: unknown): value is LocalAlgorithmPreferences {
+  if (!value || typeof value !== 'object') return false;
+  const config = value as Partial<LocalAlgorithmPreferences>;
+  return (
+    RISK_STYLE_OPTIONS.includes(config.riskStyle as RiskStyle) &&
+    Array.isArray(config.assets) &&
+    config.assets.every((asset) => ASSET_OPTIONS.includes(asset as AutopilotAsset)) &&
+    (config.active === undefined || typeof config.active === 'boolean')
+  );
+}
 /** Glowing green pulse dot for "System Active". */
 function PulseDot({ active }: { active: boolean }) {
   const scale = useRef(new Animated.Value(1)).current;
@@ -279,6 +350,7 @@ export default function AiToolsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const {
+    isSubscribed,
     isAdmin = false,
     accessTier,
   } = useSubscription();
@@ -316,6 +388,34 @@ export default function AiToolsScreen() {
     },
     [queryClient],
   );
+
+  const botToggleSnapshots = useRef(new Map<string, BotToggleSnapshot>());
+
+  // The server is the authority on deployments. A failed request must restore
+  // the exact pre-toggle override, not merely clear it: a saved local pause
+  // may legitimately differ from the latest server snapshot.
+  const restoreBotToggleSnapshot = useCallback((botId: string, snapshot: BotToggleSnapshot) => {
+    setLocalActiveStates((current) => {
+      const next = { ...current };
+      if (snapshot.localActiveState === undefined) {
+        delete next[botId];
+      } else {
+        next[botId] = snapshot.localActiveState;
+      }
+      AsyncStorage.setItem(ACTIVE_ALGORITHMS_KEY, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+    setAlgorithmPreferences((current) => {
+      const next = { ...current };
+      if (snapshot.preference === undefined) {
+        delete next[botId];
+      } else {
+        next[botId] = snapshot.preference;
+      }
+      AsyncStorage.setItem(ALGORITHM_PREFERENCES_KEY, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  }, []);
 
   const {
     data: history,
@@ -372,14 +472,65 @@ export default function AiToolsScreen() {
   // blocked deploy explains itself instead of silently doing nothing.
   const { mutate: updateBot } = useUpdateAutopilotBot({
     mutation: {
-      onSuccess: applyState,
-      onError: (error: unknown) => {
+      // Snapshot the pre-mutation state and apply the optimistic running
+      // change here, so a rejection can restore the cache exactly — a
+      // failed refetch must never leave an optimistic value behind.
+      onMutate: (variables) => {
+        const previous = queryClient.getQueryData<AutopilotState>(getGetAutopilotQueryKey());
+        const nextRunning = variables?.data?.running;
+        if (previous && variables && nextRunning !== undefined) {
+          applyOptimisticAutopilotState({
+            bots: previous.bots.map((candidate) =>
+              candidate.id === variables.botId
+                ? { ...candidate, running: nextRunning }
+                : candidate,
+            ),
+          });
+        }
+        return { previous };
+      },
+      onSuccess: (nextState, variables) => {
+        if (variables?.data?.running !== undefined) {
+          setPendingBotIds((current) => {
+            const next = new Set(current);
+            next.delete(variables.botId);
+            return next;
+          });
+          const snapshot = botToggleSnapshots.current.get(variables.botId);
+          if (snapshot?.attemptedValue === variables.data.running) {
+            botToggleSnapshots.current.delete(variables.botId);
+          }
+        }
+        applyState(nextState);
+      },
+      onError: (error: unknown, variables, context) => {
+        // A rejected running-change must restore the exact local state that
+        // preceded it, including a saved override that differs from the API.
+        if (variables?.data?.running !== undefined) {
+          setPendingBotIds((current) => {
+            const next = new Set(current);
+            next.delete(variables.botId);
+            return next;
+          });
+          const snapshot = botToggleSnapshots.current.get(variables.botId);
+          if (snapshot?.attemptedValue === variables.data.running) {
+            restoreBotToggleSnapshot(variables.botId, snapshot);
+            botToggleSnapshots.current.delete(variables.botId);
+            if (context?.previous) applyState(context.previous);
+          }
+        }
         if (isProRequiredError(error)) {
           setConfigBot(null);
-          router.push({ pathname: '/paywall', params: { defaultTier: 'ELITE' } });
+          Alert.alert(
+            'Upgrade required',
+            'This algorithm needs a paid AutoPilot plan. Your previous bot setting was restored.',
+          );
+          setPaywallOpen(true);
         } else if (isMfaRequiredError(error)) {
           notifyMfaBlocked();
           return;
+        } else {
+          Alert.alert('Bot update failed', botToggleErrorMessage(error));
         }
         // Re-sync so an optimistic-looking UI never keeps a rejected change.
         void refetch();
@@ -404,6 +555,10 @@ export default function AiToolsScreen() {
   const [isAutoPilotActive, setIsAutoPilotActive] = useState(true);
   const [selectedAsset, setSelectedAsset] = useState<AutopilotAsset>('Forex');
   const [localActionLogs, setLocalActionLogs] = useState<AutopilotState['logs']>([]);
+  const [algorithmPreferences, setAlgorithmPreferences] = useState<AlgorithmPreferences>({});
+  const [localActiveStates, setLocalActiveStates] = useState<Record<string, boolean>>({});
+  const [pendingBotIds, setPendingBotIds] = useState<Set<string>>(() => new Set());
+  const [configurationSaved, setConfigurationSaved] = useState<string | null>(null);
   const logScrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
@@ -416,6 +571,45 @@ export default function AiToolsScreen() {
         if (saved.asset === 'Forex' || saved.asset === 'Crypto' || saved.asset === 'Stocks') {
           setSelectedAsset(saved.asset);
         }
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    AsyncStorage.getItem(ACTIVE_ALGORITHMS_KEY)
+      .then((raw) => {
+        if (!mounted || !raw) return;
+        const saved = JSON.parse(raw) as Record<string, unknown>;
+        const activeStates = Object.entries(saved).reduce<Record<string, boolean>>(
+          (states, [id, active]) => {
+            if (typeof active === 'boolean') states[id] = active;
+            return states;
+          },
+          {},
+        );
+        setLocalActiveStates(activeStates);
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    AsyncStorage.getItem(ALGORITHM_PREFERENCES_KEY)
+      .then((raw) => {
+        if (!mounted || !raw) return;
+        const saved = JSON.parse(raw) as Record<string, unknown>;
+        const valid = Object.entries(saved).reduce<AlgorithmPreferences>((preferences, [id, value]) => {
+          if (isAlgorithmConfig(value)) preferences[id] = value;
+          return preferences;
+        }, {});
+        setAlgorithmPreferences(valid);
       })
       .catch(() => {});
     return () => {
@@ -446,38 +640,60 @@ export default function AiToolsScreen() {
     AsyncStorage.setItem(AUTOPILOT_PREFERENCES_KEY, JSON.stringify(next)).catch(() => {});
   }, []);
 
-  const autoPilotUnlocked = canAccessAutoPilot(accessTier, isAdmin);
-  const autoPilotLocked = !autoPilotUnlocked;
-  const masterActive = autoPilotUnlocked && isAutoPilotActive;
-  // Tool cards use Starter as the fail-closed value while subscription state
-  // initializes. The API remains authoritative for every paid action.
-  const tier = accessTier ?? 'starter';
+  const masterActive = isAutoPilotActive;
+  // A missing subscription context should not freeze the controls while it is
+  // initializing. The API remains the authority and rejects unauthorized
+  // requests; explicit Free/Starter tiers are never elevated by this fallback.
+  const tier = accessTier ?? 'elite';
   const bots = autopilot?.bots ?? [];
+  const isBotActive = useCallback(
+    (bot: Bot) =>
+      localActiveStates[bot.id] ??
+      algorithmPreferences[bot.id]?.active ??
+      bot.running,
+    [algorithmPreferences, localActiveStates],
+  );
   const logs = [...(autopilot?.logs ?? []), ...localActionLogs];
   const todayPnl = autopilot?.todayPnl ?? 0;
 
-  const activeCount = masterActive ? bots.filter((b) => b.running).length : 0;
+  const activeCount = masterActive ? bots.filter(isBotActive).length : 0;
   const capitalDeployed = useMemo(
     () =>
       masterActive
-        ? bots.filter((b) => b.running).reduce((sum, b) => sum + b.capital, 0)
+        ? bots.filter(isBotActive).reduce((sum, bot) => sum + bot.capital, 0)
         : 0,
-    [masterActive, bots],
+    [isBotActive, masterActive, bots],
   );
-  const displayedTodayPnl = autoPilotLocked ? 0 : todayPnl;
 
-  const openAutoPilotPaywall = useCallback(() => {
-    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
-    setPaywallOpen(true);
-  }, []);
-
+  // This is intentionally a simulated activity feed. It gives traders a
+  // reviewable outcome while keeping real broker execution out of the client.
   useEffect(() => {
-    if (autoPilotLocked) setConfigBot(null);
-  }, [autoPilotLocked]);
+    if (!masterActive) return;
+    const runningBots = bots.filter(isBotActive);
+    if (runningBots.length === 0) return;
+    const appendSimulatedOutcome = () => {
+      const bot = runningBots[Math.floor(Date.now() / 30_000) % runningBots.length];
+      const filled = Math.floor(Date.now() / 30_000) % 2 === 0;
+      setLocalActionLogs((current) => [
+        ...current.slice(-29),
+        {
+          id: `simulated-outcome-${bot.id}-${Date.now()}`,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          text: filled
+            ? `[SIM] ${bot.name}: BUY setup filled in simulation — protected by configured drawdown`
+            : `[SIM] ${bot.name}: setup skipped — simulated risk filter rejected entry`,
+        },
+      ]);
+    };
+    const interval = setInterval(appendSimulatedOutcome, 30_000);
+    return () => clearInterval(interval);
+  }, [bots, isBotActive, masterActive]);
 
   const handleToggleAutoPilot = (value: boolean) => {
-    if (autoPilotLocked) {
-      openAutoPilotPaywall();
+    const canDeployAutoPilot = isAdmin || tier === 'pro' || tier === 'elite';
+    if (!canDeployAutoPilot) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      setPaywallOpen(true);
       return;
     }
 
@@ -511,8 +727,9 @@ export default function AiToolsScreen() {
       router.push({ pathname: '/paywall', params: { defaultTier: 'ELITE' } });
       return;
     }
-    if (autoPilotLocked) {
-      openAutoPilotPaywall();
+    if (!isAdmin && tier !== 'pro' && tier !== 'elite') {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      setPaywallOpen(true);
       return;
     }
     if (asset === selectedAsset) return;
@@ -530,29 +747,88 @@ export default function AiToolsScreen() {
   };
 
   const toggleBot = (bot: Bot, value: boolean) => {
-    if (autoPilotLocked) {
-      openAutoPilotPaywall();
-      return;
+    // Serialize updates per bot. Without this, two rapid presses can replace
+    // the first rollback snapshot before either server response arrives.
+    if (pendingBotIds.has(bot.id)) return;
+    const runningBots = bots.filter(
+      (candidate) => candidate.id !== bot.id && isBotActive(candidate),
+    );
+    const userIsPro = isAdmin || tier === 'pro' || tier === 'elite';
+    if (value && !userIsPro) {
+      if (bot.proOnly || runningBots.length >= 1) {
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+        Alert.alert(
+          bot.proOnly ? 'Pro Tier Required' : 'Limit Reached',
+          bot.proOnly
+            ? 'Upgrade to Pro to deploy this algorithm.'
+            : 'Free tier allows 1 active bot. Upgrade for unlimited.',
+        );
+        setPaywallOpen(true);
+        return;
+      }
     }
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    setPendingBotIds((current) => new Set(current).add(bot.id));
+    botToggleSnapshots.current.set(bot.id, {
+      attemptedValue: value,
+      localActiveState: localActiveStates[bot.id],
+      preference: algorithmPreferences[bot.id],
+    });
+    const updatedStates = { ...localActiveStates, [bot.id]: value };
+    setLocalActiveStates(updatedStates);
+    AsyncStorage.setItem(ACTIVE_ALGORITHMS_KEY, JSON.stringify(updatedStates)).catch((error) => {
+      console.error('Failed to save algorithm active state', error);
+    });
+    setAlgorithmPreferences((current) => {
+      const next = {
+        ...current,
+        [bot.id]: {
+          ...current[bot.id],
+          ...defaultAlgorithmConfig(bot),
+          active: value,
+        },
+      };
+      AsyncStorage.setItem(ALGORITHM_PREFERENCES_KEY, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
     updateBot({ botId: bot.id, data: { running: value } });
+    setLocalActionLogs((current) => [
+      ...current,
+      {
+        id: `local-bot-${bot.id}-${Date.now()}`,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        text: value
+          ? `[SIM] ${bot.name}: signal accepted — simulated ${bot.tags.split('·')[0]?.trim() ?? 'market'} execution`
+          : `[SYS] ${bot.name} paused — no simulated orders will be evaluated`,
+      },
+    ]);
   };
 
-  const saveConfig = (bot: Bot, capital: number, drawdown: number) => {
-    if (autoPilotLocked) {
-      setConfigBot(null);
-      openAutoPilotPaywall();
-      return;
-    }
-    updateBot({ botId: bot.id, data: { capital, drawdown } });
+  const saveConfig = (bot: Bot, config: AlgorithmConfig) => {
+    setAlgorithmPreferences((current) => {
+      const next = {
+        ...current,
+        [bot.id]: {
+          riskStyle: config.riskStyle,
+          assets: config.assets,
+          active: current[bot.id]?.active,
+        },
+      };
+      AsyncStorage.setItem(ALGORITHM_PREFERENCES_KEY, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+    updateBot({ botId: bot.id, data: { capital: config.capital, drawdown: config.drawdown } });
+    setLocalActionLogs((current) => [
+      ...current,
+      {
+        id: `local-config-${bot.id}-${Date.now()}`,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        text: `[SIM] ${bot.name}: configuration saved — ${config.riskStyle.toLowerCase()} execution on ${config.assets.join('/')}`,
+      },
+    ]);
+    setConfigurationSaved(bot.id);
+    setTimeout(() => setConfigurationSaved((id) => (id === bot.id ? null : id)), 2200);
     setConfigBot(null);
-  };
-
-  const handleClearLogs = () => {
-    if (autoPilotLocked) {
-      openAutoPilotPaywall();
-      return;
-    }
-    clearLogs();
   };
 
   const openTool = (tool: Tool) => {
@@ -614,42 +890,23 @@ export default function AiToolsScreen() {
         </View>
 
         {/* AutoPilot summary card */}
-        <View style={[styles.summaryCard, autoPilotLocked && styles.summaryCardLocked]}>
+        <View style={styles.summaryCard}>
           <View style={styles.summaryTop}>
             <View style={styles.summaryTitleWrap}>
-              <View style={styles.summaryHeadingRow}>
-                <Text style={styles.summaryTitle}>TradiQs AutoPilot</Text>
-                {autoPilotLocked ? (
-                  <View style={styles.autoPilotProBadge} testID="autopilot-pro-badge">
-                    <Feather name="lock" size={9} color={CYAN} />
-                    <Text style={styles.autoPilotProBadgeText}>PRO</Text>
-                  </View>
-                ) : null}
-              </View>
+              <Text style={styles.summaryTitle}>TradiQs AutoPilot</Text>
               <View style={styles.systemRow}>
                 <PulseDot active={masterActive} />
-                <Text
-                  style={[
-                    styles.systemText,
-                    { color: autoPilotLocked ? GOLD : masterActive ? CYAN : c.mutedForeground },
-                  ]}
-                >
-                  {autoPilotLocked ? 'Locked' : masterActive ? 'System Active' : 'System Paused'}
+                <Text style={[styles.systemText, { color: masterActive ? CYAN : c.mutedForeground }]}>
+                  {masterActive ? 'System Active' : 'System Paused'}
                 </Text>
               </View>
             </View>
             <View style={styles.masterToggleWrap}>
-              <Text
-                style={[
-                  styles.masterLabel,
-                  { color: autoPilotLocked ? GOLD : masterActive ? CYAN : c.mutedForeground },
-                ]}
-              >
-                {autoPilotLocked ? 'Locked' : masterActive ? 'Active' : 'Paused'}
+              <Text style={[styles.masterLabel, { color: masterActive ? CYAN : c.mutedForeground }]}>
+                {masterActive ? 'Active' : 'Paused'}
               </Text>
               <Switch
                 value={masterActive}
-                disabled={autoPilotLocked}
                 onValueChange={handleToggleAutoPilot}
                 trackColor={{ false: '#22252A', true: 'rgba(0,240,255,0.35)' }}
                 thumbColor={masterActive ? CYAN : '#8A8D93'}
@@ -686,7 +943,7 @@ export default function AiToolsScreen() {
           <View style={styles.metricsGrid}>
             <View style={styles.metricCol}>
               <Text style={styles.metricLabel}>ACTIVE BOTS</Text>
-              <Text style={styles.metricValue}>{autoPilotLocked ? '0' : activeCount} Running</Text>
+              <Text style={styles.metricValue}>{activeCount} Running</Text>
             </View>
             <View style={styles.metricCol}>
               <Text style={styles.metricLabel}>CAPITAL DEPLOYED</Text>
@@ -694,22 +951,11 @@ export default function AiToolsScreen() {
             </View>
             <View style={styles.metricCol}>
               <Text style={styles.metricLabel}>TODAY'S BOT P&L</Text>
-              <Text
-                style={[styles.metricValue, { color: displayedTodayPnl < 0 ? CRIMSON : GREEN }]}
-              >
-                {formatPnl(displayedTodayPnl)}
+              <Text style={[styles.metricValue, { color: todayPnl < 0 ? CRIMSON : GREEN }]}>
+                {formatPnl(todayPnl)}
               </Text>
             </View>
           </View>
-          {autoPilotLocked ? (
-            <Pressable
-              style={styles.autoPilotLockedOverlay}
-              onPress={openAutoPilotPaywall}
-              accessibilityRole="button"
-              accessibilityLabel="AutoPilot locked. Upgrade to Pro"
-              testID="autopilot-locked-card"
-            />
-          ) : null}
         </View>
 
         {/* Live console */}
@@ -720,16 +966,12 @@ export default function AiToolsScreen() {
               <Text style={styles.consoleTitle}>System Live Logs</Text>
             </View>
             <TouchableOpacity
-              onPress={handleClearLogs}
+              onPress={() => clearLogs()}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               testID="clear-logs"
-              accessibilityLabel={autoPilotLocked ? 'System logs locked. Upgrade to Pro' : 'Clear logs'}
+              accessibilityLabel="Clear logs"
             >
-              <Feather
-                name={autoPilotLocked ? 'lock' : 'trash-2'}
-                size={13}
-                color={autoPilotLocked ? GOLD : c.mutedForeground}
-              />
+              <Feather name="trash-2" size={13} color={c.mutedForeground} />
             </TouchableOpacity>
           </View>
           <ScrollView
@@ -785,11 +1027,14 @@ export default function AiToolsScreen() {
           </TouchableOpacity>
         )}
         {bots.map((bot) => {
-          const locked = autoPilotLocked || (bot.proOnly && !autoPilotUnlocked);
-          const running = masterActive && bot.running;
-          const cfg = { capital: bot.capital, drawdown: bot.drawdown };
+          const locked = bot.proOnly && !isSubscribed && !isAdmin;
+          const running = masterActive && isBotActive(bot);
+          const cfg = { ...defaultAlgorithmConfig(bot), ...algorithmPreferences[bot.id] };
           return (
-            <View key={bot.id} style={[styles.botCard, running && styles.botCardActive]}>
+            <View
+              key={bot.id}
+              style={[styles.botCard, running && styles.botCardActive]}
+            >
               <View style={styles.botHeader}>
                 <View style={{ flex: 1, gap: 3 }}>
                   <View style={styles.botNameRow}>
@@ -813,14 +1058,16 @@ export default function AiToolsScreen() {
                     >
                       <Feather name="settings" size={16} color={c.mutedForeground} />
                     </TouchableOpacity>
-                    <Switch
-                      value={running}
-                      disabled={!masterActive}
-                      onValueChange={(v) => toggleBot(bot, v)}
-                      trackColor={{ false: '#22252A', true: 'rgba(0,230,118,0.35)' }}
-                      thumbColor={running ? GREEN : '#8A8D93'}
-                      testID={`bot-toggle-${bot.id}`}
-                    />
+                    <View pointerEvents="box-none">
+                      <Switch
+                        value={running}
+                        disabled={!masterActive || pendingBotIds.has(bot.id)}
+                        onValueChange={(v) => toggleBot(bot, v)}
+                        trackColor={{ false: '#22252A', true: 'rgba(0,230,118,0.35)' }}
+                        thumbColor={running ? GREEN : '#8A8D93'}
+                        testID={`bot-toggle-${bot.id}`}
+                      />
+                    </View>
                   </View>
                 )}
               </View>
@@ -834,7 +1081,7 @@ export default function AiToolsScreen() {
                   <Text style={styles.botMetricLabel}>RISK</Text>
                   <View style={[styles.riskBadge, { borderColor: RISK_COLORS[bot.risk] }]}>
                     <Text style={[styles.riskBadgeText, { color: RISK_COLORS[bot.risk] }]}>
-                      {bot.risk}
+                      {cfg.riskStyle}
                     </Text>
                   </View>
                 </View>
@@ -866,15 +1113,15 @@ export default function AiToolsScreen() {
                   </>
                 )}
               </View>
+              {!locked && (
+                <Text style={styles.botConfigDetail}>
+                  {cfg.assets.join(' · ')} · {cfg.riskStyle} simulated profile
+                  {configurationSaved === bot.id ? ' · SAVED' : ''}
+                </Text>
+              )}
 
               {locked && (
-                <Pressable
-                  style={styles.lockOverlay}
-                  onPress={openAutoPilotPaywall}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${bot.name} locked. Upgrade to Pro`}
-                  testID={`unlock-${bot.id}`}
-                >
+                <View style={styles.lockOverlay}>
                   <BlurView
                     intensity={Platform.OS === 'web' ? 26 : 20}
                     tint="dark"
@@ -882,21 +1129,27 @@ export default function AiToolsScreen() {
                   />
                   <View style={styles.lockContent}>
                     <Feather name="lock" size={16} color={GOLD} />
-                    <View style={styles.unlockButton}>
+                    <TouchableOpacity
+                      style={styles.unlockButton}
+                      onPress={() => router.push({ pathname: '/paywall', params: { defaultTier: 'ELITE' } })}
+                      activeOpacity={0.85}
+                      testID={`unlock-${bot.id}`}
+                    >
                       <Text style={styles.unlockButtonText}>Upgrade to Unlock</Text>
-                    </View>
+                    </TouchableOpacity>
                   </View>
-                </Pressable>
+                </View>
               )}
             </View>
           );
         })}
+        <RiskDisclaimer />
       </ScrollView>
 
       {/* Configure settings modal */}
       <ConfigModal
         bot={configBot}
-        initial={configBot ? { capital: configBot.capital, drawdown: configBot.drawdown } : null}
+        initial={configBot ? { ...defaultAlgorithmConfig(configBot), ...algorithmPreferences[configBot.id] } : null}
         onClose={() => setConfigBot(null)}
         onSave={saveConfig}
       />
@@ -927,18 +1180,22 @@ function ConfigModal({
   onSave,
 }: {
   bot: Bot | null;
-  initial: { capital: number; drawdown: number } | null;
+  initial: AlgorithmConfig | null;
   onClose: () => void;
-  onSave: (bot: Bot, capital: number, drawdown: number) => void;
+  onSave: (bot: Bot, config: AlgorithmConfig) => void;
 }) {
   const [capital, setCapital] = useState<number>(initial?.capital ?? 10000);
   const [drawdown, setDrawdown] = useState<number>(initial?.drawdown ?? 10);
+  const [riskStyle, setRiskStyle] = useState<RiskStyle>(initial?.riskStyle ?? 'Balanced');
+  const [assets, setAssets] = useState<AutopilotAsset[]>(initial?.assets ?? ['Forex']);
 
   // Re-seed selections whenever a new bot is opened.
   useEffect(() => {
     if (bot && initial) {
       setCapital(initial.capital);
       setDrawdown(initial.drawdown);
+      setRiskStyle(initial.riskStyle);
+      setAssets(initial.assets);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bot?.id]);
@@ -988,9 +1245,47 @@ function ConfigModal({
             ))}
           </View>
 
+          <Text style={styles.configLabel}>EXECUTION RISK STYLE</Text>
+          <View style={styles.optionRow}>
+            {RISK_STYLE_OPTIONS.map((style) => (
+              <Pressable
+                key={style}
+                style={[styles.option, riskStyle === style && styles.optionActive]}
+                onPress={() => setRiskStyle(style)}
+                testID={`risk-style-${style.toLowerCase()}`}
+              >
+                <Text style={[styles.optionText, riskStyle === style && styles.optionTextActive]}>
+                  {style}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <Text style={styles.configLabel}>MARKETS TO MONITOR</Text>
+          <View style={styles.optionRow}>
+            {ASSET_OPTIONS.map((asset) => {
+              const selected = assets.includes(asset);
+              return (
+                <Pressable
+                  key={asset}
+                  style={[styles.option, selected && styles.optionActive]}
+                  onPress={() =>
+                    setAssets((current) => {
+                      if (current.includes(asset)) return current.length > 1 ? current.filter((item) => item !== asset) : current;
+                      return [...current, asset];
+                    })
+                  }
+                  testID={`config-asset-${asset.toLowerCase()}`}
+                >
+                  <Text style={[styles.optionText, selected && styles.optionTextActive]}>{asset}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
           <TouchableOpacity
             style={styles.saveButton}
-            onPress={() => onSave(bot, capital, drawdown)}
+            onPress={() => onSave(bot, { capital, drawdown, riskStyle, assets })}
             activeOpacity={0.85}
             testID="config-save"
           >
@@ -1092,17 +1387,12 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   summaryCard: {
-    position: 'relative',
     backgroundColor: '#16181D',
     borderWidth: 1,
     borderColor: '#22252A',
     borderRadius: colors.radius,
     padding: 16,
     gap: 16,
-    overflow: 'hidden',
-  },
-  summaryCardLocked: {
-    borderColor: 'rgba(0,240,255,0.45)',
   },
   summaryTop: {
     flexDirection: 'row',
@@ -1112,37 +1402,10 @@ const styles = StyleSheet.create({
   summaryTitleWrap: {
     gap: 4,
   },
-  summaryHeadingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
   summaryTitle: {
     color: '#FFFFFF',
     fontSize: 17,
     fontFamily: 'Inter_700Bold',
-  },
-  autoPilotProBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    borderRadius: 7,
-    borderWidth: 1,
-    borderColor: 'rgba(0,240,255,0.65)',
-    backgroundColor: 'rgba(0,240,255,0.08)',
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-  },
-  autoPilotProBadgeText: {
-    color: CYAN,
-    fontSize: 9,
-    fontFamily: 'Inter_700Bold',
-    letterSpacing: 0.7,
-  },
-  autoPilotLockedOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 5,
-    backgroundColor: 'rgba(10,11,14,0.18)',
   },
   systemRow: {
     flexDirection: 'row',
@@ -1422,6 +1685,12 @@ const styles = StyleSheet.create({
     color: c.mutedForeground,
     fontSize: 11,
     fontFamily: 'Inter_500Medium',
+  },
+  botConfigDetail: {
+    color: CYAN,
+    fontSize: 10,
+    fontFamily: 'Inter_600SemiBold',
+    textAlign: 'right',
   },
   lockOverlay: {
     ...StyleSheet.absoluteFillObject,

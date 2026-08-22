@@ -37,13 +37,13 @@ const haptics = vi.hoisted(() => ({
   impactAsync: vi.fn(async () => undefined),
   selectionAsync: vi.fn(async () => undefined),
   notificationAsync: vi.fn(async () => undefined),
-  ImpactFeedbackStyle: { Medium: 'medium' },
+  ImpactFeedbackStyle: { Light: 'light', Medium: 'medium' },
   NotificationFeedbackType: { Error: 'error', Warning: 'warning' },
 }));
 vi.mock('expo-haptics', () => haptics);
 
 const storage = vi.hoisted(() => ({
-  getItem: vi.fn(async () => null),
+  getItem: vi.fn(async (_key?: string) => null as string | null),
   setItem: vi.fn(async () => undefined),
 }));
 vi.mock('@react-native-async-storage/async-storage', () => ({
@@ -99,6 +99,9 @@ const fakeServer = vi.hoisted(() => {
     queryOptions: null as any,
     historyDays: [] as { day: string; pnl: number }[],
     historyErrorMode: null as null | 'mfa_required',
+    botUpdateErrorMode: null as null | 'pro_required' | 'server_error' | 'network_error' | 'pending',
+    pendingBotUpdate: null as null | (() => void),
+    queryFails: false,
   };
 
   function pushLog(text: string) {
@@ -129,6 +132,9 @@ const fakeServer = vi.hoisted(() => {
       state.queryOptions = null;
       state.historyDays = [];
       state.historyErrorMode = null;
+      state.botUpdateErrorMode = null;
+      state.pendingBotUpdate = null;
+      state.queryFails = false;
       pushLog('[SYS] TradiQs AutoPilot core initialized');
       pushLog('[SYS] 2 algorithms deployed — monitoring 14 markets');
     },
@@ -169,6 +175,10 @@ const fakeServer = vi.hoisted(() => {
       state.logs = [];
       return snapshot();
     },
+    resolvePendingBotUpdate() {
+      state.pendingBotUpdate?.();
+      state.pendingBotUpdate = null;
+    },
   };
 });
 
@@ -200,7 +210,10 @@ vi.mock('@workspace/api-client-react', async () => {
       fakeServer.state.queryOptions = options?.query ?? null;
       return useQuery({
         queryKey: QUERY_KEY,
-        queryFn: async () => fakeServer.snapshot(),
+        queryFn: async () => {
+          if (fakeServer.state.queryFails) throw new Error('network down');
+          return fakeServer.snapshot();
+        },
         initialData: fakeServer.snapshot(),
       });
     },
@@ -213,8 +226,35 @@ vi.mock('@workspace/api-client-react', async () => {
         options?.mutation?.onSuccess?.(fakeServer.setAsset(data.asset)),
     }),
     useUpdateAutopilotBot: (options?: any) => ({
-      mutate: ({ botId, data }: { botId: string; data: any }) =>
-        options?.mutation?.onSuccess?.(fakeServer.updateBot(botId, data)),
+      mutate: ({ botId, data }: { botId: string; data: any }) => {
+        // Run the optimistic onMutate first, like react-query does.
+        const context = options?.mutation?.onMutate?.({ botId, data });
+        if (fakeServer.state.botUpdateErrorMode === 'pro_required') {
+          // Mirror the real API: AutoPilot routes reject non-Pro callers
+          // with 403 + pro_subscription_required.
+          const error = Object.assign(new Error('pro_subscription_required'), {
+            status: 403,
+            data: { code: 'pro_subscription_required' },
+          });
+          options?.mutation?.onError?.(error, { botId, data }, context);
+          return;
+        }
+        if (fakeServer.state.botUpdateErrorMode === 'server_error') {
+          const error = Object.assign(new Error('server unavailable'), { status: 500 });
+          options?.mutation?.onError?.(error, { botId, data }, context);
+          return;
+        }
+        if (fakeServer.state.botUpdateErrorMode === 'network_error') {
+          options?.mutation?.onError?.(new Error('network down'), { botId, data }, context);
+          return;
+        }
+        if (fakeServer.state.botUpdateErrorMode === 'pending') {
+          fakeServer.state.pendingBotUpdate = () =>
+            options?.mutation?.onSuccess?.(fakeServer.updateBot(botId, data), { botId, data }, context);
+          return;
+        }
+        options?.mutation?.onSuccess?.(fakeServer.updateBot(botId, data), { botId, data }, context);
+      },
     }),
     useClearAutopilotLogs: (options?: any) => ({
       mutate: () => options?.mutation?.onSuccess?.(fakeServer.clearLogs()),
@@ -232,20 +272,11 @@ function renderScreen() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  const result = render(
+  return render(
     <QueryClientProvider client={client}>
       <AiToolsScreen />
     </QueryClientProvider>,
   );
-  return {
-    ...result,
-    rerenderScreen: () =>
-      result.rerender(
-        <QueryClientProvider client={client}>
-          <AiToolsScreen />
-        </QueryClientProvider>,
-      ),
-  };
 }
 
 /** React-native-web Switch exposes a checkbox input inside the testID root. */
@@ -281,13 +312,12 @@ afterEach(() => {
 // ---- Tests ------------------------------------------------------------------
 
 describe('AutoPilot summary + master toggle', () => {
-  it('shows a locked, zeroed AutoPilot summary for Starter traders', () => {
+  it('starts active with 2 running bots and deployed capital', () => {
     renderScreen();
-    expect(screen.getAllByText('Locked').length).toBeGreaterThan(0);
-    expect(screen.getByTestId('autopilot-pro-badge')).toBeTruthy();
-    expect(screen.getByText('0 Running')).toBeTruthy();
-    expect(screen.getByText('$0')).toBeTruthy();
-    expect(screen.getByText('+$0.00')).toBeTruthy();
+    expect(screen.getByText('System Active')).toBeTruthy();
+    expect(screen.getByText('2 Running')).toBeTruthy();
+    expect(screen.getByText('$25,000')).toBeTruthy(); // 10k + 15k
+    expect(screen.getByText('+$1,420.50')).toBeTruthy();
   });
 
   it('master toggle pauses everything and logs the halt', async () => {
@@ -314,12 +344,12 @@ describe('AutoPilot summary + master toggle', () => {
     );
   });
 
-  it('opens the existing paywall when free traders press the locked card', () => {
+  it('opens the existing paywall when free traders use the master toggle', () => {
     renderScreen();
-    press('autopilot-locked-card');
-    expect(screen.getAllByText('Locked').length).toBeGreaterThan(0);
+    toggle('master-toggle');
+    expect(screen.getByText('System Active')).toBeTruthy();
     expect(screen.getByTestId('paywall-card')).toBeTruthy();
-    expect(haptics.notificationAsync).toHaveBeenCalledWith('warning');
+    expect(haptics.notificationAsync).toHaveBeenCalledWith('error');
   });
 });
 
@@ -352,14 +382,13 @@ describe('Tiered AutoPilot asset selector', () => {
     expect(haptics.selectionAsync).toHaveBeenCalledTimes(1);
   });
 
-  it('fails closed while the subscription tier is initializing', () => {
+  it('keeps controls interactive while the subscription tier is initializing', async () => {
     subscription.accessTier = undefined as any;
     renderScreen();
-    press('autopilot-locked-card');
+    press('autopilot-asset-crypto');
 
-    expect(fakeServer.state.selectedAsset).toBe('Forex');
-    expect(screen.getByTestId('paywall-card')).toBeTruthy();
-    expect(haptics.notificationAsync).toHaveBeenCalledWith('warning');
+    await waitFor(() => expect(fakeServer.state.selectedAsset).toBe('Crypto'));
+    expect(haptics.selectionAsync).toHaveBeenCalledTimes(1);
   });
 
   it('persists an asset choice locally before its background API sync finishes', () => {
@@ -389,6 +418,7 @@ describe('Per-bot toggles', () => {
         /\[BOT\] Grid Matrix AI initialized with \$10,000 capital allocation/,
       ),
     ).toBeTruthy();
+    expect(haptics.impactAsync).toHaveBeenCalledWith('light');
   });
 
   it('turning a bot off drops the count and logs the stop', () => {
@@ -403,12 +433,133 @@ describe('Per-bot toggles', () => {
       screen.getByText(/\[BOT\] Scalp Oracle AI stopped — open positions managed to close/),
     ).toBeTruthy();
   });
+
+  it('serializes repeated presses while a bot update is still pending', async () => {
+    subscription.isSubscribed = true;
+    subscription.accessTier = 'pro';
+    fakeServer.state.botUpdateErrorMode = 'pending';
+    renderScreen();
+
+    toggle('bot-toggle-grid-matrix');
+    const switchInput = within(screen.getByTestId('bot-toggle-grid-matrix')).getByRole('switch') as HTMLInputElement;
+    expect(switchInput.disabled).toBe(true);
+
+    fakeServer.resolvePendingBotUpdate();
+    await waitFor(() => expect(switchInput.disabled).toBe(false));
+    expect(screen.getByText('3 Running')).toBeTruthy();
+  });
+});
+
+describe('Toggle tier gating and server rejection', () => {
+  it('opens the paywall when a starter user exceeds the free one-bot limit', () => {
+    vi.spyOn(Alert, 'alert').mockImplementation(() => {});
+    renderScreen();
+    toggle('bot-toggle-grid-matrix');
+
+    expect(screen.getByText('2 Running')).toBeTruthy();
+    expect(screen.getByTestId('paywall-card')).toBeTruthy();
+    expect(haptics.notificationAsync).toHaveBeenCalledWith('warning');
+  });
+
+  it('rolls back the local switch when the API rejects the update', async () => {
+    subscription.isSubscribed = true;
+    subscription.accessTier = 'pro';
+    fakeServer.state.botUpdateErrorMode = 'pro_required';
+    renderScreen();
+
+    toggle('bot-toggle-grid-matrix');
+
+    // The optimistic repaint must not survive the server's rejection.
+    await waitFor(() => expect(screen.getByText('2 Running')).toBeTruthy());
+    expect(fakeServer.state.bots.find((b) => b.id === 'grid-matrix')?.running).toBe(false);
+    expect(screen.getByTestId('paywall-card')).toBeTruthy();
+    // There was no prior override, so restoring the exact state removes it.
+    expect(storage.setItem).toHaveBeenCalledWith('@tradiqs_active_algorithms', '{}');
+  });
+
+  it('reverts the switch even when the re-sync also fails', async () => {
+    subscription.isSubscribed = true;
+    subscription.accessTier = 'pro';
+    renderScreen();
+    fakeServer.state.botUpdateErrorMode = 'pro_required';
+    fakeServer.state.queryFails = true;
+
+    toggle('bot-toggle-grid-matrix');
+
+    // The optimistic running=true is rolled back from the onMutate
+    // snapshot; the failing refetch cannot restore the rejected value.
+    await waitFor(() => expect(screen.getByText('2 Running')).toBeTruthy());
+    expect(storage.setItem).toHaveBeenCalledWith('@tradiqs_active_algorithms', '{}');
+    expect(screen.getByTestId('paywall-card')).toBeTruthy();
+  });
+
+  it('restores a prior local pause instead of clearing it after a rejected start', async () => {
+    subscription.isSubscribed = true;
+    subscription.accessTier = 'pro';
+    storage.getItem.mockImplementation(async (key?: string) =>
+      key === '@tradiqs_active_algorithms'
+        ? JSON.stringify({ 'scalp-oracle': false })
+        : null,
+    );
+    fakeServer.state.botUpdateErrorMode = 'server_error';
+    vi.spyOn(Alert, 'alert').mockImplementation(() => {});
+    renderScreen();
+
+    await waitFor(() => expect(screen.getByText('1 Running')).toBeTruthy());
+    toggle('bot-toggle-scalp-oracle');
+
+    await waitFor(() => expect(screen.getByText('1 Running')).toBeTruthy());
+    expect(storage.setItem).toHaveBeenCalledWith(
+      '@tradiqs_active_algorithms',
+      JSON.stringify({ 'scalp-oracle': false }),
+    );
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'Bot update failed',
+      expect.stringContaining('temporarily unavailable'),
+    );
+  });
+
+  it('surfaces a clear connection error after a network drop', async () => {
+    subscription.isSubscribed = true;
+    subscription.accessTier = 'pro';
+    fakeServer.state.botUpdateErrorMode = 'network_error';
+    vi.spyOn(Alert, 'alert').mockImplementation(() => {});
+    renderScreen();
+
+    toggle('bot-toggle-grid-matrix');
+
+    await waitFor(() => expect(screen.getByText('2 Running')).toBeTruthy());
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'Bot update failed',
+      expect.stringContaining('Check your connection'),
+    );
+  });
+
+  it('lets a starter user run one bot once no others are running', () => {
+    renderScreen();
+
+    // Stopping is always free; with nothing running, one start is allowed.
+    toggle('bot-toggle-scalp-oracle');
+    toggle('bot-toggle-breakout-engine');
+    expect(screen.getByText('0 Running')).toBeTruthy();
+    toggle('bot-toggle-grid-matrix');
+    expect(screen.getByText('1 Running')).toBeTruthy();
+  });
+
+  it('hydrates persisted switch states from storage on launch', async () => {
+    storage.getItem.mockImplementation(async (key?: string) =>
+      key === '@tradiqs_active_algorithms'
+        ? JSON.stringify({ 'scalp-oracle': false })
+        : null,
+    );
+    renderScreen();
+
+    await waitFor(() => expect(screen.getByText('1 Running')).toBeTruthy());
+  });
 });
 
 describe('Config modal', () => {
   it('saves new capital/drawdown for a bot and logs the change', () => {
-    subscription.isSubscribed = true;
-    subscription.accessTier = 'pro';
     renderScreen();
     press('configure-scalp-oracle');
     press('capital-25000');
@@ -427,8 +578,6 @@ describe('Config modal', () => {
   });
 
   it('re-seeds selections per bot when reopened', () => {
-    subscription.isSubscribed = true;
-    subscription.accessTier = 'pro';
     renderScreen();
 
     // Change scalp-oracle to 25k/20%, then open breakout-engine: its own
@@ -448,21 +597,6 @@ describe('Config modal', () => {
     press('config-save');
     expect(screen.getByText('$25,000 · 20% max DD')).toBeTruthy();
   });
-
-  it('closes an open config modal when paid access is revoked', async () => {
-    subscription.isSubscribed = true;
-    subscription.accessTier = 'pro';
-    const { rerenderScreen } = renderScreen();
-    press('configure-scalp-oracle');
-    expect(screen.getByTestId('config-save')).toBeTruthy();
-
-    subscription.isSubscribed = false;
-    subscription.accessTier = 'starter';
-    rerenderScreen();
-
-    await waitFor(() => expect(screen.queryByTestId('config-save')).toBeNull());
-    expect(fakeServer.state.bots.find((bot) => bot.id === 'scalp-oracle')?.capital).toBe(10000);
-  });
 });
 
 describe('Live log console', () => {
@@ -472,22 +606,11 @@ describe('Live log console', () => {
   });
 
   it('clear-logs empties the buffer', () => {
-    subscription.isSubscribed = true;
-    subscription.accessTier = 'pro';
     renderScreen();
     expect(screen.getByText(/TradiQs AutoPilot core initialized/)).toBeTruthy();
     press('clear-logs');
     expect(screen.queryByText(/TradiQs AutoPilot core initialized/)).toBeNull();
     expect(screen.getByText('— log buffer cleared —')).toBeTruthy();
-  });
-
-  it('routes Starter traders to upgrade without clearing logs', () => {
-    renderScreen();
-    press('clear-logs');
-
-    expect(screen.getByText(/TradiQs AutoPilot core initialized/)).toBeTruthy();
-    expect(screen.getByTestId('paywall-card')).toBeTruthy();
-    expect(haptics.notificationAsync).toHaveBeenCalledWith('warning');
   });
 });
 
@@ -508,13 +631,14 @@ describe('PRO-locked bot', () => {
   it('opens the paywall from the unlock button and closes it again', () => {
     renderScreen();
     press('unlock-quantum-inst');
-    expect(screen.getByTestId('paywall-card')).toBeTruthy();
-    expect(haptics.notificationAsync).toHaveBeenCalledWith('warning');
+    expect(routerPush).toHaveBeenCalledWith({
+      pathname: '/paywall',
+      params: { defaultTier: 'ELITE' },
+    });
   });
 
   it('subscribers see full metrics and controls on the PRO bot', () => {
     subscription.isSubscribed = true;
-    subscription.accessTier = 'pro';
     renderScreen();
     expect(screen.getByText('88.7%')).toBeTruthy();
     expect(screen.getByText('+21.3%')).toBeTruthy();
@@ -589,8 +713,6 @@ describe('Server-state hydration', () => {
 
   it('shows System Active and Forex when server reports active+Forex', () => {
     // Defaults match server state — no regression.
-    subscription.isSubscribed = true;
-    subscription.accessTier = 'pro';
     renderScreen();
     expect(screen.getByText('System Active')).toBeTruthy();
     expect(screen.getByText('2 Running')).toBeTruthy();

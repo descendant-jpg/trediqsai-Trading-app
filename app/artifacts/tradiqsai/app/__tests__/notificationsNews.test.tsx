@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  fetchMarketNews: vi.fn(),
+  customFetch: vi.fn(),
   push: vi.fn(),
 }));
 
@@ -13,11 +13,7 @@ vi.mock('expo-router', () => ({ useRouter: () => ({ back: vi.fn(), push: mocks.p
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: { getItem: vi.fn().mockResolvedValue(null), setItem: vi.fn().mockResolvedValue(null) },
 }));
-vi.mock('@/services/supabaseService', () => ({ fetchMarketNews: mocks.fetchMarketNews }));
-vi.mock('@/components/NewsDetailModal', () => ({
-  NewsDetailModal: ({ article }: { article: { headline: string } | null }) =>
-    article ? <div data-testid="news-detail">{article.headline}</div> : null,
-}));
+vi.mock('@workspace/api-client-react', () => ({ customFetch: mocks.customFetch }));
 
 import NotificationsScreen from '../notifications';
 
@@ -26,36 +22,40 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe('Notifications market news', () => {
-  it('loads cached Supabase stories in the News filter and opens details in-app', async () => {
-    mocks.fetchMarketNews.mockResolvedValue([
+describe('Notifications live alerts', () => {
+  it('loads live alerts and filters them by asset class', async () => {
+    mocks.customFetch.mockResolvedValue([
       {
-        id: 42,
-        external_id: 'article-42',
-        headline: 'Bitcoin volatility lifts into the session',
-        ai_summary: 'Liquidity is improving. Traders should watch confirmation before adding risk.',
-        category: 'crypto',
-        sentiment: 'Bullish',
-        url: 'https://example.com/article',
-        published_at: new Date().toISOString(),
-        created_at: new Date().toISOString(),
+        id: 'crypto-alert',
+        title: 'Bitcoin setup ready',
+        message: 'Watch confirmation before adding risk.',
+        type: 'AI_ALERT',
+        assetClass: 'crypto',
+        timestamp: Date.now(),
+        referenceId: 'btc-1',
+      },
+      {
+        id: 'forex-alert',
+        title: 'EUR/USD setup ready',
+        message: 'Momentum is building.',
+        type: 'AI_ALERT',
+        assetClass: 'forex',
+        timestamp: Date.now(),
+        referenceId: 'eur-1',
       },
     ]);
     render(<NotificationsScreen />);
 
-    await act(async () => {});
-    fireEvent.click(screen.getByRole('button', { name: 'Filter News' }));
-    expect(screen.getByText('Bitcoin volatility lifts into the session')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /Bitcoin volatility lifts/i }));
-    expect(screen.getByTestId('news-detail').textContent).toContain('Bitcoin volatility lifts into the session');
+    await screen.findByText('Bitcoin setup ready');
+    fireEvent.click(screen.getByRole('button', { name: 'Filter Crypto' }));
+    expect(screen.getByText('Bitcoin setup ready')).toBeTruthy();
+    expect(screen.queryByText('EUR/USD setup ready')).toBeNull();
   });
 
-  it('keeps the News filter usable when the cache read is unavailable', async () => {
-    mocks.fetchMarketNews.mockRejectedValue(new Error('network unavailable'));
+  it('keeps retry feedback usable when loading live alerts fails', async () => {
+    mocks.customFetch.mockRejectedValue(new Error('network unavailable'));
     render(<NotificationsScreen />);
 
-    await act(async () => {});
-    fireEvent.click(screen.getByRole('button', { name: 'Filter News' }));
-    expect(screen.getByText('Market news is temporarily unavailable.')).toBeTruthy();
+    await screen.findByText(/Live alerts are temporarily unavailable/);
   });
 });
