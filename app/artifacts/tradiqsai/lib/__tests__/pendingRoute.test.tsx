@@ -56,9 +56,14 @@ describe('buildPendingRoute', () => {
 
   it('preserves ordinary routes with their query params', () => {
     expect(buildPendingRoute('/oracle')).toBe('/oracle');
-    expect(buildPendingRoute('/profile', { user: 'abc' })).toBe(
-      '/profile?user=abc',
+    expect(buildPendingRoute('/signals', { highlight_id: 'abc' })).toBe(
+      '/signals?highlight_id=abc',
     );
+  });
+
+  it('sends profile-tab restore attempts to the Home tab after login', () => {
+    expect(buildPendingRoute('/profile')).toBe('/');
+    expect(buildPendingRoute('/(tabs)/profile', { user: 'abc' })).toBe('/');
   });
 
   it('maps legacy Oracle chat links to /oracle', () => {
@@ -138,6 +143,41 @@ describe('usePendingRouteRedirect (deferred navigation)', () => {
     act(() => vi.runAllTimers());
 
     expect(replace).toHaveBeenCalledWith('/oracle');
+  });
+
+  it('routes a signed-out Profile URL to Home after sign-in', () => {
+    routerState.pathname = '/profile';
+
+    const { rerender } = render(<Harness session={null} />);
+    rerender(<Harness session={{ user: 'u1' }} />);
+    act(() => vi.runAllTimers());
+
+    expect(replace).toHaveBeenCalledTimes(1);
+    expect(replace).toHaveBeenCalledWith('/');
+  });
+
+  it('routes an active-session cold start on a stale Profile URL to Home', () => {
+    routerState.pathname = '/(tabs)/profile';
+
+    render(<Harness session={{ user: 'u1' }} />);
+    act(() => vi.runAllTimers());
+
+    expect(replace).toHaveBeenCalledTimes(1);
+    expect(replace).toHaveBeenCalledWith('/');
+  });
+
+  it('does not pull users out of Profile when the session refreshes later', () => {
+    routerState.pathname = '/(tabs)/profile';
+
+    const { rerender } = render(<Harness session={{ user: 'u1' }} />);
+    act(() => vi.runAllTimers());
+    expect(replace).toHaveBeenCalledWith('/');
+
+    replace.mockClear();
+    rerender(<Harness session={{ user: 'u1', refreshed: true }} />);
+    act(() => vi.runAllTimers());
+
+    expect(replace).not.toHaveBeenCalled();
   });
 
   it('does not navigate when signing in from the home screen', () => {

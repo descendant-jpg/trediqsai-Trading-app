@@ -25,6 +25,15 @@ function isAiToolsPath(pathname: string): boolean {
   );
 }
 
+/** Profile is a signed-in account surface, never a post-auth landing page. */
+export function isProfilePath(pathname: string): boolean {
+  const normalized = pathname
+    .split(/[?#]/, 1)[0]
+    .replace(/\/+$/, '')
+    .toLowerCase();
+  return normalized === '/profile' || normalized === '/(tabs)/profile';
+}
+
 function encodeParams(params: Record<string, ParamValue>): string {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
@@ -47,6 +56,11 @@ export function buildPendingRoute(
   params: Record<string, ParamValue> = {},
 ): string | null {
   if (!pathname || IGNORED_PATHS.has(pathname)) return null;
+
+  // Signing out from Profile leaves `/profile` as the current URL. Replaying
+  // that URL after the next login looks like a hardcoded Profile redirect, so
+  // route account-page restores through the tab group's Home entry instead.
+  if (isProfilePath(pathname)) return '/';
 
   if (isAiToolsPath(pathname)) {
     const legacy = legacyOracleRedirectTarget(params);

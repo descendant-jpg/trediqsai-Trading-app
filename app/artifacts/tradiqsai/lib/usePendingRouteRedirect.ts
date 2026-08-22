@@ -6,12 +6,13 @@
  * shared link), the user is sent to the home tab with a brief notice instead
  * of the bare not-found screen.
  */
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Alert, Platform } from 'react-native';
 import { useGlobalSearchParams, usePathname, useRouter } from 'expo-router';
 import {
   buildPendingRoute,
   consumePendingRoute,
+  isProfilePath,
   isResolvableRoute,
   setPendingRoute,
 } from '@/lib/pendingRoute';
@@ -35,30 +36,47 @@ export function usePendingRouteRedirect(
 ): void {
   const router = useRouter();
   const pathname = usePathname();
+  const pathnameRef = useRef(pathname);
+  pathnameRef.current = pathname;
+  const handledAuthLandingRef = useRef(false);
   const params = useGlobalSearchParams();
 
   // While signed out, remember the deep-link route the user was trying to
   // reach so we can land them there after sign-in.
   useEffect(() => {
     if (loading || session) return;
+    handledAuthLandingRef.current = false;
     const pending = buildPendingRoute(pathname, params);
     if (pending) setPendingRoute(pending);
   }, [loading, session, pathname, params]);
 
-  // Once signed in, replay the stored destination (if any) exactly once.
+  // Once signed in, replay the stored destination (if any) exactly once. A
+  // stored or restored Profile URL is normalized to Home; users can still tap
+  // the Profile tab afterward without this effect running again.
   useEffect(() => {
-    if (loading || !session) return;
-    const pending = consumePendingRoute();
-    if (!pending) return;
-    if (isResolvableRoute(pending)) {
-      // Defer until the router stack has mounted.
-      setTimeout(() => router.replace(pending as never), 0);
-    } else {
-      // Stale link: land on the home tab and explain briefly.
-      setTimeout(() => {
-        router.replace('/');
-        notifyStaleLink();
-      }, 0);
+    if (loading || !session || handledAuthLandingRef.current) return;
+    handledAuthLandingRef.current = true;
+    const requestedRoute = consumePendingRoute();
+    if (requestedRoute) {
+      const pending = isProfilePath(requestedRoute) ? '/' : requestedRoute;
+      if (isResolvableRoute(pending)) {
+        // Defer until the router stack has mounted.
+        setTimeout(() => router.replace(pending as never), 0);
+      } else {
+        // Stale link: land on the home tab and explain briefly.
+        setTimeout(() => {
+          router.replace('/');
+          notifyStaleLink();
+        }, 0);
+      }
+      return;
+    }
+
+    // An active session can be restored while the browser still points at the
+    // Profile URL from the previous visit. That is stale navigation state, not
+    // a deep link the user just chose, so app launch lands on Home.
+    if (isProfilePath(pathnameRef.current)) {
+      setTimeout(() => router.replace('/'), 0);
     }
   }, [loading, session, router]);
 }
