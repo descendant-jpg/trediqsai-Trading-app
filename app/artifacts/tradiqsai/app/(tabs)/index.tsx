@@ -245,6 +245,7 @@ type Ticker = { symbol: string; price: number; changePercent: number };
 type FmpQuote = {
   symbol?: string;
   price?: number;
+  changePercentage?: number;
   changesPercentage?: number;
 };
 
@@ -315,33 +316,54 @@ export default function HomeScreen() {
 
   useEffect(() => {
     let active = true;
+
     const loadTickers = async () => {
       try {
-        const response = await fetch(
-          `https://financialmodelingprep.com/api/v3/quote/AAPL,MSFT,NVDA,AMZN,GOOGL,META,TSLA,SPY,QQQ?apikey=${process.env.EXPO_PUBLIC_STOCK_API_KEY}`,
-        );
-        if (!response.ok) throw new Error('Ticker unavailable');
-        const data = await response.json() as FmpQuote[];
-        const quotesBySymbol = new Map(
-          (Array.isArray(data) ? data : [])
-            .filter((quote): quote is Required<Pick<FmpQuote, 'symbol' | 'price' | 'changesPercentage'>> =>
-              typeof quote.symbol === 'string'
-              && typeof quote.price === 'number'
-              && Number.isFinite(quote.price)
-              && typeof quote.changesPercentage === 'number'
-              && Number.isFinite(quote.changesPercentage),
-            )
-            .map((quote) => [quote.symbol, quote]),
-        );
+        const url = `https://financialmodelingprep.com/stable/quote?symbol=AAPL,MSFT,NVDA,AMZN,GOOGL,META,TSLA,SPY,QQQ&apikey=${process.env.EXPO_PUBLIC_STOCK_API_KEY || ''}`;
+        const response = await fetch(url);
+        console.log('FMP HTTP Status:', response.status);
+        const rawText = await response.text();
+        console.log('FMP Raw Response:', rawText.substring(0, 250));
+
+        if (!url.includes('apikey=') || url.endsWith('apikey=')) {
+          throw new Error('Env Var Failed: API Key is undefined in the bundle.');
+        }
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${rawText.substring(0, 100)}`);
+        }
+
+        if (rawText.includes('Error Message') || rawText.includes('Invalid API KEY')) {
+          throw new Error(`FMP API Key Error: ${rawText.substring(0, 100)}`);
+        }
+
+        const data = JSON.parse(rawText) as FmpQuote[];
+        const quotesBySymbol = new Map<string, { price: number; changePercent: number }>();
+        for (const quote of Array.isArray(data) ? data : []) {
+          const changePercent = quote.changePercentage ?? quote.changesPercentage;
+          if (
+            typeof quote.symbol === 'string'
+            && typeof quote.price === 'number'
+            && Number.isFinite(quote.price)
+            && typeof changePercent === 'number'
+            && Number.isFinite(changePercent)
+          ) {
+            quotesBySymbol.set(quote.symbol, { price: quote.price, changePercent });
+          }
+        }
         const updatedTickers = STOCK_SYMBOLS.flatMap((symbol) => {
           const quote = quotesBySymbol.get(symbol);
           return quote
-            ? [{ symbol, price: quote.price, changePercent: quote.changesPercentage }]
+            ? [{ symbol, price: quote.price, changePercent: quote.changePercent }]
             : [];
         });
-        if (active && updatedTickers.length > 0) setTickers(updatedTickers);
+        if (updatedTickers.length === 0) {
+          throw new Error(`FMP returned no usable quotes: ${rawText.substring(0, 100)}`);
+        }
+        if (active) setTickers(updatedTickers);
       } catch (error) {
-        console.warn('Market ticker refresh failed.', error);
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn('Market ticker refresh failed.', message);
       } finally {
         if (active) setTickerLoading(false);
       }
