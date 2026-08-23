@@ -240,19 +240,12 @@ const FEATURED_MARKETS = [
   ['EUR/USD', 'SELL', '1.0850'],
   ['NVDA', 'BUY', '128.40'],
 ] as const;
-const STOCK_SYMBOLS = ['AAPL', 'MSFT', 'NVDA', 'AMZN', 'GOOGL', 'META', 'TSLA', 'QQQ'] as const;
+const STOCK_SYMBOLS = ['AAPL', 'MSFT', 'NVDA', 'AMZN', 'GOOGL', 'META', 'TSLA', 'SPY'] as const;
 type Ticker = { symbol: string; price: number; changePercent: number };
-type TwelveDataQuote = {
-  symbol?: string;
-  close?: string | number;
-  previous_close?: string | number;
-  percent_change?: string | number;
-};
-type TwelveDataResponse = {
-  status?: string;
-  code?: number | string;
-  message?: string;
-  [symbol: string]: TwelveDataQuote | string | number | undefined;
+type FinnhubQuote = {
+  c?: number | null; // current price
+  pc?: number | null; // previous close
+  dp?: number | null; // percent change
 };
 
 function isTicker(value: unknown): value is Ticker {
@@ -334,49 +327,37 @@ export default function HomeScreen() {
 
     const loadTickers = async () => {
       try {
-        const url = `https://api.twelvedata.com/quote?symbol=AAPL,MSFT,NVDA,AMZN,GOOGL,META,TSLA,QQQ&apikey=${process.env.EXPO_PUBLIC_STOCK_API_KEY || ''}`;
-        const response = await fetch(url);
-        const rawText = await response.text();
-
-        if (!url.includes('apikey=') || url.endsWith('apikey=')) {
-          throw new Error('Env Var Failed: API Key is undefined in the bundle.');
+        const apiKey = process.env.EXPO_PUBLIC_FINNHUB_API_KEY || '';
+        if (!apiKey) {
+          throw new Error('Env Var Failed: Finnhub API Key is undefined in the bundle.');
         }
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${rawText.substring(0, 100)}`);
-        }
-
-        const parsedJson = JSON.parse(rawText) as TwelveDataResponse;
-        if (parsedJson.status === 'error' || parsedJson.code) {
-          throw new Error(parsedJson.message || 'Twelve Data API blocked the request.');
-        }
-
-        const dataArray = Object.values(parsedJson).filter(
-          (item): item is TwelveDataQuote => typeof item === 'object' && item !== null && typeof item.symbol === 'string',
-        );
-        const quotesBySymbol = new Map<string, { price: number; changePercent: number }>();
-        for (const quote of dataArray) {
-          if (!quote.symbol) continue;
-          const rawPrice = quote?.close
-            ? Number.parseFloat(String(quote.close))
-            : quote?.previous_close
-              ? Number.parseFloat(String(quote.previous_close))
-              : 0;
-          const rawChange = quote?.percent_change
-            ? Number.parseFloat(String(quote.percent_change))
-            : 0;
+        const fetchPromises = STOCK_SYMBOLS.map(async (sym) => {
+          const res = await fetch(`https://finnhub.io/api/v1/quote?symbol=${sym}&token=${apiKey}`);
+          if (!res.ok) throw new Error(`Finnhub API Error: ${res.status}`);
+          const data = (await res.json()) as FinnhubQuote;
+          return { symbol: sym as string, data };
+        });
+        const parsedData = await Promise.all(fetchPromises);
+        const updatedTickers = parsedData.flatMap(({ symbol, data }) => {
+          const rawPrice =
+            typeof data.c === 'number' && data.c !== 0
+              ? data.c
+              : typeof data.pc === 'number'
+                ? data.pc
+                : 0;
+          const rawChange = typeof data.dp === 'number' ? data.dp : 0;
           const price = Number.isFinite(rawPrice) ? rawPrice : 0;
-          const changePercent = Number.isFinite(rawChange) ? rawChange : 0;
-          quotesBySymbol.set(quote.symbol, { price, changePercent });
-        }
-        const updatedTickers = STOCK_SYMBOLS.flatMap((symbol) => {
-          const quote = quotesBySymbol.get(symbol);
-          return quote
-            ? [{ symbol, price: quote.price, changePercent: quote.changePercent }]
-            : [];
+          if (price === 0) return [];
+          return [
+            {
+              symbol,
+              price,
+              changePercent: Number.isFinite(rawChange) ? rawChange : 0,
+            },
+          ];
         });
         if (updatedTickers.length === 0) {
-          throw new Error('Twelve Data returned no usable quotes.');
+          throw new Error('Finnhub returned no usable quotes.');
         }
         if (active) setTickers(updatedTickers);
       } catch (error) {
