@@ -96,7 +96,7 @@ describe('usePendingRouteRedirect global auth policy', () => {
   });
 
   it('does not redirect again when a signed-in session refreshes', () => {
-    routerState.pathname = '/(tabs)/index';
+    routerState.pathname = '/(tabs)';
     const { rerender } = render(<Harness session={{ user: 'u1' }} />);
     act(() => vi.runAllTimers());
     expect(replace).not.toHaveBeenCalled();

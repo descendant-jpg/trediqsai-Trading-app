@@ -14,7 +14,7 @@ export default function RootIndex() {
 
   return (
     <Redirect
-      href={(session ? '/(tabs)/index' : '/(auth)/login') as never}
+      href={(session ? '/(tabs)' : '/(auth)/login') as never}
     />
   );
 }

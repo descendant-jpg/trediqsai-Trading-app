@@ -10,7 +10,7 @@ export default function LoginScreen() {
   if (loading) return null;
 
   if (session) {
-    return <Redirect href={'/(tabs)/index' as never} />;
+    return <Redirect href={'/(tabs)' as never} />;
   }
 
   return <AuthScreen initialMode={authScreenMode} />;

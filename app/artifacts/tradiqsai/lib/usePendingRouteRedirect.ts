@@ -8,7 +8,7 @@
 import { useEffect, useRef } from 'react';
 import { usePathname, useRouter } from 'expo-router';
 
-export const AUTH_HOME_ROUTE = '/(tabs)/index';
+export const AUTH_HOME_ROUTE = '/(tabs)';
 export const AUTH_LOGIN_ROUTE = '/(auth)/login';
 
 export function usePendingRouteRedirect(

@@ -65,7 +65,7 @@ describe('AdminRouteLayout authorization gate', () => {
     render(<AdminRouteLayout />);
 
     expect(redirectSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ href: '/(tabs)/index' }),
+      expect.objectContaining({ href: '/(tabs)' }),
       undefined,
     );
     expect(stackSpy).not.toHaveBeenCalled();

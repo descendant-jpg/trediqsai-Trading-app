@@ -31,7 +31,7 @@ export default function AdminRouteLayout() {
     );
   }
 
-  if (!isAdmin) return <Redirect href={'/(tabs)/index' as never} />;
+  if (!isAdmin) return <Redirect href={'/(tabs)' as never} />;
 
   return (
     <Stack

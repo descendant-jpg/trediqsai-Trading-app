@@ -14,7 +14,7 @@ describe('mobile admin route isolation', () => {
     expect(adminLayout).toContain('const { session, loading } = useAuth()');
     expect(adminLayout).toContain("const { isAdmin, isAdminLoading } = useSubscription()");
     expect(adminLayout).toContain("if (!session) return <Redirect href={'/(auth)/login' as never} />;");
-    expect(adminLayout).toContain("if (!isAdmin) return <Redirect href={'/(tabs)/index' as never} />;");
+    expect(adminLayout).toContain("if (!isAdmin) return <Redirect href={'/(tabs)' as never} />;");
     expect(adminLayout).not.toContain('isGodAdmin');
     expect(adminLayout).not.toContain('<Tabs');
   });
