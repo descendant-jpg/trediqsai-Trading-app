@@ -297,6 +297,7 @@ export default function HomeScreen() {
   const [insightsOpen, setInsightsOpen] = useState(false);
   const [analysisSymbol, setAnalysisSymbol] = useState<string | null>(null);
   const [tickers, setTickers] = useState<Ticker[]>([]);
+  const [tickerLoading, setTickerLoading] = useState(true);
   const [primaryTickerWidth, setPrimaryTickerWidth] = useState(0);
   const [pickerMessage, setPickerMessage] = useState<string | null>(null);
   const tickerOffset = useRef(new Animated.Value(0)).current;
@@ -339,6 +340,8 @@ export default function HomeScreen() {
         if (active && updatedTickers.length > 0) setTickers(updatedTickers);
       } catch (error) {
         console.warn('Market ticker refresh failed.', error);
+      } finally {
+        if (active) setTickerLoading(false);
       }
     };
     loadTickers();
@@ -430,7 +433,9 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
-         {liveTickers.length > 0 ? <View style={styles.tickerViewport}>
+         {tickerLoading ? <View style={styles.tickerLoading} accessibilityRole="progressbar" accessibilityLabel="Loading live market data">
+           <Text style={styles.tickerLoadingText}>Loading live market data…</Text>
+         </View> : liveTickers.length > 0 ? <View style={styles.tickerViewport}>
            <Animated.View
              style={[styles.tickerRow, { transform: [{ translateX: tickerOffset }] }]}
            >
@@ -632,6 +637,8 @@ const styles = StyleSheet.create({
   onlineDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: c.success },
   onlineText: { color: c.success, fontSize: 11, fontFamily: 'Inter_600SemiBold' },
   tickerViewport: { overflow: 'hidden', marginHorizontal: -16, paddingVertical: 2 },
+  tickerLoading: { minHeight: 50, marginHorizontal: -16, alignItems: 'center', justifyContent: 'center' },
+  tickerLoadingText: { color: c.mutedForeground, fontSize: 11, fontFamily: 'Inter_600SemiBold' },
   tickerRow: { flexDirection: 'row', alignSelf: 'flex-start' },
   tickerCopy: { flexDirection: 'row', gap: 8, paddingLeft: 16, paddingRight: 8 },
   tickerPill: { backgroundColor: c.card, borderWidth: 1, borderColor: c.border, borderRadius: 10, paddingHorizontal: 11, paddingVertical: 8, minWidth: 100 },
