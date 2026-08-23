@@ -39,6 +39,7 @@ import { useSubscription } from "@/lib/revenuecat";
 import { PRIVACY_POLICY, TERMS_AND_CONDITIONS } from "@/lib/legalContent";
 import { supabase } from "@/utils/supabase";
 import { canAccessPayoutEvaluation } from "@/lib/payoutAccess";
+import { canAccess } from "@/lib/profileEntitlements";
 import colors from "@/constants/colors";
 import { AcademyModal } from "../../components/AcademyModal";
 import { SocialMediaModal } from "@/components/SocialMediaModal";
@@ -995,12 +996,25 @@ export default function ProfileScreen() {
           <Tool
             icon="link"
             label="BrokerSync"
-            onPress={() =>
+            onPress={() => {
+              if (
+                canAccess(
+                  {
+                    role,
+                    isAdmin,
+                    tier: activeAccessTier,
+                  },
+                  "pro",
+                )
+              ) {
+                router.push("/profile/brokersync");
+                return;
+              }
               router.push({
                 pathname: "/paywall",
                 params: { defaultTier: "ELITE" },
-              })
-            }
+              });
+            }}
           />
           <Tool
             icon="gift"

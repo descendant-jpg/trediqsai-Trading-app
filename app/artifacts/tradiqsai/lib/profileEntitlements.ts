@@ -23,6 +23,44 @@ export function isProfileAdmin(profile: ProfileEntitlement | null | undefined): 
   return ADMIN_ROLES.has(normalized(profile?.role));
 }
 
+export type UserProfile = ProfileEntitlement & {
+  /** Accepted for call-site convenience but NEVER an entitlement signal:
+   *  email is a user-chosen identifier, not server-owned authorization. */
+  email?: string | null;
+  isAdmin?: boolean | null;
+};
+
+export type RequiredTier = 'free' | 'pro' | 'elite';
+
+/**
+ * Unified client-side access engine ("God Mode" rule):
+ * 1. Admin Master Bypass — server-owned role or explicit admin flag unlocks
+ *    every tier.
+ * 2. Tier Hierarchy — free < pro < elite, resolved through the profile
+ *    entitlement resolver (manual overrides, trials, billing tier) so every
+ *    screen evaluates the same effective tier. Unresolved tiers fail closed.
+ *
+ * Display gate only: server actions still re-check access.
+ */
+export function canAccess(
+  user: UserProfile | null | undefined,
+  requiredTier: RequiredTier = 'pro',
+): boolean {
+  if (!user) return false;
+
+  // 1. Admin Master Bypass (server-owned signals only — email is user-chosen
+  // and must never unlock paid tiers)
+  if (isProfileAdmin(user) || user.isAdmin === true) {
+    return true;
+  }
+
+  // 2. Tier Hierarchy Evaluation
+  if (requiredTier === 'free') return true;
+  const userTier = getProfileAccessTier(user);
+  if (requiredTier === 'pro') return userTier === 'pro' || userTier === 'elite';
+  return userTier === 'elite';
+}
+
 /** Normalizes server-owned profile data into the tier used for client display gates. */
 export function getProfileAccessTier(
   profile: ProfileEntitlement | null | undefined,
