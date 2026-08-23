@@ -11,6 +11,7 @@ import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import colors from '@/constants/colors';
+import { fetchFinnhubQuotes, type MappedQuote } from '@/lib/finnhubQuotes';
 
 const c = colors.light;
 
@@ -25,18 +26,6 @@ const DEFAULT_PAIRS = ['AAPL', 'MSFT', 'AMZN', 'GOOGL'];
 
 const REFRESH_INTERVAL_MS = 60_000;
 
-type FinnhubQuote = {
-  c?: number | null; // current price
-  pc?: number | null; // previous close
-  dp?: number | null; // percent change
-};
-
-type ForexQuote = {
-  symbol: string;
-  price: number;
-  changePercent: number;
-};
-
 function resolvePairs(sessionName: string): string[] {
   return SESSION_PAIRS[sessionName.trim().toLowerCase()] ?? DEFAULT_PAIRS;
 }
@@ -50,7 +39,7 @@ export default function SessionDetailsScreen() {
       ? params.sessionName.trim()
       : 'Global';
 
-  const [quotes, setQuotes] = useState<ForexQuote[]>([]);
+  const [quotes, setQuotes] = useState<MappedQuote[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -74,38 +63,7 @@ export default function SessionDetailsScreen() {
         if (!apiKey) {
           throw new Error('Env Var Failed: Finnhub API Key is undefined in the bundle.');
         }
-        const results = await Promise.all(
-          pairs.map(async (sym) => {
-            const res = await fetch(
-              `https://finnhub.io/api/v1/quote?symbol=${sym}&token=${apiKey}`,
-              { signal: controller.signal },
-            );
-            if (!res.ok) throw new Error(`Finnhub API Error: ${res.status}`);
-            const data = (await res.json()) as FinnhubQuote;
-            return { symbol: sym, data };
-          }),
-        );
-        const resolved = results.flatMap(({ symbol, data }) => {
-          const rawPrice =
-            typeof data.c === 'number' && data.c !== 0
-              ? data.c
-              : typeof data.pc === 'number'
-                ? data.pc
-                : 0;
-          const rawChange = typeof data.dp === 'number' ? data.dp : 0;
-          const price = Number.isFinite(rawPrice) ? rawPrice : 0;
-          if (price === 0) return [];
-          return [
-            {
-              symbol,
-              price,
-              changePercent: Number.isFinite(rawChange) ? rawChange : 0,
-            },
-          ];
-        });
-        if (resolved.length === 0) {
-          throw new Error('Finnhub returned no usable quotes.');
-        }
+        const resolved = await fetchFinnhubQuotes(pairs, apiKey, controller.signal);
         if (active && requestId === latestRequest) {
           setQuotes(resolved);
         }
