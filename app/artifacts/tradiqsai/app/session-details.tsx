@@ -15,28 +15,20 @@ import colors from '@/constants/colors';
 const c = colors.light;
 
 const SESSION_PAIRS: Record<string, string[]> = {
-  london: ['EUR/USD', 'GBP/USD', 'EUR/GBP'],
-  'new york': ['EUR/USD', 'USD/JPY', 'GBP/USD'],
-  tokyo: ['USD/JPY', 'AUD/USD', 'NZD/USD'],
-  sydney: ['USD/JPY', 'AUD/USD', 'NZD/USD'],
+  london: ['OANDA:EUR_USD', 'OANDA:GBP_USD', 'OANDA:EUR_GBP'],
+  'new york': ['OANDA:EUR_USD', 'OANDA:USD_JPY', 'OANDA:GBP_USD'],
+  tokyo: ['OANDA:USD_JPY', 'OANDA:AUD_USD', 'OANDA:NZD_USD'],
+  sydney: ['OANDA:USD_JPY', 'OANDA:AUD_USD', 'OANDA:NZD_USD'],
 };
 
-const DEFAULT_PAIRS = ['EUR/USD', 'GBP/USD', 'USD/JPY'];
+const DEFAULT_PAIRS = ['OANDA:EUR_USD', 'OANDA:GBP_USD', 'OANDA:USD_JPY'];
 
 const REFRESH_INTERVAL_MS = 60_000;
 
-type TwelveDataQuote = {
-  symbol?: string;
-  close?: string;
-  previous_close?: string;
-  percent_change?: string;
-};
-
-type TwelveDataResponse = {
-  status?: string;
-  code?: number | string;
-  message?: string;
-  [symbol: string]: unknown;
+type FinnhubQuote = {
+  c?: number | null; // current price
+  pc?: number | null; // previous close
+  dp?: number | null; // percent change
 };
 
 type ForexQuote = {
@@ -78,50 +70,41 @@ export default function SessionDetailsScreen() {
       }
       try { setError(null); } catch { /* screen unmounted */ }
       try {
-        const symbols = pairs.join(',');
-        const url = `https://api.twelvedata.com/quote?symbol=${symbols}&apikey=${process.env.EXPO_PUBLIC_STOCK_API_KEY || ''}`;
-        const response = await fetch(url, { signal: controller.signal });
-        const rawText = await response.text();
-
-        if (!url.includes('apikey=') || url.endsWith('apikey=')) {
-          throw new Error('Env Var Failed: API Key is undefined in the bundle.');
+        const apiKey = process.env.EXPO_PUBLIC_FINNHUB_API_KEY || '';
+        if (!apiKey) {
+          throw new Error('Env Var Failed: Finnhub API Key is undefined in the bundle.');
         }
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${rawText.substring(0, 100)}`);
-        }
-
-        const parsedJson = JSON.parse(rawText) as TwelveDataResponse;
-        if (parsedJson.status === 'error' || parsedJson.code) {
-          throw new Error(parsedJson.message || 'Twelve Data API blocked the request.');
-        }
-
-        const dataArray = Object.values(parsedJson).filter(
-          (item): item is TwelveDataQuote =>
-            typeof item === 'object' && item !== null && typeof (item as TwelveDataQuote).symbol === 'string',
+        const results = await Promise.all(
+          pairs.map(async (sym) => {
+            const res = await fetch(
+              `https://finnhub.io/api/v1/quote?symbol=${sym}&token=${apiKey}`,
+              { signal: controller.signal },
+            );
+            if (!res.ok) throw new Error(`Finnhub API Error: ${res.status}`);
+            const data = (await res.json()) as FinnhubQuote;
+            return { symbol: sym.replace('OANDA:', '').replace('_', '/'), data };
+          }),
         );
-        const quotesBySymbol = new Map<string, ForexQuote>();
-        for (const quote of dataArray) {
-          if (!quote.symbol) continue;
-          const rawPrice = quote.close
-            ? Number.parseFloat(String(quote.close))
-            : quote.previous_close
-              ? Number.parseFloat(String(quote.previous_close))
-              : 0;
-          const rawChange = quote.percent_change
-            ? Number.parseFloat(String(quote.percent_change))
-            : 0;
-          quotesBySymbol.set(quote.symbol, {
-            symbol: quote.symbol,
-            price: Number.isFinite(rawPrice) ? rawPrice : 0,
-            changePercent: Number.isFinite(rawChange) ? rawChange : 0,
-          });
-        }
-        const resolved = pairs.flatMap((symbol) => {
-          const quote = quotesBySymbol.get(symbol);
-          return quote ? [quote] : [];
+        const resolved = results.flatMap(({ symbol, data }) => {
+          const rawPrice =
+            typeof data.c === 'number' && data.c !== 0
+              ? data.c
+              : typeof data.pc === 'number'
+                ? data.pc
+                : 0;
+          const rawChange = typeof data.dp === 'number' ? data.dp : 0;
+          const price = Number.isFinite(rawPrice) ? rawPrice : 0;
+          if (price === 0) return [];
+          return [
+            {
+              symbol,
+              price,
+              changePercent: Number.isFinite(rawChange) ? rawChange : 0,
+            },
+          ];
         });
         if (resolved.length === 0) {
-          throw new Error('Twelve Data returned no usable quotes.');
+          throw new Error('Finnhub returned no usable quotes.');
         }
         if (active && requestId === latestRequest) {
           setQuotes(resolved);
@@ -214,7 +197,7 @@ export default function SessionDetailsScreen() {
             );
           })}
           <Text style={styles.disclaimer}>
-            Live quotes via Twelve Data · refreshes every 60 seconds.
+            Live quotes via Finnhub · refreshes every 60 seconds.
           </Text>
         </ScrollView>
       )}

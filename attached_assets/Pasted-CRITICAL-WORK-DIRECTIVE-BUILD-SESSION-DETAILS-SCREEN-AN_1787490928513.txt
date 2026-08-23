@@ -1,0 +1,38 @@
+CRITICAL WORK DIRECTIVE: BUILD SESSION DETAILS SCREEN AND FIX ROUTING.
+
+To conserve context window and AI credits, DO NOT read previous chat history.
+
+The "Trade Active Session" buttons on the Global Markets screen are incorrectly routing to the simulated trading terminal. They must route to a new, dedicated "Session Details" screen that shows live market data for that specific session without adding a new bottom tab.
+
+### 1. Create the New Screen (`app/session-details.tsx`)
+- Create a new file at `app/session-details.tsx` (outside the `(tabs)` directory so it does not add a bottom tab).
+- Use `useLocalSearchParams` from `expo-router` to accept a `sessionName` parameter (e.g., 'London', 'New York', 'Tokyo', 'Sydney').
+- Implement a Header at the top with a clear "Back" button using `router.back()` (use an arrow-left icon) and display the `{sessionName} Session` as the title.
+
+### 2. Fetch Live Forex Data (Reuse Twelve Data)
+- Based on the `sessionName`, define an array of relevant Forex pairs:
+  - London: `EUR/USD,GBP/USD,EUR/GBP`
+  - New York: `EUR/USD,USD/JPY,GBP/USD`
+  - Tokyo/Sydney: `USD/JPY,AUD/USD,NZD/USD`
+  - Default: `EUR/USD,GBP/USD,USD/JPY`
+- Implement a `useEffect` to fetch these live quotes using the existing Twelve Data key:
+  `const url = \`https://api.twelvedata.com/quote?symbol=\${symbols}&apikey=\${process.env.EXPO_PUBLIC_STOCK_API_KEY || ''}\`;`
+- Implement the same defensive parsing as the Home screen (check `status === 'error'` and safely handle `.toFixed(5)` for Forex pricing).
+
+### 3. Design the UI
+- Render the fetched data in a clean list or card layout matching the app's dark theme.
+- Display the `symbol`, the `close` price, and the `percent_change` (Green for positive, Red for negative).
+- Ensure a loading state (e.g., `ActivityIndicator` or "Loading live pairs...") is shown while the fetch is in flight.
+
+### 4. Update the Routing
+- Locate the Global Markets screen (likely `app/session-intelligence.tsx` or similar).
+- Find the "Trade Active Session" buttons inside the session cards.
+- Change their `onPress` or `<Link>` properties to push to the new route with the session parameter:
+  `router.push({ pathname: '/session-details', params: { sessionName: session.name } })`
+
+### 5. Verify & Push
+- Run full workspace typechecks.
+- Commit: `feat(markets): create dedicated session details screen with live forex data and correct widget routing`
+- Push securely to the active repository.
+
+EXECUTION REQUIREMENT: Output the code for the new `router.push` implementation in the session cards, and confirm the new `session-details.tsx` file was successfully created.
