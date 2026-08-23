@@ -240,24 +240,22 @@ const FEATURED_MARKETS = [
   ['EUR/USD', 'SELL', '1.0850'],
   ['NVDA', 'BUY', '128.40'],
 ] as const;
-const STOCK_SYMBOLS = ['AAPL', 'TSLA', 'META', 'GOOGL', 'MSFT', 'AMZN', 'NVDA'];
-type Ticker = { symbol: string; lastPrice: string; priceChangePercent: string };
-const FALLBACK_TICKERS: Ticker[] = [
-  { symbol: 'AAPL', lastPrice: '231.30', priceChangePercent: '0.84' },
-  { symbol: 'TSLA', lastPrice: '331.97', priceChangePercent: '-1.12' },
-  { symbol: 'META', lastPrice: '529.28', priceChangePercent: '1.06' },
-  { symbol: 'GOOGL', lastPrice: '178.34', priceChangePercent: '0.42' },
-  { symbol: 'MSFT', lastPrice: '421.50', priceChangePercent: '-0.36' },
-  { symbol: 'AMZN', lastPrice: '224.19', priceChangePercent: '0.75' },
-  { symbol: 'NVDA', lastPrice: '118.65', priceChangePercent: '1.43' },
-];
+const STOCK_SYMBOLS = ['AAPL', 'MSFT', 'NVDA', 'AMZN', 'GOOGL', 'META', 'TSLA', 'SPY', 'QQQ'] as const;
+type Ticker = { symbol: string; price: number; changePercent: number };
+type YahooQuote = {
+  symbol?: string;
+  regularMarketPrice?: number;
+  regularMarketChangePercent?: number;
+};
 
 function isTicker(value: unknown): value is Ticker {
   if (!value || typeof value !== 'object') return false;
   const ticker = value as Partial<Ticker>;
   return typeof ticker.symbol === 'string'
-    && typeof ticker.lastPrice === 'string'
-    && typeof ticker.priceChangePercent === 'string';
+    && typeof ticker.price === 'number'
+    && Number.isFinite(ticker.price)
+    && typeof ticker.changePercent === 'number'
+    && Number.isFinite(ticker.changePercent);
 }
 
 function HomeWidgetFallback({ resetError }: ErrorFallbackProps) {
@@ -298,14 +296,14 @@ export default function HomeScreen() {
   const [paywallOpen, setPaywallOpen] = useState(false);
   const [insightsOpen, setInsightsOpen] = useState(false);
   const [analysisSymbol, setAnalysisSymbol] = useState<string | null>(null);
-  const [tickers, setTickers] = useState<Ticker[]>(FALLBACK_TICKERS);
-  const [tickerTrackWidth, setTickerTrackWidth] = useState(0);
+  const [tickers, setTickers] = useState<Ticker[]>([]);
+  const [primaryTickerWidth, setPrimaryTickerWidth] = useState(0);
   const [pickerMessage, setPickerMessage] = useState<string | null>(null);
   const tickerOffset = useRef(new Animated.Value(0)).current;
   const { profile } = useProfile();
   const topInset = Platform.OS === 'web' ? 38 : (insets?.top ?? 0) + 10;
   const bottomInset = insets?.bottom ?? 0;
-  const safeTickers = Array.isArray(tickers) ? tickers.filter(isTicker) : FALLBACK_TICKERS;
+  const liveTickers = useMemo(() => tickers.filter(isTicker), [tickers]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -320,19 +318,27 @@ export default function HomeScreen() {
       try {
         const response = await fetch(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${STOCK_SYMBOLS.join(',')}`);
         if (!response.ok) throw new Error('Ticker unavailable');
-        const data = await response.json() as { quoteResponse?: { result?: Array<{ symbol: string; regularMarketPrice?: number; regularMarketChangePercent?: number }> } };
-        const quotes = data.quoteResponse?.result ?? [];
-        const updatedTickers = STOCK_SYMBOLS.map((symbol) => {
-          const quote = quotes.find((item) => item.symbol === symbol);
-          const fallback = FALLBACK_TICKERS.find((item) => item.symbol === symbol)!;
-          return quote?.regularMarketPrice != null && quote.regularMarketChangePercent != null
-            ? { symbol, lastPrice: String(quote.regularMarketPrice), priceChangePercent: String(quote.regularMarketChangePercent) }
-            : fallback;
+        const data = await response.json() as { quoteResponse?: { result?: YahooQuote[] } };
+        const quotesBySymbol = new Map(
+          (data.quoteResponse?.result ?? [])
+            .filter((quote): quote is Required<Pick<YahooQuote, 'symbol' | 'regularMarketPrice' | 'regularMarketChangePercent'>> =>
+              typeof quote.symbol === 'string'
+              && typeof quote.regularMarketPrice === 'number'
+              && Number.isFinite(quote.regularMarketPrice)
+              && typeof quote.regularMarketChangePercent === 'number'
+              && Number.isFinite(quote.regularMarketChangePercent),
+            )
+            .map((quote) => [quote.symbol, quote]),
+        );
+        const updatedTickers = STOCK_SYMBOLS.flatMap((symbol) => {
+          const quote = quotesBySymbol.get(symbol);
+          return quote
+            ? [{ symbol, price: quote.regularMarketPrice, changePercent: quote.regularMarketChangePercent }]
+            : [];
         });
-        if (active) setTickers(Array.isArray(updatedTickers) ? updatedTickers : FALLBACK_TICKERS);
+        if (active && updatedTickers.length > 0) setTickers(updatedTickers);
       } catch (error) {
-        console.warn('Market ticker refresh failed; using local fallback quotes.', error);
-        if (active) setTickers(FALLBACK_TICKERS);
+        console.warn('Market ticker refresh failed.', error);
       }
     };
     loadTickers();
@@ -341,19 +347,26 @@ export default function HomeScreen() {
   }, []);
 
   useEffect(() => {
-    if (!tickerTrackWidth) return;
+    if (!primaryTickerWidth) return;
     tickerOffset.setValue(0);
     const animation = Animated.loop(
-      Animated.timing(tickerOffset, {
-        toValue: -tickerTrackWidth / 2,
-        duration: Math.max(18_000, tickerTrackWidth * 28),
-        easing: Easing.linear,
-        useNativeDriver: true,
-      }),
+      Animated.sequence([
+        Animated.timing(tickerOffset, {
+          toValue: -primaryTickerWidth,
+          duration: Math.max(18_000, primaryTickerWidth * 28),
+          easing: Easing.linear,
+          useNativeDriver: true,
+        }),
+        Animated.timing(tickerOffset, {
+          toValue: 0,
+          duration: 0,
+          useNativeDriver: true,
+        }),
+      ]),
     );
     animation.start();
     return () => animation.stop();
-  }, [tickerOffset, tickerTrackWidth]);
+  }, [primaryTickerWidth, tickerOffset]);
 
   const openGallery = async () => {
     try {
@@ -417,18 +430,24 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
-         <View style={styles.tickerViewport}>
+         {liveTickers.length > 0 ? <View style={styles.tickerViewport}>
            <Animated.View
              style={[styles.tickerRow, { transform: [{ translateX: tickerOffset }] }]}
-             onLayout={(event) => setTickerTrackWidth(event.nativeEvent.layout.width)}
            >
-            {[...safeTickers, ...safeTickers].map((ticker, index) => {
-             const change = Number(ticker.priceChangePercent);
-              const isUp = change >= 0;
-              return <View key={`${ticker.symbol}-${index}`} style={styles.tickerPill}><Text style={styles.tickerSymbol}>{ticker.symbol}</Text><Text style={styles.tickerPrice}>${Number(ticker.lastPrice).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text><Text style={[styles.tickerChange, { color: isUp ? '#00FF00' : '#FF0000' }]}>{`${isUp ? '+' : ''}${change.toFixed(2)}%`}</Text></View>;
-           })}
+             {[0, 1].map((copy) => (
+               <View
+                 key={`ticker-copy-${copy}`}
+                 style={styles.tickerCopy}
+                 onLayout={copy === 0 ? (event) => setPrimaryTickerWidth(event.nativeEvent.layout.width) : undefined}
+               >
+                 {liveTickers.map((ticker) => {
+                   const isUp = ticker.changePercent >= 0;
+                   return <View key={`${ticker.symbol}-${copy}`} style={styles.tickerPill}><Text style={styles.tickerSymbol}>{ticker.symbol}</Text><Text style={styles.tickerPrice}>${ticker.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text><Text style={[styles.tickerChange, { color: isUp ? '#00FF00' : '#FF0000' }]}>{`${isUp ? '+' : ''}${ticker.changePercent.toFixed(2)}%`}</Text></View>;
+                 })}
+               </View>
+             ))}
           </Animated.View>
-         </View>
+          </View> : null}
 
          <Text style={styles.sectionLabel}>ANALYZE CHART WITH AI</Text>
          <View style={styles.visionRow}>
@@ -611,7 +630,8 @@ const styles = StyleSheet.create({
   onlineDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: c.success },
   onlineText: { color: c.success, fontSize: 11, fontFamily: 'Inter_600SemiBold' },
   tickerViewport: { overflow: 'hidden', marginHorizontal: -16, paddingVertical: 2 },
-  tickerRow: { flexDirection: 'row', alignSelf: 'flex-start', gap: 8, paddingHorizontal: 16 },
+  tickerRow: { flexDirection: 'row', alignSelf: 'flex-start' },
+  tickerCopy: { flexDirection: 'row', gap: 8, paddingLeft: 16, paddingRight: 8 },
   tickerPill: { backgroundColor: c.card, borderWidth: 1, borderColor: c.border, borderRadius: 10, paddingHorizontal: 11, paddingVertical: 8, minWidth: 100 },
   tickerSymbol: { color: c.mutedForeground, fontSize: 9, fontFamily: 'Inter_700Bold', letterSpacing: 1 },
   tickerPrice: { color: c.foreground, fontSize: 13, fontFamily: 'Inter_700Bold', marginTop: 3 },
