@@ -6,6 +6,7 @@ import {
   Linking,
   Modal,
   Platform,
+  Pressable,
   RefreshControl,
   ScrollView,
   Share,
@@ -160,6 +161,13 @@ function ProfileSkeleton() {
     </View>
   );
 }
+
+const EXPERIENCE_OPTIONS = [
+  { level: "Beginner", subtitle: "0 – 1 Years • Learning basics & risk management" },
+  { level: "Intermediate", subtitle: "1 – 3 Years • Consistent execution & technical setups" },
+  { level: "Advanced", subtitle: "3 – 5 Years • Multi-timeframe confluence & prop trading" },
+  { level: "Professional", subtitle: "5+ Years • Full-time / Institutional volume" },
+] as const;
 
 /** Bottom-sheet style modal shell shared by all profile modals. */
 function SheetModal({
@@ -698,7 +706,6 @@ export default function ProfileScreen() {
             </View>
           </View>
         </View>
-        {!isGuest && <TouchableOpacity style={styles.experienceCard} onPress={() => setExperienceOpen(true)} testID="profile-trading-experience"><Text style={styles.experienceLabel}>TRADING EXPERIENCE</Text><Text style={styles.experienceValue}>{tradingExperience ?? "Choose your experience"}</Text></TouchableOpacity>}
         {!isSubscribed && (
           <TouchableOpacity
             style={styles.upgradeButton}
@@ -940,6 +947,25 @@ export default function ProfileScreen() {
           </View>
           <Feather name="chevron-right" size={21} color={c.primary} />
         </TouchableOpacity>
+        {!isGuest && (
+          <TouchableOpacity
+            style={styles.experienceCard}
+            onPress={() => setExperienceOpen(true)}
+            activeOpacity={0.86}
+            testID="profile-trading-experience"
+          >
+            <View style={styles.experienceIconWrap}>
+              <Feather name="trending-up" size={20} color="#00e5ff" />
+            </View>
+            <View style={styles.experienceCopy}>
+              <Text style={styles.experienceLabel}>TRADING EXPERIENCE</Text>
+              <Text style={styles.experienceValue}>
+                {tradingExperience ?? "Choose your experience"}
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={21} color={c.primary} />
+          </TouchableOpacity>
+        )}
         <View style={styles.metrics}>
           <Metric label="WIN RATE" value="68%" color={c.success} />
           <Metric label="PROFIT FACTOR" value="1.8" />
@@ -1081,12 +1107,47 @@ export default function ProfileScreen() {
         <RiskDisclaimer />
       </ScrollView>
       <Modal visible={experienceOpen} transparent animationType="slide" onRequestClose={() => setExperienceOpen(false)}>
-        <View style={styles.experienceOverlay}>
-          <View style={styles.experienceSheet}>
-            <Text style={styles.experienceTitle}>Trading Experience</Text>
-            {["Beginner", "Intermediate", "Advanced", "Professional"].map((level) => <TouchableOpacity key={level} style={styles.experienceOption} onPress={() => { if (!userId) return; void supabase.from("profiles").update({ trading_experience: level }).eq("id", userId).then(({ error }) => { if (error) { showAlert("Could not save experience", "Please try again."); return; } setTradingExperience(level); setExperienceOpen(false); }); }}><Text style={styles.experienceOptionText}>{level}</Text></TouchableOpacity>)}
-          </View>
-        </View>
+        <Pressable style={styles.experienceOverlay} onPress={() => setExperienceOpen(false)} testID="experience-backdrop">
+          <Pressable style={styles.experienceSheet} onPress={() => {}}>
+            <View style={styles.experienceHeader}>
+              <Text style={styles.experienceTitle}>Select Trading Experience</Text>
+              <TouchableOpacity
+                onPress={() => setExperienceOpen(false)}
+                accessibilityRole="button"
+                accessibilityLabel="Close experience selector"
+                testID="experience-close"
+                style={styles.experienceClose}
+              >
+                <Feather name="x" size={22} color={c.mutedForeground} />
+              </TouchableOpacity>
+            </View>
+            {EXPERIENCE_OPTIONS.map((option) => {
+              const active = tradingExperience === option.level;
+              return (
+                <TouchableOpacity
+                  key={option.level}
+                  style={[styles.experienceOptionCard, active && styles.experienceOptionCardActive]}
+                  onPress={() => {
+                    if (!userId) return;
+                    void supabase.from("profiles").update({ trading_experience: option.level }).eq("id", userId).then(({ error }) => {
+                      if (error) { showAlert("Could not save experience", "Please try again."); return; }
+                      setTradingExperience(option.level);
+                      setExperienceOpen(false);
+                    });
+                  }}
+                  accessibilityRole="button"
+                  testID={`experience-option-${option.level.toLowerCase()}`}
+                >
+                  <View style={styles.experienceOptionCopy}>
+                    <Text style={[styles.experienceOptionTitle, active && styles.experienceOptionTitleActive]}>{option.level}</Text>
+                    <Text style={styles.experienceOptionSubtitle}>{option.subtitle}</Text>
+                  </View>
+                  {active && <Feather name="check-circle" size={22} color="#00e5ff" />}
+                </TouchableOpacity>
+              );
+            })}
+          </Pressable>
+        </Pressable>
       </Modal>
 
       {/* Trading-day timezone picker (restored from settings task) */}
@@ -1354,14 +1415,22 @@ function SettingsGroup({
 }
 
 const styles = StyleSheet.create({
-  experienceCard: { backgroundColor: c.card, borderColor: c.border, borderWidth: 1, borderRadius: 12, marginHorizontal: 20, marginBottom: 16, padding: 14 },
+  experienceCard: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: "#121824", borderColor: "rgba(0,229,255,0.22)", borderWidth: 1, borderRadius: 16, marginHorizontal: 20, marginBottom: 16, padding: 14 },
+  experienceIconWrap: { width: 40, height: 40, borderRadius: 12, backgroundColor: "rgba(0,229,255,0.1)", alignItems: "center", justifyContent: "center" },
+  experienceCopy: { flex: 1 },
   experienceLabel: { color: c.mutedForeground, fontSize: 10, fontFamily: "Inter_700Bold", letterSpacing: 1 },
   experienceValue: { color: c.foreground, fontSize: 16, fontFamily: "Inter_600SemiBold", marginTop: 5 },
-  experienceOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,.6)", justifyContent: "flex-end" },
-  experienceSheet: { backgroundColor: c.card, padding: 22, borderTopLeftRadius: 22, borderTopRightRadius: 22 },
-  experienceTitle: { color: c.foreground, fontSize: 20, fontFamily: "Inter_700Bold", marginBottom: 12 },
-  experienceOption: { paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: c.border },
-  experienceOptionText: { color: c.foreground, fontSize: 16, fontFamily: "Inter_500Medium" },
+  experienceOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,.72)", justifyContent: "flex-end" },
+  experienceSheet: { backgroundColor: "#0B0E14", padding: 22, paddingBottom: 34, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderTopWidth: 1, borderColor: "rgba(0,229,255,0.18)" },
+  experienceHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 16 },
+  experienceTitle: { color: c.foreground, fontSize: 20, fontFamily: "Inter_700Bold" },
+  experienceClose: { width: 36, height: 36, borderRadius: 18, backgroundColor: "#121824", borderWidth: 1, borderColor: "rgba(0,229,255,0.25)", alignItems: "center", justifyContent: "center" },
+  experienceOptionCard: { flexDirection: "row", alignItems: "center", backgroundColor: "#121824", borderWidth: 1, borderColor: "rgba(255,255,255,0.08)", borderRadius: 16, padding: 16, marginBottom: 12 },
+  experienceOptionCardActive: { borderColor: "#00e5ff", backgroundColor: "rgba(0,229,255,0.08)", shadowColor: "#00e5ff", shadowOpacity: 0.35, shadowRadius: 12, shadowOffset: { width: 0, height: 0 }, elevation: 6 },
+  experienceOptionCopy: { flex: 1, paddingRight: 10 },
+  experienceOptionTitle: { color: c.foreground, fontSize: 16, fontFamily: "Inter_700Bold" },
+  experienceOptionTitleActive: { color: "#00e5ff" },
+  experienceOptionSubtitle: { color: c.mutedForeground, fontSize: 12, fontFamily: "Inter_500Medium", marginTop: 4 },
   container: {
     flex: 1,
     backgroundColor: "#0A0B0E",
