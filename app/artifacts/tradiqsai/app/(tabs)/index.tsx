@@ -242,10 +242,10 @@ const FEATURED_MARKETS = [
 ] as const;
 const STOCK_SYMBOLS = ['AAPL', 'MSFT', 'NVDA', 'AMZN', 'GOOGL', 'META', 'TSLA', 'SPY', 'QQQ'] as const;
 type Ticker = { symbol: string; price: number; changePercent: number };
-type YahooQuote = {
+type FmpQuote = {
   symbol?: string;
-  regularMarketPrice?: number;
-  regularMarketChangePercent?: number;
+  price?: number;
+  changesPercentage?: number;
 };
 
 function isTicker(value: unknown): value is Ticker {
@@ -317,24 +317,26 @@ export default function HomeScreen() {
     let active = true;
     const loadTickers = async () => {
       try {
-        const response = await fetch(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${STOCK_SYMBOLS.join(',')}`);
+        const response = await fetch(
+          `https://financialmodelingprep.com/api/v3/quote/AAPL,MSFT,NVDA,AMZN,GOOGL,META,TSLA,SPY,QQQ?apikey=${process.env.EXPO_PUBLIC_STOCK_API_KEY}`,
+        );
         if (!response.ok) throw new Error('Ticker unavailable');
-        const data = await response.json() as { quoteResponse?: { result?: YahooQuote[] } };
+        const data = await response.json() as FmpQuote[];
         const quotesBySymbol = new Map(
-          (data.quoteResponse?.result ?? [])
-            .filter((quote): quote is Required<Pick<YahooQuote, 'symbol' | 'regularMarketPrice' | 'regularMarketChangePercent'>> =>
+          (Array.isArray(data) ? data : [])
+            .filter((quote): quote is Required<Pick<FmpQuote, 'symbol' | 'price' | 'changesPercentage'>> =>
               typeof quote.symbol === 'string'
-              && typeof quote.regularMarketPrice === 'number'
-              && Number.isFinite(quote.regularMarketPrice)
-              && typeof quote.regularMarketChangePercent === 'number'
-              && Number.isFinite(quote.regularMarketChangePercent),
+              && typeof quote.price === 'number'
+              && Number.isFinite(quote.price)
+              && typeof quote.changesPercentage === 'number'
+              && Number.isFinite(quote.changesPercentage),
             )
             .map((quote) => [quote.symbol, quote]),
         );
         const updatedTickers = STOCK_SYMBOLS.flatMap((symbol) => {
           const quote = quotesBySymbol.get(symbol);
           return quote
-            ? [{ symbol, price: quote.regularMarketPrice, changePercent: quote.regularMarketChangePercent }]
+            ? [{ symbol, price: quote.price, changePercent: quote.changesPercentage }]
             : [];
         });
         if (active && updatedTickers.length > 0) setTickers(updatedTickers);
