@@ -24,8 +24,9 @@ export function isProfileAdmin(profile: ProfileEntitlement | null | undefined): 
 }
 
 export type UserProfile = ProfileEntitlement & {
-  /** Accepted for call-site convenience but NEVER an entitlement signal:
-   *  email is a user-chosen identifier, not server-owned authorization. */
+  /** Accepted for call-site convenience but NEVER entitlement signals: both
+   *  are client-supplied and forgeable. Only the server-owned role (checked
+   *  via isProfileAdmin) or the resolved server-owned tier grants access. */
   email?: string | null;
   isAdmin?: boolean | null;
 };
@@ -34,8 +35,8 @@ export type RequiredTier = 'free' | 'pro' | 'elite';
 
 /**
  * Unified client-side access engine ("God Mode" rule):
- * 1. Admin Master Bypass — server-owned role or explicit admin flag unlocks
- *    every tier.
+ * 1. Admin Master Bypass — only an immutable, server-owned role unlocks
+ *    every tier. Client-supplied flags or emails never grant access.
  * 2. Tier Hierarchy — free < pro < elite, resolved through the profile
  *    entitlement resolver (manual overrides, trials, billing tier) so every
  *    screen evaluates the same effective tier. Unresolved tiers fail closed.
@@ -48,9 +49,9 @@ export function canAccess(
 ): boolean {
   if (!user) return false;
 
-  // 1. Admin Master Bypass (server-owned signals only — email is user-chosen
-  // and must never unlock paid tiers)
-  if (isProfileAdmin(user) || user.isAdmin === true) {
+  // 1. Admin Master Bypass — immutable backend role only. A client-supplied
+  // isAdmin boolean or email is forgeable and must never unlock paid tiers.
+  if (isProfileAdmin(user)) {
     return true;
   }
 

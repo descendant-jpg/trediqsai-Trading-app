@@ -1001,7 +1001,6 @@ export default function ProfileScreen() {
                 canAccess(
                   {
                     role,
-                    isAdmin,
                     tier: activeAccessTier,
                   },
                   "pro",

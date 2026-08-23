@@ -7,13 +7,15 @@ describe('canAccess', () => {
     expect(canAccess(undefined, 'free')).toBe(false);
   });
 
-  it('grants the admin master bypass regardless of tier', () => {
+  it('grants the admin master bypass only for server-owned roles', () => {
     expect(canAccess({ role: 'admin' }, 'elite')).toBe(true);
     expect(canAccess({ role: 'god_admin' }, 'elite')).toBe(true);
-    expect(canAccess({ isAdmin: true, tier: 'free' }, 'elite')).toBe(true);
+    expect(canAccess({ role: 'ADMIN' }, 'pro')).toBe(true);
   });
 
-  it('never treats an email address as an entitlement signal', () => {
+  it('never treats client-supplied flags or emails as entitlements', () => {
+    expect(canAccess({ isAdmin: true, tier: 'free' }, 'pro')).toBe(false);
+    expect(canAccess({ isAdmin: true, role: 'user' }, 'elite')).toBe(false);
     expect(canAccess({ email: 'admin@example.com', tier: 'free' })).toBe(false);
     expect(canAccess({ email: 'user-admin@gmail.com' }, 'elite')).toBe(false);
   });

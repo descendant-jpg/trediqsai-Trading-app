@@ -1,12 +1,17 @@
-# Nginx Reverse Proxy — api.tradiqsai.com
+# Nginx Reverse Proxy — api.tradiqsai.com (isolated server block)
 
-Reverse proxies public traffic on port 80 to the PM2-managed API on
-`http://localhost:5000` (see `ecosystem.config.js`).
+This server also hosts other apps, so the TradiQs API gets its **own isolated
+server block and its own port (5050)** — nothing else on the host is touched.
+The block proxies public port-80 traffic for `api.tradiqsai.com` to the
+PM2-managed API on `http://localhost:5050` (see `ecosystem.config.cjs`).
 
-## Server block
+## 1. Create the server block file
 
-Save as `/etc/nginx/sites-available/tradiqs-api`, then
-`sudo ln -s /etc/nginx/sites-available/tradiqs-api /etc/nginx/sites-enabled/`.
+```bash
+sudo nano /etc/nginx/sites-available/api.tradiqsai.com
+```
+
+Contents:
 
 ```nginx
 server {
@@ -14,7 +19,7 @@ server {
     server_name api.tradiqsai.com;
 
     location / {
-        proxy_pass http://localhost:5000;
+        proxy_pass http://localhost:5050;
         proxy_http_version 1.1;
 
         # WebSocket / keep-alive upgrade support
@@ -32,26 +37,32 @@ server {
 }
 ```
 
-## Apply
+## 2. Enable the block (symlink)
+
+```bash
+sudo ln -s /etc/nginx/sites-available/api.tradiqsai.com /etc/nginx/sites-enabled/api.tradiqsai.com
+```
+
+## 3. Validate and apply
 
 ```bash
 sudo nginx -t                 # validate config
-sudo systemctl reload nginx   # apply without dropping connections
+sudo systemctl reload nginx   # apply without dropping other sites' traffic
 ```
 
-## TLS (recommended once DNS resolves)
+## 4. TLS (recommended once DNS resolves)
 
 ```bash
 sudo certbot --nginx -d api.tradiqsai.com
 ```
 
-Certbot rewrites the block to listen on 443 and redirects 80 → 443; the
-`proxy_pass http://localhost:5000` target is unchanged.
+Certbot rewrites only this domain's block to listen on 443 and redirects
+80 → 443; the `proxy_pass http://localhost:5050` target is unchanged.
 
-## Process lifecycle
+## 5. API process lifecycle (PM2)
 
 ```bash
 pnpm run build
-pm2 start ecosystem.config.cjs --env production
-pm2 save && pm2 startup       # survive droplet reboots
+pm2 start ecosystem.config.cjs --env production   # name: tradiqs-api-prod, PORT 5050
+pm2 save && pm2 startup                           # survive droplet reboots
 ```

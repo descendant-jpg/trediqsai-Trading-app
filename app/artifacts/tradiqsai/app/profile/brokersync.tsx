@@ -20,7 +20,7 @@ const keyFor = (name: string) => `tradiqs.broker-sync.${name.toLowerCase().repla
 const storage = { get: (key:string) => Platform.OS === 'web' ? AsyncStorage.getItem(key) : SecureStore.getItemAsync(key), set: (key:string, value:string) => Platform.OS === 'web' ? AsyncStorage.setItem(key,value) : SecureStore.setItemAsync(key,value), remove: (key:string) => Platform.OS === 'web' ? AsyncStorage.removeItem(key) : SecureStore.deleteItemAsync(key) };
 
 export default function BrokerSyncScreen() {
-  const { accessTier, isAdmin } = useSubscription(); const userTier = accessTier === 'elite' ? 'ELITE' : accessTier === 'pro' ? 'PRO' : 'FREE'; const canConnect = canAccess({ tier: accessTier, isAdmin }, 'pro'); const canMirror = canAccess({ tier: accessTier, isAdmin }, 'elite');
+  const { accessTier } = useSubscription(); const userTier = accessTier === 'elite' ? 'ELITE' : accessTier === 'pro' ? 'PRO' : 'FREE'; const canConnect = canAccess({ tier: accessTier }, 'pro'); const canMirror = canAccess({ tier: accessTier }, 'elite');
   const [connected, setConnected] = useState<Record<string, boolean>>({}); const [broker, setBroker] = useState<Broker | null>(null); const [values, setValues] = useState<Record<string,string>>({}); const [paywall,setPaywall]=useState(false); const [mirror,setMirror]=useState(false);
   const refresh = async () => { const entries = await Promise.all(BROKERS.map(async b => [b.name, Boolean(await storage.get(keyFor(b.name)))] as const)); setConnected(Object.fromEntries(entries)); };
   useEffect(() => { void refresh(); }, []);
