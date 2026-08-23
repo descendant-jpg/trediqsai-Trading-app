@@ -25,6 +25,12 @@ const authState = vi.hoisted(() => ({
     },
     } as { user: { id: string; email: string; is_anonymous?: boolean } } | null,
 }));
+const subscriptionState = vi.hoisted(() => ({
+  isAdmin: false,
+  isAdminLoading: false,
+  activeAccessTier: "starter",
+  hasActiveEntitlement: false,
+}));
 
 vi.mock("react-native", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react-native-web")>();
@@ -103,7 +109,10 @@ vi.mock("@/context/TradingContext", () => ({
 vi.mock("@/lib/revenuecat", () => ({
   useSubscription: () => ({
     isSubscribed: false,
-    isAdmin: false,
+    isAdmin: subscriptionState.isAdmin,
+    isAdminLoading: subscriptionState.isAdminLoading,
+    activeAccessTier: subscriptionState.activeAccessTier,
+    hasActiveEntitlement: subscriptionState.hasActiveEntitlement,
     refreshProfileEntitlement,
   }),
 }));
@@ -208,6 +217,10 @@ beforeEach(() => {
   profileResponses.splice(0);
   referralResponses.splice(0);
   supabase.from.mockClear();
+  subscriptionState.isAdmin = false;
+  subscriptionState.isAdminLoading = false;
+  subscriptionState.activeAccessTier = "starter";
+  subscriptionState.hasActiveEntitlement = false;
   refreshProfileEntitlement.mockClear();
   refreshPayoutEvaluation.mockClear();
   invalidateQueries.mockClear();
@@ -240,7 +253,7 @@ describe("profile identity refresh", () => {
       Promise.resolve({ data: null, count: null, error: new Error("offline") }),
     );
 
-    render(<ProfileScreen />);
+    const view = render(<ProfileScreen />);
     expect(screen.getByTestId("profile-loading-skeleton")).toBeTruthy();
 
     await act(async () => {
@@ -252,6 +265,8 @@ describe("profile identity refresh", () => {
         },
         error: null,
       });
+      subscriptionState.isAdmin = true;
+      view.rerender(<ProfileScreen />);
     });
 
     await waitFor(() =>
@@ -270,7 +285,7 @@ describe("profile identity refresh", () => {
       refreshedReferrals.promise,
     );
 
-    render(<ProfileScreen />);
+    const view = render(<ProfileScreen />);
     fireEvent.click(screen.getByTestId("profile-refresh-control"));
     expect(
       screen.getByTestId("profile-refresh-control").getAttribute("data-refreshing"),
@@ -286,6 +301,8 @@ describe("profile identity refresh", () => {
         error: null,
       });
       refreshedReferrals.resolve({ data: [], count: 0, error: null });
+      subscriptionState.isAdmin = true;
+      view.rerender(<ProfileScreen />);
     });
     await waitFor(() =>
       expect(screen.getByTestId("profile-admin-command-center")).toBeTruthy(),
@@ -322,6 +339,8 @@ describe("profile identity refresh", () => {
       Promise.resolve({ data: [], count: 0, error: null }),
     );
 
+    subscriptionState.isAdmin = true;
+
     const view = render(<ProfileScreen />);
     await waitFor(() =>
       expect(screen.getByTestId("profile-admin-command-center")).toBeTruthy(),
@@ -338,6 +357,7 @@ describe("profile identity refresh", () => {
         email: "ordinary@example.com",
       },
     };
+    subscriptionState.isAdmin = false;
     view.rerender(<ProfileScreen />);
 
     expect(screen.queryByTestId("profile-admin-command-center")).toBeNull();
@@ -357,5 +377,39 @@ describe("profile identity refresh", () => {
       expect(screen.queryByTestId("profile-loading-skeleton")).toBeNull(),
     );
     expect(screen.queryByTestId("profile-admin-command-center")).toBeNull();
+  });
+
+  it("shows the Elite channel only after an authenticated Elite entitlement resolves", async () => {
+    profileResponses.push(
+      Promise.resolve({
+        data: {
+          username: "elite-trader",
+          referral_code: "ELITE500",
+          role: "user",
+        },
+        error: null,
+      }),
+    );
+    referralResponses.push(Promise.resolve({ data: [], count: 0, error: null }));
+
+    const view = render(<ProfileScreen />);
+    await waitFor(() =>
+      expect(screen.queryByTestId("profile-elite-channel")).toBeNull(),
+    );
+
+    subscriptionState.activeAccessTier = "elite";
+    subscriptionState.hasActiveEntitlement = true;
+    subscriptionState.isAdminLoading = false;
+    view.rerender(<ProfileScreen />);
+    expect(screen.getByTestId("profile-elite-channel")).toBeTruthy();
+
+    subscriptionState.hasActiveEntitlement = false;
+    view.rerender(<ProfileScreen />);
+    expect(screen.queryByTestId("profile-elite-channel")).toBeNull();
+
+    subscriptionState.hasActiveEntitlement = true;
+    subscriptionState.isAdminLoading = true;
+    view.rerender(<ProfileScreen />);
+    expect(screen.queryByTestId("profile-elite-channel")).toBeNull();
   });
 });

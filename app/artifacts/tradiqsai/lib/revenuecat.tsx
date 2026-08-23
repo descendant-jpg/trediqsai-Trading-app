@@ -8,26 +8,31 @@ import { isSupabaseConfigured, supabase } from "@/utils/supabase";
 import { isRevenueCatIdentityReady, revenueCatIdentityKey } from "@/lib/revenuecatIdentity";
 import {
   getProfileAccessTier,
+  getProfileGrantedAccessTier,
   hasProfileProAccess,
-  isAccessTierUpgrade,
   isProfileAdmin,
   type AccessTier,
   type ProfileEntitlement,
 } from "@/lib/profileEntitlements";
-import {
-  isCurrentSubscriptionIdentity,
-  readCurrentSubscriptionValue,
-  type IdentityScoped,
-} from "@/lib/subscriptionIdentity";
+import { isActiveRevenueCatEntitlement } from "@/lib/revenuecatEntitlements";
 
 const SUBSCRIPTION_CACHE_KEY_PREFIX = "revenuecat.entitlement";
 
-const REVENUECAT_IOS_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY;
-const REVENUECAT_ANDROID_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY;
+// Prefer the app's configured public keys. The shorter RC aliases and older
+// API-key names are retained only for backwards-compatible local builds.
+const REVENUECAT_IOS_API_KEY =
+  process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY ??
+  process.env.EXPO_PUBLIC_RC_IOS_KEY ??
+  process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY;
+const REVENUECAT_ANDROID_API_KEY =
+  process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY ??
+  process.env.EXPO_PUBLIC_RC_ANDROID_KEY ??
+  process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY;
 const REVENUECAT_WEB_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_WEB_API_KEY;
 
 export const REVENUECAT_ENTITLEMENT_IDENTIFIER = "pro";
 export const REVENUECAT_ELITE_ENTITLEMENT_IDENTIFIER = "elite";
+export const REVENUECAT_WHALE_ENTITLEMENT_IDENTIFIER = "whale";
 
 type CustomerInfoLike = {
   entitlements: { active?: Record<string, unknown> };
@@ -69,10 +74,22 @@ export function initializeRevenueCat() {
   return true;
 }
 
+/** Native RevenueCat initialization entry point for app startup. */
+export const initRevenueCat = initializeRevenueCat;
+
 export function revenueCatAccessTier(customerInfo: CustomerInfoLike | null | undefined): AccessTier {
   const active = customerInfo?.entitlements.active ?? {};
-  if (active[REVENUECAT_ELITE_ENTITLEMENT_IDENTIFIER] !== undefined) return "elite";
-  if (active[REVENUECAT_ENTITLEMENT_IDENTIFIER] !== undefined) return "pro";
+  // Whale includes Elite-level access in the app even when RevenueCat uses a
+  // separate entitlement identifier for its highest lifetime package.
+  if (isActiveRevenueCatEntitlement(active[REVENUECAT_WHALE_ENTITLEMENT_IDENTIFIER])) {
+    return "elite";
+  }
+  if (isActiveRevenueCatEntitlement(active[REVENUECAT_ELITE_ENTITLEMENT_IDENTIFIER])) {
+    return "elite";
+  }
+  if (isActiveRevenueCatEntitlement(active[REVENUECAT_ENTITLEMENT_IDENTIFIER])) {
+    return "pro";
+  }
   return "starter";
 }
 
@@ -83,15 +100,16 @@ function useSubscriptionContext() {
   // mounted inside AuthProvider in _layout.tsx.
   const { session } = useAuth();
   const userId = session?.user?.id ?? null;
-  const currentUserIdRef = useRef<string | null>(userId);
-  currentUserIdRef.current = userId;
+  // A profile read can resolve after an account switch. Track the currently
+  // rendered identity independently from the async request so old results
+  // cannot grant staff state or clear loading for the next account.
+  const activeProfileUserId = useRef(userId);
+  const profileEntitlementGeneration = useRef(0);
+  activeProfileUserId.current = userId;
 
   // Last-known subscription state from AsyncStorage, used until the live
   // customerInfo fetch resolves so the paywall doesn't flash for subscribers.
-  const [cachedEntitlement, setCachedEntitlement] = useState<
-    IdentityScoped<AccessTier> | null
-  >(null);
-  const cachedTier = readCurrentSubscriptionValue(cachedEntitlement, userId);
+  const [cachedTier, setCachedTier] = useState<AccessTier | null>(null);
   const [cacheLoaded, setCacheLoaded] = useState(false);
   const [listenerCustomerInfo, setListenerCustomerInfo] = useState<{
     userId: string | null;
@@ -105,20 +123,14 @@ function useSubscriptionContext() {
 
   useEffect(() => {
     let cancelled = false;
-    const cacheUserId = userId;
     setCacheLoaded(false);
-    setCachedEntitlement(null);
+    setCachedTier(null);
     setListenerCustomerInfo(null);
     setRevenueCatIdentity(undefined);
     AsyncStorage.getItem(subscriptionCacheKey(userId))
       .then((value) => {
         if (cancelled) return;
-        if (
-          isCurrentSubscriptionIdentity(cacheUserId, currentUserIdRef.current) &&
-          (value === "pro" || value === "elite" || value === "starter")
-        ) {
-          setCachedEntitlement({ userId: cacheUserId, value });
-        }
+        if (value === "pro" || value === "elite" || value === "starter") setCachedTier(value);
       })
       .catch(() => {})
       .finally(() => {
@@ -174,7 +186,7 @@ function useSubscriptionContext() {
 
   useEffect(() => {
     if (!liveTier) return;
-    setCachedEntitlement({ userId, value: liveTier });
+    setCachedTier(liveTier);
     AsyncStorage.setItem(subscriptionCacheKey(userId), liveTier).catch(() => {});
   }, [liveTier, userId]);
 
@@ -193,132 +205,66 @@ function useSubscriptionContext() {
   // Read the server-owned profile entitlement. RevenueCat is for store
   // purchases; the profile covers server-granted paid tiers and staff admins.
   // This is display/access state only—sensitive API actions verify it again.
-  type ProfileEntitlementState = {
-    isSubscribed: boolean;
-    isAdmin: boolean;
-    accessTier: AccessTier;
-    hasManualTierOverride: boolean;
-  };
-  const EMPTY_PROFILE_ENTITLEMENT: ProfileEntitlementState = {
-    isSubscribed: false,
-    isAdmin: false,
-    accessTier: 'starter',
-    hasManualTierOverride: false,
-  };
-  const [profileEntitlement, setProfileEntitlement] = useState<
-    IdentityScoped<ProfileEntitlementState>
-  >({ userId: null, value: EMPTY_PROFILE_ENTITLEMENT });
-  const profileEntitlementRef = useRef(profileEntitlement);
-  const [profileUpgrade, setProfileUpgrade] = useState<{
-    userId: string;
-    tier: Exclude<AccessTier, 'starter'>;
-    sequence: number;
-  } | null>(null);
-  const commitProfileEntitlement = useCallback((
-    capturedUserId: string | null,
-    profile: ProfileEntitlement | null,
-    announceUpgrade: boolean,
-  ) => {
-    if (
-      !isCurrentSubscriptionIdentity(
-        capturedUserId,
-        currentUserIdRef.current,
-      )
-    ) {
-      return;
-    }
-    const previousTier =
-      profileEntitlementRef.current.userId === capturedUserId
-        ? profileEntitlementRef.current.value.accessTier
-        : 'starter';
-    const nextTier = getProfileAccessTier(profile);
-    const nextEntitlement: IdentityScoped<ProfileEntitlementState> = {
-      userId: capturedUserId,
-      value: {
-        isSubscribed: hasProfileProAccess(profile),
-        isAdmin: isProfileAdmin(profile),
-        accessTier: nextTier,
-        hasManualTierOverride: Boolean(profile?.manual_tier_override?.trim()),
-      },
-    };
-    profileEntitlementRef.current = nextEntitlement;
-    setProfileEntitlement(nextEntitlement);
-
-    if (
-      announceUpgrade &&
-      capturedUserId &&
-      nextTier !== 'starter' &&
-      isAccessTierUpgrade(previousTier, nextTier)
-    ) {
-      setProfileUpgrade((current) => ({
-        userId: capturedUserId,
-        tier: nextTier,
-        sequence: (current?.sequence ?? 0) + 1,
-      }));
-    }
-  }, []);
+  const [supabaseIsSubscribed, setSupabaseIsSubscribed] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isAdminLoading, setIsAdminLoading] = useState(true);
+  const [profileAccessTier, setProfileAccessTier] = useState<AccessTier>('starter');
+  const [profileGrantedAccessTier, setProfileGrantedAccessTier] =
+    useState<AccessTier>('starter');
+  const [hasManualTierOverride, setHasManualTierOverride] = useState(false);
   const refreshProfileEntitlement = useCallback(async () => {
-    const requestedUserId = userId;
-    if (!userId || !isSupabaseConfigured) {
-      commitProfileEntitlement(requestedUserId, null, false);
-      setProfileUpgrade(null);
+    const requestUserId = userId;
+    const generation = ++profileEntitlementGeneration.current;
+    const isCurrent = () =>
+      activeProfileUserId.current === requestUserId &&
+      profileEntitlementGeneration.current === generation;
+    const resetProfileEntitlement = () => {
+      if (!isCurrent()) return;
+      setSupabaseIsSubscribed(false);
+      setIsAdmin(false);
+      setProfileAccessTier('starter');
+      setProfileGrantedAccessTier('starter');
+      setHasManualTierOverride(false);
+    };
+
+    if (isCurrent()) setIsAdminLoading(true);
+    if (!requestUserId || !isSupabaseConfigured) {
+      resetProfileEntitlement();
+      if (isCurrent()) setIsAdminLoading(false);
       return;
     }
 
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("role, tier, revenuecat_tier, manual_tier_override, free_trial_until")
-      .eq("id", userId)
-      .maybeSingle();
-    if (error) throw error;
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("role, tier, revenuecat_tier, manual_tier_override, free_trial_until")
+        .eq("id", requestUserId)
+        .maybeSingle();
+      if (error) throw error;
+      if (!isCurrent()) return;
 
-    const profile = data as ProfileEntitlement | null;
-    commitProfileEntitlement(requestedUserId, profile, false);
-  }, [commitProfileEntitlement, userId]);
+      const profile = data as ProfileEntitlement | null;
+      setSupabaseIsSubscribed(hasProfileProAccess(profile));
+      setIsAdmin(isProfileAdmin(profile));
+      setProfileAccessTier(getProfileAccessTier(profile));
+      setProfileGrantedAccessTier(getProfileGrantedAccessTier(profile));
+      setHasManualTierOverride(Boolean(profile?.manual_tier_override?.trim()));
+    } catch (error) {
+      resetProfileEntitlement();
+      throw error;
+    } finally {
+      if (isCurrent()) setIsAdminLoading(false);
+    }
+  }, [userId]);
 
   useEffect(() => {
-    let cancelled = false;
-    setProfileUpgrade(null);
-    void refreshProfileEntitlement().catch(() => {
-      if (!cancelled) {
-        commitProfileEntitlement(userId, null, false);
-      }
-    });
+    void refreshProfileEntitlement().catch(() => {});
     return () => {
-      cancelled = true;
+      // Supersede an in-flight request before the next identity's effect
+      // starts, preventing its late result from mutating global staff state.
+      profileEntitlementGeneration.current += 1;
     };
-  }, [commitProfileEntitlement, refreshProfileEntitlement, userId]);
-
-  // The verified webhook writes the server-owned profile row. Listening to
-  // that row makes the purchase result visible without polling or trusting a
-  // client callback as the entitlement source of truth.
-  useEffect(() => {
-    if (!userId || !isSupabaseConfigured) return;
-
-    const channel = supabase
-      .channel(`profile-entitlement-${userId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'profiles',
-          filter: `id=eq.${userId}`,
-        },
-        (payload) => {
-          commitProfileEntitlement(
-            userId,
-            payload.new as ProfileEntitlement,
-            true,
-          );
-        },
-      )
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [commitProfileEntitlement, userId]);
+  }, [refreshProfileEntitlement]);
 
   // Invalidate the cache when a purchase or restore completes: recompute the
   // store entitlement and force a fresh server-owned profile read so screens
@@ -326,19 +272,10 @@ function useSubscriptionContext() {
   const applyFreshCustomerInfo = useCallback(async (
     customerInfo: Awaited<ReturnType<typeof Purchases.getCustomerInfo>>,
   ) => {
-    const capturedUserId = userId;
-    if (
-      !isCurrentSubscriptionIdentity(
-        capturedUserId,
-        currentUserIdRef.current,
-      )
-    ) {
-      return;
-    }
     const tier = revenueCatAccessTier(customerInfo);
-    setListenerCustomerInfo({ userId: capturedUserId, customerInfo });
-    setCachedEntitlement({ userId: capturedUserId, value: tier });
-    AsyncStorage.setItem(subscriptionCacheKey(capturedUserId), tier).catch(() => {});
+    setListenerCustomerInfo({ userId, customerInfo });
+    setCachedTier(tier);
+    AsyncStorage.setItem(subscriptionCacheKey(userId), tier).catch(() => {});
     await Promise.all([
       refetchCustomerInfo(),
       refreshProfileEntitlement().catch(() => {}),
@@ -416,26 +353,34 @@ function useSubscriptionContext() {
 
   // Prefer live RevenueCat data; fall back to the cached value while loading.
   // OR grant access from the server-owned profile tier/override/admin role.
-  const currentProfileEntitlement =
-    readCurrentSubscriptionValue(profileEntitlement, userId) ??
-    EMPTY_PROFILE_ENTITLEMENT;
-  const activeProfileUpgrade =
-    profileUpgrade?.userId === userId ? profileUpgrade : null;
   const resolvedRevenueCatTier = liveTier ?? cachedTier ?? "starter";
   const rcIsSubscribed = resolvedRevenueCatTier !== "starter";
-  const isSubscribed = currentProfileEntitlement.hasManualTierOverride
-    ? currentProfileEntitlement.isSubscribed
-    : rcIsSubscribed || currentProfileEntitlement.isSubscribed;
+  const isSubscribed = hasManualTierOverride ? supabaseIsSubscribed : rcIsSubscribed || supabaseIsSubscribed;
   // RevenueCat's shared entitlement represents Pro access. A server-owned
   // Elite tier takes precedence when it is present.
   const accessTier: AccessTier =
-    currentProfileEntitlement.isAdmin ||
-    currentProfileEntitlement.accessTier === 'elite' ||
-    resolvedRevenueCatTier === "elite"
+    isAdmin || profileAccessTier === 'elite' || resolvedRevenueCatTier === "elite"
       ? 'elite'
-      : isSubscribed || currentProfileEntitlement.accessTier === 'pro'
+      : isSubscribed || profileAccessTier === 'pro'
         ? 'pro'
         : 'starter';
+  // Cached store state makes paywalls feel responsive, but it must never
+  // authorize an external private-channel link. Those links require a
+  // currently resolved authenticated entitlement from RevenueCat or the
+  // server-owned profile.
+  const isAuthenticated = Boolean(userId) && session?.user?.is_anonymous !== true;
+  const activeAccessTier: AccessTier =
+    isAdmin ||
+    profileGrantedAccessTier === "elite" ||
+    liveTier === "elite"
+      ? "elite"
+      : profileGrantedAccessTier === "pro" || liveTier === "pro"
+        ? "pro"
+        : "starter";
+  const hasActiveEntitlement =
+    isAuthenticated &&
+    !isAdminLoading &&
+    activeAccessTier !== "starter";
 
   // Entitlement is active but the user cancelled in the store: Pro access
   // continues until expirationDate, then the paywall reappears normally.
@@ -456,10 +401,11 @@ function useSubscriptionContext() {
     offerings: offeringsQuery.data,
     activeEntitlement,
     isSubscribed,
-    isAdmin: currentProfileEntitlement.isAdmin,
-    isAdminLoading: Boolean(userId) && profileEntitlement.userId !== userId,
+    isAdmin,
+    isAdminLoading,
     accessTier,
-    profileUpgrade: activeProfileUpgrade,
+    activeAccessTier,
+    hasActiveEntitlement,
     refreshProfileEntitlement,
     isWindingDown,
     windDownExpirationDate,

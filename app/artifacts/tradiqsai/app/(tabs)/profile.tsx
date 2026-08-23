@@ -74,7 +74,6 @@ const LANGUAGES = ["English", "Spanish", "French"] as const;
 type Language = (typeof LANGUAGES)[number];
 
 const TELEGRAM_CHANNEL_URL = "https://t.me/tradiqsai";
-const TELEGRAM_GROUP_URL = "https://t.me/tradiqs_ai";
 
 const PARTNER_PROGRAM_COPY: Record<string, string> = {
   "Crypto Brokers":
@@ -220,7 +219,14 @@ export default function ProfileScreen() {
   const { mfa } = useLocalSearchParams<{ mfa?: string }>();
   const queryClient = useQueryClient();
   const { session, signOut, startAccountCreation } = useAuth();
-  const { isSubscribed, isAdmin, refreshProfileEntitlement } = useSubscription();
+  const {
+    isSubscribed,
+    isAdmin,
+    isAdminLoading,
+    activeAccessTier,
+    hasActiveEntitlement,
+    refreshProfileEntitlement,
+  } = useSubscription();
   const { tradingDayTz, setTradingDayTz } = useTrading();
   const {
     evaluation,
@@ -1035,15 +1041,21 @@ export default function ProfileScreen() {
             onPress={() => setActiveModal("terms")}
           />
         </SettingsGroup>
-        <TouchableOpacity
-          style={styles.community}
-          onPress={() => openLink(TELEGRAM_GROUP_URL, "Elite Community")}
-        >
-          <Feather name="send" size={17} color={c.primaryForeground} />
-          <Text style={styles.communityText}>
-            Join the TradiQs Elite Community
-          </Text>
-        </TouchableOpacity>
+        {!isGuest &&
+          !isAdminLoading &&
+          hasActiveEntitlement &&
+          activeAccessTier === "elite" && (
+          <TouchableOpacity
+            style={styles.community}
+            onPress={() => openLink(TELEGRAM_CHANNEL_URL, "Elite Channel")}
+            testID="profile-elite-channel"
+          >
+            <Feather name="send" size={17} color={c.primaryForeground} />
+            <Text style={styles.communityText}>
+              Join the TradiQs Elite Channel
+            </Text>
+          </TouchableOpacity>
+        )}
         <TouchableOpacity
           style={styles.signOutButton}
           onPress={handleSignOut}

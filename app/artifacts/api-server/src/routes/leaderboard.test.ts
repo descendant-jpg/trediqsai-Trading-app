@@ -1,76 +1,110 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import express, { type Express } from "express";
-import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import { GetLeaderboardResponse } from "@workspace/api-zod";
+import type { Server } from "node:http";
+import leaderboardRouter, {
+  fetchAllCompetitionRows,
+  rankCompetitionProfiles,
+} from "./leaderboard";
 
-let server: Server;
-let baseUrl: string;
-
-async function startFreshApp(): Promise<void> {
-  // Follow the autopilot test pattern: fresh module import per test.
-  vi.resetModules();
-  const { default: leaderboardRouter } = await import("./leaderboard");
-  const app: Express = express();
-  app.use(express.json());
-  app.use(leaderboardRouter);
-  await new Promise<void>((resolve) => {
-    server = app.listen(0, "127.0.0.1", () => resolve());
-  });
-  const { address, port } = server.address() as AddressInfo;
-  baseUrl = `http://${address}:${port}`;
-}
-
-async function request(
-  method: string,
-  path: string,
-): Promise<{ status: number; body: any }> {
-  const res = await fetch(`${baseUrl}${path}`, { method });
-  const text = await res.text();
-  let body: any;
-  try {
-    body = JSON.parse(text);
-  } catch {
-    body = text;
-  }
-  return { status: res.status, body };
-}
-
-beforeEach(async () => {
-  await startFreshApp();
-});
+let server: Server | undefined;
 
 afterEach(async () => {
+  vi.unstubAllEnvs();
+  if (!server) return;
   await new Promise<void>((resolve, reject) =>
-    server.close((err) => (err ? reject(err) : resolve())),
+    server?.close((error) => (error ? reject(error) : resolve())),
   );
+  server = undefined;
 });
 
-describe("GET /leaderboard", () => {
-  it("returns a schema-valid list of traders", async () => {
-    const { status, body } = await request("GET", "/leaderboard");
-    expect(status).toBe(200);
-    expect(() => GetLeaderboardResponse.parse(body)).not.toThrow();
-    expect(body).toHaveLength(10);
+describe("competition leaderboard", () => {
+  it("ranks only persisted profile performance in response order", () => {
+    expect(
+      rankCompetitionProfiles([
+        {
+          id: "trader-a",
+          username: "alpha",
+        },
+        {
+          id: "trader-b",
+          username: null,
+        },
+      ],
+      [
+        { user_id: "trader-a", pnl: "4200.25", price_source: "SERVER" },
+        { user_id: "trader-a", pnl: -100, price_source: "SERVER" },
+        { user_id: "trader-b", pnl: -80, price_source: "SERVER" },
+        {
+          user_id: "trader-b",
+          pnl: 999999,
+          price_source: "CLIENT",
+        },
+      ],
+    )).toEqual([
+      {
+        id: "trader-a",
+        rank: 1,
+        username: "alpha",
+        profit: 4100.25,
+        winRate: 50,
+      },
+      {
+        id: "trader-b",
+        rank: 2,
+        username: null,
+        profit: -80,
+        winRate: 0,
+      },
+    ]);
   });
 
-  it("returns traders in rank order with unique ids", async () => {
-    const { body } = await request("GET", "/leaderboard");
-    const ranks = body.map((t: any) => t.rank);
-    expect(ranks).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
-    const ids = body.map((t: any) => t.id);
-    expect(new Set(ids).size).toBe(ids.length);
-    expect(body[0].name).toBe("Ava Chen");
+  it("reads every page and keeps a deterministic order for tied profit", async () => {
+    const rows = Array.from({ length: 1_001 }, (_, index) => ({
+      id: `trader-${String(index).padStart(4, "0")}`,
+      username: `trader-${index}`,
+    }));
+    const requestedPages: Array<[number, number]> = [];
+
+    const fetchedRows = await fetchAllCompetitionRows(async (from, to) => {
+      requestedPages.push([from, to]);
+      return { data: rows.slice(from, to + 1), error: null };
+    });
+
+    expect(requestedPages).toEqual([
+      [0, 999],
+      [1000, 1999],
+    ]);
+    expect(
+      rankCompetitionProfiles(fetchedRows, [
+        { user_id: "trader-1000", pnl: 20, price_source: "SERVER" },
+        { user_id: "trader-0001", pnl: 20, price_source: "SERVER" },
+      ]),
+    ).toMatchObject([
+      { id: "trader-0001", rank: 1, profit: 20 },
+      { id: "trader-1000", rank: 2, profit: 20 },
+    ]);
   });
 
-  it("is stable across repeated requests", async () => {
-    const first = await request("GET", "/leaderboard");
-    const second = await request("GET", "/leaderboard");
-    expect(second.body).toEqual(first.body);
-  });
+  it("returns an explicit unavailable error instead of fixture traders", async () => {
+    vi.stubEnv("SUPABASE_URL", "");
+    vi.stubEnv("EXPO_PUBLIC_SUPABASE_URL", "");
+    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "");
 
-  it("returns 404 for unknown paths and methods without handlers", async () => {
-    expect((await request("GET", "/leaderboard/t1")).status).toBe(404);
-    expect((await request("POST", "/leaderboard")).status).toBe(404);
+    const app: Express = express();
+    app.use(leaderboardRouter);
+    await new Promise<void>((resolve) => {
+      server = app.listen(0, "127.0.0.1", () => resolve());
+    });
+    const runningServer = server!;
+    const { address, port } = runningServer.address() as AddressInfo;
+    const response = await fetch(
+      `http://${address}:${port}/competition/leaderboard`,
+    );
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({
+      error: "Competition leaderboard is temporarily unavailable.",
+    });
   });
 });
