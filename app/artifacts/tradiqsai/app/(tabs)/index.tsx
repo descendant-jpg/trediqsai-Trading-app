@@ -433,28 +433,34 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
-         {tickerLoading ? <View style={styles.tickerLoading} accessibilityRole="progressbar" accessibilityLabel="Loading live market data">
-           <Text style={styles.tickerLoadingText}>Loading live market data…</Text>
-         </View> : liveTickers.length > 0 ? <View style={styles.tickerViewport}>
-           <Animated.View
-             style={[styles.tickerRow, { transform: [{ translateX: tickerOffset }] }]}
-           >
-             {[0, 1].map((copy) => (
-               <View
-                 key={`ticker-copy-${copy}`}
-                 style={styles.tickerCopy}
-                 onLayout={copy === 0 ? (event) => setPrimaryTickerWidth(event.nativeEvent.layout.width) : undefined}
-               >
-                 {liveTickers.map((ticker) => {
-                   const isPositive = ticker.changePercent > 0;
-                   const isNegative = ticker.changePercent < 0;
-                   const changeColor = isPositive ? '#00FF00' : isNegative ? '#FF0000' : c.mutedForeground;
-                   return <View key={`${ticker.symbol}-${copy}`} style={styles.tickerPill}><Text style={styles.tickerSymbol}>{ticker.symbol}</Text><Text style={styles.tickerPrice}>${ticker.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text><Text style={[styles.tickerChange, { color: changeColor }]}>{`${isPositive ? '+' : ''}${ticker.changePercent.toFixed(2)}%`}</Text></View>;
-                 })}
-               </View>
-             ))}
-          </Animated.View>
-          </View> : null}
+         <View style={styles.tickerViewport} testID="stock-marquee">
+           {tickerLoading ? (
+             <View style={styles.tickerStatus} accessibilityRole="progressbar" accessibilityLabel="Loading live market data">
+               <Text style={styles.tickerStatusText}>Loading live market data…</Text>
+             </View>
+           ) : liveTickers.length > 0 ? (
+             <Animated.View style={[styles.tickerRow, { transform: [{ translateX: tickerOffset }] }]}>
+               {[0, 1].map((copy) => (
+                 <View
+                   key={`ticker-copy-${copy}`}
+                   style={styles.tickerCopy}
+                   onLayout={copy === 0 ? (event) => setPrimaryTickerWidth(event.nativeEvent.layout.width) : undefined}
+                 >
+                   {liveTickers.map((ticker) => {
+                     const isPositive = ticker.changePercent > 0;
+                     const isNegative = ticker.changePercent < 0;
+                     const changeColor = isPositive ? '#00FF00' : isNegative ? '#FF0000' : c.mutedForeground;
+                     return <View key={`${ticker.symbol}-${copy}`} style={styles.tickerPill}><Text style={styles.tickerSymbol}>{ticker.symbol}</Text><Text style={styles.tickerPrice}>${ticker.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text><Text style={[styles.tickerChange, { color: changeColor }]}>{`${isPositive ? '+' : ''}${ticker.changePercent.toFixed(2)}%`}</Text></View>;
+                   })}
+                 </View>
+               ))}
+             </Animated.View>
+           ) : (
+             <View style={styles.tickerStatus}>
+               <Text style={styles.tickerStatusText}>Live market data is temporarily unavailable.</Text>
+             </View>
+           )}
+         </View>
 
          <Text style={styles.sectionLabel}>ANALYZE CHART WITH AI</Text>
          <View style={styles.visionRow}>
@@ -637,8 +643,8 @@ const styles = StyleSheet.create({
   onlineDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: c.success },
   onlineText: { color: c.success, fontSize: 11, fontFamily: 'Inter_600SemiBold' },
   tickerViewport: { overflow: 'hidden', marginHorizontal: -16, paddingVertical: 2 },
-  tickerLoading: { minHeight: 50, marginHorizontal: -16, alignItems: 'center', justifyContent: 'center' },
-  tickerLoadingText: { color: c.mutedForeground, fontSize: 11, fontFamily: 'Inter_600SemiBold' },
+  tickerStatus: { minHeight: 50, alignItems: 'center', justifyContent: 'center' },
+  tickerStatusText: { color: c.mutedForeground, fontSize: 11, fontFamily: 'Inter_600SemiBold' },
   tickerRow: { flexDirection: 'row', alignSelf: 'flex-start' },
   tickerCopy: { flexDirection: 'row', gap: 8, paddingLeft: 16, paddingRight: 8 },
   tickerPill: { backgroundColor: c.card, borderWidth: 1, borderColor: c.border, borderRadius: 10, paddingHorizontal: 11, paddingVertical: 8, minWidth: 100 },
