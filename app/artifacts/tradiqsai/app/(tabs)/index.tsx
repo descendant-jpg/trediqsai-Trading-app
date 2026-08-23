@@ -441,8 +441,10 @@ export default function HomeScreen() {
                  onLayout={copy === 0 ? (event) => setPrimaryTickerWidth(event.nativeEvent.layout.width) : undefined}
                >
                  {liveTickers.map((ticker) => {
-                   const isUp = ticker.changePercent >= 0;
-                   return <View key={`${ticker.symbol}-${copy}`} style={styles.tickerPill}><Text style={styles.tickerSymbol}>{ticker.symbol}</Text><Text style={styles.tickerPrice}>${ticker.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text><Text style={[styles.tickerChange, { color: isUp ? '#00FF00' : '#FF0000' }]}>{`${isUp ? '+' : ''}${ticker.changePercent.toFixed(2)}%`}</Text></View>;
+                   const isPositive = ticker.changePercent > 0;
+                   const isNegative = ticker.changePercent < 0;
+                   const changeColor = isPositive ? '#00FF00' : isNegative ? '#FF0000' : c.mutedForeground;
+                   return <View key={`${ticker.symbol}-${copy}`} style={styles.tickerPill}><Text style={styles.tickerSymbol}>{ticker.symbol}</Text><Text style={styles.tickerPrice}>${ticker.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text><Text style={[styles.tickerChange, { color: changeColor }]}>{`${isPositive ? '+' : ''}${ticker.changePercent.toFixed(2)}%`}</Text></View>;
                  })}
                </View>
              ))}
