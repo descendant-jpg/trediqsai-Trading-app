@@ -242,11 +242,16 @@ const FEATURED_MARKETS = [
 ] as const;
 const STOCK_SYMBOLS = ['AAPL', 'MSFT', 'NVDA', 'AMZN', 'GOOGL', 'META', 'TSLA', 'SPY', 'QQQ'] as const;
 type Ticker = { symbol: string; price: number; changePercent: number };
-type FmpQuote = {
+type TwelveDataQuote = {
   symbol?: string;
-  price?: number;
-  changePercentage?: number;
-  changesPercentage?: number;
+  close?: string | number;
+  previous_close?: string | number;
+  percent_change?: string | number;
+};
+type TwelveDataResponse = {
+  status?: string;
+  message?: string;
+  [symbol: string]: TwelveDataQuote | string | undefined;
 };
 
 function isTicker(value: unknown): value is Ticker {
@@ -319,11 +324,9 @@ export default function HomeScreen() {
 
     const loadTickers = async () => {
       try {
-        const url = `https://financialmodelingprep.com/stable/quote?symbol=AAPL,MSFT,NVDA,AMZN,GOOGL,META,TSLA,SPY,QQQ&apikey=${process.env.EXPO_PUBLIC_STOCK_API_KEY || ''}`;
+        const url = `https://api.twelvedata.com/quote?symbol=AAPL,MSFT,NVDA,AMZN,GOOGL,META,TSLA,SPY,QQQ&apikey=${process.env.EXPO_PUBLIC_STOCK_API_KEY || ''}`;
         const response = await fetch(url);
-        console.log('FMP HTTP Status:', response.status);
         const rawText = await response.text();
-        console.log('FMP Raw Response:', rawText.substring(0, 250));
 
         if (!url.includes('apikey=') || url.endsWith('apikey=')) {
           throw new Error('Env Var Failed: API Key is undefined in the bundle.');
@@ -333,22 +336,24 @@ export default function HomeScreen() {
           throw new Error(`HTTP ${response.status}: ${rawText.substring(0, 100)}`);
         }
 
-        if (rawText.includes('Error Message') || rawText.includes('Invalid API KEY')) {
-          throw new Error(`FMP API Key Error: ${rawText.substring(0, 100)}`);
+        const parsedJson = JSON.parse(rawText) as TwelveDataResponse;
+        if (parsedJson.status === 'error') {
+          throw new Error(parsedJson.message || 'Twelve Data API request failed.');
         }
 
-        const data = JSON.parse(rawText) as FmpQuote[];
+        const dataArray = Object.values(parsedJson);
         const quotesBySymbol = new Map<string, { price: number; changePercent: number }>();
-        for (const quote of Array.isArray(data) ? data : []) {
-          const changePercent = quote.changePercentage ?? quote.changesPercentage;
+        for (const item of dataArray) {
+          if (!item || typeof item !== 'object') continue;
+          const quote = item as TwelveDataQuote;
+          const price = Number.parseFloat(String(quote.close || quote.previous_close));
+          const changePercent = Number.parseFloat(String(quote.percent_change));
           if (
             typeof quote.symbol === 'string'
-            && typeof quote.price === 'number'
-            && Number.isFinite(quote.price)
-            && typeof changePercent === 'number'
+            && Number.isFinite(price)
             && Number.isFinite(changePercent)
           ) {
-            quotesBySymbol.set(quote.symbol, { price: quote.price, changePercent });
+            quotesBySymbol.set(quote.symbol, { price, changePercent });
           }
         }
         const updatedTickers = STOCK_SYMBOLS.flatMap((symbol) => {
@@ -358,7 +363,7 @@ export default function HomeScreen() {
             : [];
         });
         if (updatedTickers.length === 0) {
-          throw new Error(`FMP returned no usable quotes: ${rawText.substring(0, 100)}`);
+          throw new Error('Twelve Data returned no usable quotes.');
         }
         if (active) setTickers(updatedTickers);
       } catch (error) {
