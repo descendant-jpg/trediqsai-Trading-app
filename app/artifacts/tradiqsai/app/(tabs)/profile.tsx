@@ -281,7 +281,7 @@ export default function ProfileScreen() {
   const displayName = isGuest
     ? "Guest Trader"
     : (metadataName || username || userEmail || "Trader");
-  const userId = session?.user.id ?? null;
+  const userId = session?.user?.id ?? null;
   const activeProfileUserId = useRef(userId);
   const profileRequestGeneration = useRef(0);
   const referralRequestGeneration = useRef(0);
@@ -876,7 +876,7 @@ export default function ProfileScreen() {
         </View>
           </>
         )}
-        {role === "god_admin" && (
+        {isAdmin && (
           <TouchableOpacity
             style={styles.commandCenterCard}
             onPress={() => {
