@@ -15,13 +15,13 @@ import colors from '@/constants/colors';
 const c = colors.light;
 
 const SESSION_PAIRS: Record<string, string[]> = {
-  london: ['OANDA:EUR_USD', 'OANDA:GBP_USD', 'OANDA:EUR_GBP'],
-  'new york': ['OANDA:EUR_USD', 'OANDA:USD_JPY', 'OANDA:GBP_USD'],
-  tokyo: ['OANDA:USD_JPY', 'OANDA:AUD_USD', 'OANDA:NZD_USD'],
-  sydney: ['OANDA:USD_JPY', 'OANDA:AUD_USD', 'OANDA:NZD_USD'],
+  london: ['AAPL', 'MSFT', 'AMZN', 'GOOGL'],
+  'new york': ['SPY', 'QQQ', 'NVDA', 'TSLA'],
+  tokyo: ['META', 'AAPL', 'NVDA', 'GOOGL'],
+  sydney: ['META', 'AAPL', 'NVDA', 'GOOGL'],
 };
 
-const DEFAULT_PAIRS = ['OANDA:EUR_USD', 'OANDA:GBP_USD', 'OANDA:USD_JPY'];
+const DEFAULT_PAIRS = ['AAPL', 'MSFT', 'AMZN', 'GOOGL'];
 
 const REFRESH_INTERVAL_MS = 60_000;
 
@@ -82,7 +82,7 @@ export default function SessionDetailsScreen() {
             );
             if (!res.ok) throw new Error(`Finnhub API Error: ${res.status}`);
             const data = (await res.json()) as FinnhubQuote;
-            return { symbol: sym.replace('OANDA:', '').replace('_', '/'), data };
+            return { symbol: sym, data };
           }),
         );
         const resolved = results.flatMap(({ symbol, data }) => {
@@ -180,7 +180,7 @@ export default function SessionDetailsScreen() {
               <View key={quote.symbol} style={styles.card}>
                 <View style={styles.cardLeft}>
                   <Text style={styles.symbol}>{quote.symbol}</Text>
-                  <Text style={styles.price}>{quote.price.toFixed(5)}</Text>
+                  <Text style={styles.price}>{quote.price.toFixed(2)}</Text>
                 </View>
                 <View style={[styles.changeBadge, { backgroundColor: `${changeColor}1A` }]}>
                   <Feather
