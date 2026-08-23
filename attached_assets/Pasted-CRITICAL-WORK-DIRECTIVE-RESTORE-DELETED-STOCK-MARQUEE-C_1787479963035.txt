@@ -1,0 +1,25 @@
+CRITICAL WORK DIRECTIVE: RESTORE DELETED STOCK MARQUEE, CONNECT LIVE API, AND FIX ANIMATION.
+
+To conserve context window and AI credits, DO NOT read previous chat history.
+
+You previously deleted or commented out the Stock Marquee component from the Home screen (likely `app/(tabs)/index.tsx` or `app/(tabs)/home.tsx`) to bypass an animation or rendering error. This is unacceptable. You must restore it immediately and implement it correctly.
+
+### 1. Restore the Ticker Component
+- Place the stock marquee component back at the very top of the Home screen, directly above the "ANALYZE CHART WITH AI" section.
+
+### 2. Connect Live Yahoo Finance Data
+- Wire a `useEffect` to fetch from the free public endpoint: `https://query1.finance.yahoo.com/v7/finance/quote?symbols=AAPL,MSFT,NVDA,AMZN,GOOGL,META,TSLA,SPY,QQQ`
+- Extract `symbol`, `regularMarketPrice` (format to 2 decimals), and `regularMarketChangePercent`.
+- UI Colors: Positive percentages must render Green with a `+` prefix. Negative percentages must render Red. Show a fallback loading state if the fetch is pending.
+
+### 3. Implement True Right-to-Left Infinite Scroll
+- The ticker must move continuously from RIGHT to LEFT without ever stopping or freezing.
+- To prevent freezing at the end of the list, duplicate the stock array in the render (e.g., `const tickerData = [...stocks, ...stocks]`) to create a seamless visual wrapper.
+- Use React Native's `Animated` API. Create an `Animated.Value(0)`. Drive it from `0` to a negative X translation value (based on content width) over a set duration, then instantly snap it back to `0` inside an `Animated.loop`.
+
+### 4. Verify & Push
+- Run full workspace typechecks. Do not delete the component if you hit a type error; fix the types.
+- Commit: `fix(home): restore stock marquee, wire live Yahoo API, and implement continuous right-to-left infinite scroll`
+- Push securely to the active repository.
+
+EXECUTION REQUIREMENT: Output the exact component file where you restored the ticker, and confirm the right-to-left `Animated.loop` is successfully implemented without crashing.

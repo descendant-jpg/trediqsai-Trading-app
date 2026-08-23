@@ -12,11 +12,17 @@ import {
   autopilotStateTable,
   autopilotPnlHistoryTable,
 } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { identity, requestUserId, type TokenVerifier } from "../middlewares/identity";
 import { requireAal2IfMfaEnrolledSoft, requireAal2IfMfaEnrolledWrite } from "../middlewares/aal2";
-import { hasEliteAccess, hasProAccess, type TierLookup } from "../lib/entitlement";
+import {
+  hasEliteAccess,
+  hasProAccess,
+  isProTier,
+  resolveAccessTier,
+  type TierLookup,
+} from "../lib/entitlement";
 
 type BotState = {
   id: string;
@@ -496,6 +502,108 @@ async function persistStoppedPro(
   await persistState(userId, state);
 }
 
+/**
+ * Free/Starter accounts may run at most ONE non-Pro bot. Seeded defaults
+ * boot with two free bots running, and a crafted or restored state could
+ * hold more, so the limit is enforced on every state read/change for
+ * non-Pro users: the first running bot stays, the rest are stopped.
+ *
+ * Returns the bots it stopped so callers can persist them.
+ */
+async function enforceFreeTierBotLimit(
+  userId: string,
+  state: UserAutopilot,
+  tierLookup?: TierLookup,
+): Promise<BotState[]> {
+  if (await hasProAccess(userId, tierLookup)) return [];
+  const runningFree = state.bots.filter((b) => !b.proOnly && b.running);
+  if (runningFree.length <= 1) return [];
+
+  // Settle P&L earned before the trim, mirroring enforceProEntitlement.
+  advanceSimulation(userId, state);
+  const stopped = runningFree.slice(1);
+  for (const bot of stopped) {
+    bot.running = false;
+    pushLog(
+      state,
+      `[SYS] ${bot.name} stopped — Free tier runs 1 algorithm at a time`,
+    );
+  }
+  logger.warn(
+    { userId, stopped: stopped.map((b) => b.id) },
+    "Trimmed free tier to one active bot",
+  );
+  return stopped;
+}
+
+/** Persist the bots stopped by the free-tier limit. */
+async function persistStoppedBots(
+  userId: string,
+  state: UserAutopilot,
+  stopped: BotState[],
+): Promise<void> {
+  await Promise.all(stopped.map((bot) => persistBot(userId, bot)));
+  await persistState(userId, state);
+}
+
+/**
+ * Ensure every bot has a persisted row WITHOUT overwriting existing ones.
+ * Rows are otherwise written lazily, so a concurrent API instance counting
+ * running bots in Postgres could miss a bot that only exists in this
+ * process's memory. Insert-if-missing is deliberate: an upsert here could
+ * clobber a running flag another instance has just claimed.
+ */
+async function syncBotRowsIfMissing(
+  userId: string,
+  state: UserAutopilot,
+): Promise<void> {
+  await Promise.all(
+    state.bots.map((bot) =>
+      db
+        .insert(autopilotBotsTable)
+        .values({
+          userId,
+          botId: bot.id,
+          running: bot.running,
+          capital: bot.capital,
+          drawdown: bot.drawdown,
+        })
+        .onConflictDoNothing(),
+    ),
+  );
+}
+
+/**
+ * Atomically claim the free tier's single running-bot slot in Postgres.
+ * The process-local check alone is not enough: two API instances can each
+ * observe zero running bots and both start one. The per-user advisory lock
+ * serializes the count-check-and-claim across every instance sharing the
+ * database. Returns false when another bot is already running.
+ */
+async function tryClaimFreeBotSlot(
+  userId: string,
+  botId: string,
+): Promise<boolean> {
+  return await db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${userId}))`);
+    const rows = await tx
+      .select()
+      .from(autopilotBotsTable)
+      .where(eq(autopilotBotsTable.userId, userId));
+    if (rows.some((row) => row.running && row.botId !== botId)) return false;
+    await tx
+      .update(autopilotBotsTable)
+      .set({ running: true })
+      .where(
+        and(
+          eq(autopilotBotsTable.userId, userId),
+          eq(autopilotBotsTable.botId, botId),
+        ),
+      );
+    return true;
+  });
+}
+
 // ---- Routes ----------------------------------------------------------------
 
 /**
@@ -527,6 +635,12 @@ export function createAutopilotRouter(
     assurance ?? (verifier ? testPassthrough : requireAal2IfMfaEnrolledWrite);
   const requireReadAssurance: RequestHandler =
     readAssurance ?? (verifier ? testPassthrough : requireAal2IfMfaEnrolledSoft);
+  // Identity + tier resolution for every AutoPilot route, ahead of body
+  // parsing and state loading. Anonymous callers and unresolved tiers fail
+  // closed. Free/Starter users are allowed through for reads and their
+  // single free bot — Pro-only bots, a second concurrent bot, and the
+  // engine-level controls (master switch, execution market) are gated per
+  // route below.
   const requireAutopilotAccess: RequestHandler = async (_req, res, next) => {
     try {
       const userId = requestUserId(res);
@@ -534,11 +648,20 @@ export function createAutopilotRouter(
         res.status(401).json({ error: "Sign in required." });
         return;
       }
-      if (!(await hasProAccess(userId, tierLookup))) {
-        // If this user previously had paid access in this process, revoke
-        // privileged persisted execution before denying the request. Do not
-        // lazily load state for ordinary free users merely because they probed
-        // the endpoint.
+      const tier = await resolveAccessTier(userId, tierLookup);
+      if (tier === null) {
+        // No profile row or a broken lookup: fail closed rather than guess.
+        res.status(403).json({
+          error: "AutoPilot requires a signed-in account",
+          code: "pro_subscription_required",
+        });
+        return;
+      }
+      if (!isProTier(tier)) {
+        // A lapsed subscriber must not keep privileged persisted execution
+        // running just because their tier is now free — revoke it at the
+        // first touch. Do not lazily load state for ordinary free users
+        // merely because they probed the endpoint.
         const loadedState = users.get(userId);
         const state = loadedState
           ? await loadedState
@@ -553,11 +676,6 @@ export function createAutopilotRouter(
           if (proRevoked) await persistStoppedPro(userId, state);
           else if (assetRevoked) await persistState(userId, state);
         }
-        res.status(403).json({
-          error: "AutoPilot requires a Pro or Elite subscription",
-          code: "pro_subscription_required",
-        });
-        return;
       }
       next();
     } catch (err) {
@@ -565,9 +683,6 @@ export function createAutopilotRouter(
     }
   };
   router.use("/autopilot", identity(verifier));
-  // Every AutoPilot route is paid-only. Keep this gate ahead of body parsing
-  // and state loading so free, Starter, unresolved, and anonymous callers
-  // cannot read, mutate, or advance execution state through a crafted request.
   router.use("/autopilot", requireAutopilotAccess);
 
   router.get("/autopilot", async (_req, res, next) => {
@@ -580,6 +695,10 @@ export function createAutopilotRouter(
         await persistStoppedPro(userId, state);
       } else if (assetRevoked) {
         await persistState(userId, state);
+      }
+      const freeStopped = await enforceFreeTierBotLimit(userId, state, tierLookup);
+      if (freeStopped.length > 0) {
+        await persistStoppedBots(userId, state, freeStopped);
       }
       res.json(snapshot(userId, state));
     } catch (err) {
@@ -600,6 +719,10 @@ export function createAutopilotRouter(
       } else if (assetRevoked) {
         await persistState(userId, state);
       }
+      const freeStopped = await enforceFreeTierBotLimit(userId, state, tierLookup);
+      if (freeStopped.length > 0) {
+        await persistStoppedBots(userId, state, freeStopped);
+      }
       advanceSimulation(userId, state);
       persistStateThrottled(userId, state);
       // Ensure a rollover triggered by this request has been persisted
@@ -619,6 +742,15 @@ export function createAutopilotRouter(
     }
     try {
       const userId = requestUserId(res);
+      // The engine-level master switch stays a paid control; free users
+      // manage their single allowed bot directly.
+      if (!(await hasProAccess(userId, tierLookup))) {
+        res.status(403).json({
+          error: "AutoPilot requires a Pro or Elite subscription",
+          code: "pro_subscription_required",
+        });
+        return;
+      }
       const state = await stateFor(userId);
       // Re-arming must not resurrect a Pro bot the user no longer pays for.
       await enforceProEntitlement(userId, state, tierLookup);
@@ -647,6 +779,15 @@ export function createAutopilotRouter(
     }
     try {
       const userId = requestUserId(res);
+      // Execution-market selection stays a paid control for all tiers below
+      // Pro; the Elite-only Stocks gate below still applies to Pro users.
+      if (!(await hasProAccess(userId, tierLookup))) {
+        res.status(403).json({
+          error: "AutoPilot requires a Pro or Elite subscription",
+          code: "pro_subscription_required",
+        });
+        return;
+      }
       const state = await stateFor(userId);
       if (await enforceSelectedAssetEntitlement(userId, state, tierLookup)) {
         await persistState(userId, state);
@@ -693,6 +834,9 @@ export function createAutopilotRouter(
       // Pro bot before revocation ever ran.
       const revoked = await enforceProEntitlement(userId, state, tierLookup);
       const assetRevoked = await enforceSelectedAssetEntitlement(userId, state, tierLookup);
+      const freeStopped = await enforceFreeTierBotLimit(userId, state, tierLookup);
+      if (freeStopped.length > 0) await persistStoppedBots(userId, state, freeStopped);
+      const isPro = await hasProAccess(userId, tierLookup);
 
       // Pro-only bots are gated on the server, not just hidden in the UI:
       // the client's tier is never trusted, and the check runs before any
@@ -700,7 +844,7 @@ export function createAutopilotRouter(
       // bot is always allowed — a user must be able to switch off something
       // they can no longer afford.
       const wantsToStart = parsed.data.running !== false;
-      if (bot.proOnly && wantsToStart && !(await hasProAccess(userId, tierLookup))) {
+      if (bot.proOnly && wantsToStart && !isPro) {
         if (revoked) await persistStoppedPro(userId, state);
         else if (assetRevoked) await persistState(userId, state);
         logger.warn(
@@ -712,6 +856,40 @@ export function createAutopilotRouter(
           code: "pro_subscription_required",
         });
         return;
+      }
+
+      // Free/Starter tier runs ONE non-Pro bot at a time. Starting a second
+      // concurrent bot requires a paid plan; reconfiguring or stopping a bot
+      // they already run stays free.
+      if (!isPro && parsed.data.running === true && !bot.running) {
+        // Fast path: this process's state already shows the slot is taken.
+        if (state.bots.some((other) => other.running && other.id !== bot.id)) {
+          logger.warn(
+            { userId, botId: bot.id },
+            "Blocked second concurrent bot for a free user",
+          );
+          res.status(403).json({
+            error: "Free tier is limited to 1 active algorithm. Upgrade to run multi-bot strategies.",
+            code: "pro_subscription_required",
+          });
+          return;
+        }
+        // Authoritative cross-instance guard: sync lazily-created rows
+        // (insert-if-missing, never overwriting a concurrent claim), then
+        // claim the single free slot under a per-user advisory lock so two
+        // scaled-out instances cannot both win the race.
+        await syncBotRowsIfMissing(userId, state);
+        if (!(await tryClaimFreeBotSlot(userId, bot.id))) {
+          logger.warn(
+            { userId, botId: bot.id },
+            "Blocked second concurrent bot for a free user (cross-instance)",
+          );
+          res.status(403).json({
+            error: "Free tier is limited to 1 active algorithm. Upgrade to run multi-bot strategies.",
+            code: "pro_subscription_required",
+          });
+          return;
+        }
       }
       advanceSimulation(userId, state);
       const { running, capital, drawdown } = parsed.data;
@@ -750,6 +928,8 @@ export function createAutopilotRouter(
       const assetRevoked = await enforceSelectedAssetEntitlement(userId, state, tierLookup);
       if (proRevoked) await persistStoppedPro(userId, state);
       else if (assetRevoked) await persistState(userId, state);
+      const freeStopped = await enforceFreeTierBotLimit(userId, state, tierLookup);
+      if (freeStopped.length > 0) await persistStoppedBots(userId, state, freeStopped);
       advanceSimulation(userId, state);
       state.logs = [];
       await persistState(userId, state);

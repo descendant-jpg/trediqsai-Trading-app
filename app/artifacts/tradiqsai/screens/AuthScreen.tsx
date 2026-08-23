@@ -423,6 +423,11 @@ export default function AuthScreen({ initialMode = 'signin' }: { initialMode?: '
           >
             <Text style={styles.guestButtonText}>Continue as Guest</Text>
           </TouchableOpacity>
+          <View style={styles.trustBadges} accessibilityLabel="Bank-grade security, AI-powered edge, and global markets">
+            <Text style={styles.trustBadge}>🛡️ Bank-Grade Security</Text>
+            <Text style={styles.trustBadge}>🧠 AI-Powered Edge</Text>
+            <Text style={styles.trustBadge}>🌍 Global Markets</Text>
+          </View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -477,6 +482,8 @@ const styles = StyleSheet.create({
     marginTop: 26,
     gap: 14,
   },
+  trustBadges: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 10, marginTop: 12 },
+  trustBadge: { color: '#8A8D93', fontSize: 10, fontFamily: 'Inter_500Medium' },
   input: {
     backgroundColor: '#16181D',
     color: '#FFFFFF',

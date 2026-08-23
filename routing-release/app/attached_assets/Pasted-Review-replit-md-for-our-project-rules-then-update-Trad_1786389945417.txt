@@ -1,0 +1,45 @@
+Review replit.md for our project rules, then update `TradiQsAIScreen.tsx` into an institutional suite named "TradiQsAI Tools" that preserves our existing execution engine while integrating a complete 13-tool AI catalog.
+
+### 1. Title & Engine Preservation (STRICT)
+- Screen Title: "TradiQsAI Tools" (Top left header).
+- Right Action: "Ask AI Oracle" floating cyan pill button.
+- PRESERVE intact at the top of the screen:
+  1. `TradiQs AutoPilot` control card (Active Bots, Capital Deployed, Today's Bot P&L, System Switch).
+  2. `>_ System Live Logs` monospace log terminal with trash icon.
+  3. `Daily P&L History` card.
+
+### 2. Tool Tier Badging & Locked Interceptor
+- Tools must feature clean badge tags: `STARTER` (Green), `PRO` (Electric Cyan), or `ELITE` (Gold/Orange).
+- Include a small padlock icon on cards requiring an upgrade.
+- Tapping any locked tool for a user below that tier level must automatically open `PaywallModal.tsx`.
+- Tapping an unlocked tool opens its dedicated interactive modal.
+
+### 3. Hero Tools (2 Large Cards)
+- **AI Signal Generator [PRO]:** "Upload chart, get instant BUY/SELL signal with TP & SL".
+- **AutoPilot Bots [ELITE]:** "Cloud-hosted GRID & DCA bots that trade for you 24/7".
+
+### 4. AI Analysis Section (2x2 Grid)
+- Header: "AI ANALYSIS"
+- Card 1: `AI Chart Analysis` [PRO] — "Upload trading charts for AI-powered analysis".
+- Card 2: `AI News Analyser` [PRO] — "Analyse forex news & economic events with AI".
+- Card 3: `Psychology Coach` [ELITE] — "Stop revenge trading and emotional losses forever".
+- Card 4: `Market Radar` [PRO] — "Top forex, crypto, stock & commodity news — highest impact".
+- Card 5 (Exclusive): `Liquidity Scanner` [ELITE] — "Detect institutional stop-hunts & Fair Value Gaps".
+
+### 5. Tools & Utilities Section (2x2 Grid)
+- Header: "TOOLS & UTILITIES"
+- Card 1: `Correlation Finder` [STARTER] — "Discover how currency pairs move together".
+- Card 2: `Currency Heatmap` [PRO] — "Cross pair pressure map with directional bias".
+- Card 3: `Broker Comparison` [FREE] — "Find the best broker for your trading style".
+- Card 4: `Code Lab` [ELITE] — "AI-powered Indicator Builder + Robot Builder (EA)".
+- Card 5: `Account Tracker` [PRO] — "Connect MT4/MT5 and get AI trading insights" (Full width card).
+- Card 6 (Exclusive): `Risk Calculator` [STARTER] — "Calculate exact lot size based on SL pips".
+
+### 6. Interactive Modal Handlers
+Create functional modal views (or bottom sheets) when unlocked tools are clicked:
+- **Code Lab Modal:** Prompt input field ("Describe your indicator/bot...") + Code Output view with a "Copy MQL5 Code" button.
+- **Correlation Finder Modal:** Interactive table showing pairs (e.g., EURUSD vs USDCHF = -0.92).
+- **Currency Heatmap Modal:** Visual green/red strength matrix (USD +2.4%, JPY -1.8%).
+- **Position Size Calculator Modal:** Inputs for Balance ($), Risk (%), Stop Loss (pips) -> Output: Exact Lot Size (e.g., 1.25 Lots).
+
+Ensure dark terminal aesthetic (#0A0B0E background, #16181D cards), safe area padding, and smooth touch feedback across all cards.

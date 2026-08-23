@@ -1,0 +1,30 @@
+CRITICAL FORCE WORK DIRECTIVE: OVERHAUL BROKERSYNC ARCHITECTURE & IMPLEMENT DYNAMIC SECURE CONNECTIONS.
+
+Review replit.md for our project rules. We are upgrading the "Exchange Integration" (BrokerSync/Account Tracker) screen from a static 4-grid UI to a production-ready, dynamic broker management system. It must support Crypto, Forex (MT4/MT5), Stocks, and Prop Firms, and the connection flow must actually persist data securely.
+
+### PHASE 1: Define Broker Configurations & Schemas
+Create a constant configuration object defining the available brokers and their required connection fields:
+- **Crypto:** Binance, Bybit, Coinbase, OKX, KuCoin. (Requires: `API Key`, `API Secret`).
+- **Forex & CFDs:** MetaTrader 4, MetaTrader 5, Exness, Oanda, IC Markets. (Requires: `Account ID`, `Password`, `Server Name`).
+- **Stocks:** Interactive Brokers, Webull, TradeStation. (Requires: `API Key`, `API Secret` or OAuth mock).
+- **Prop Firms:** FTMO, Topstep. (Requires: `Account ID`, `Password`, `Platform`).
+
+### PHASE 2: UI Restructure (Categorized Sections)
+- Refactor the Exchange Integration screen. Replace the single flat grid with categorized sections (Crypto, Forex, Stocks, Prop Firms).
+- Use a `ScrollView` with clean, branded cards for each broker.
+- Each card must display its connection status (e.g., a green "CONNECTED" badge or an "unlinked" state).
+
+### PHASE 3: Dynamic Connection Wizard & Secure Storage
+- Tapping a disconnected broker opens a `ConnectBrokerModal`.
+- The modal MUST dynamically render input fields based on the broker's schema defined in Phase 1 (e.g., don't ask for a Server Name if it's Binance).
+- **Storage Implementation:** Use `expo-secure-store` to save the credentials locally when "Connect" is tapped. 
+- *CRITICAL DEV GUARD:* Wrap `expo-secure-store` calls in a `Platform.OS !== 'web'` check. If on the web, fallback to `AsyncStorage` or an in-memory mock so the Replit web simulator does not crash.
+- Tapping a connected broker opens a "Manage Connection" modal allowing the user to "Disconnect" (which deletes the stored credentials).
+
+### PHASE 4: Autonomous QA & Verification
+The AI must self-verify the following before completing the task:
+1. **State Reactivity:** Connecting or disconnecting a broker must instantly update the UI badge on the main list without requiring a screen reload.
+2. **Layout Integrity:** Ensure the ScrollView reaches the bottom of the screen without clipping the last broker.
+3. **Web Safety:** Verify the web-preview doesn't throw a native module error when trying to save an API key.
+
+EXECUTION REQUIREMENT: Execute all 4 phases sequentially. Ensure the UI is categorized, the modal inputs adapt to the broker type, and connections are persistently stored using SecureStore (with web fallback).

@@ -1,0 +1,26 @@
+CRITICAL WORK DIRECTIVE: FIX ADMIN BLOG PUBLISHING CONTROLLER, ENHANCE SCHEMA, AND PUSH TO PRODUCTION.
+
+The "Publish Insight" button on the CMS frontend is throwing a generic "Failed to create post" error. We need to audit the API route, fix the database insertion logic, add missing professional blog features, and then securely push the updates.
+
+### 1. Fix the Publishing API Route
+- Locate the API endpoint handling the blog POST request (likely `app/api/admin/blog/route.ts` or `app/api/admin/insights/route.ts`).
+- **CRITICAL:** Ensure the route uses the Supabase `service_role` key (Admin Client) to bypass Row Level Security (RLS) for this authorized admin action. 
+- Audit the POST payload against the expected Supabase table schema. Ensure no required fields are missing. If the slug is empty, ensure the backend auto-generates it properly before inserting.
+- Add robust `console.error` logging inside the catch block so any future Supabase insertion errors are printed directly to the server logs.
+
+### 2. Add Missing CMS Features
+- **Frontend (Modal):** Add an optional input field for `Cover Image URL` above the body text.
+- **Backend (Auto-calculations):** Before inserting the record into Supabase, write a helper function to calculate the `read_time`. Count the words in the body text, divide by 200 (average words per minute), and append " min read" (e.g., "4 min read"). Insert this automatically.
+
+### 3. Polish the UI Feedback
+- Ensure that upon a successful 200 OK response from the API, the modal automatically closes, the form resets, and the frontend instantly refetches the updated list of market insights.
+
+### 4. Commit and Secure Push to Vercel
+Once the code is verified locally:
+- Stage and commit the changes with the message: `fix: Resolve CMS publish API, add cover image support, and auto-calculate read time`
+- Retrieve the GitHub token securely from the environment variables (e.g., `$GITHUB_TOKEN`).
+- Execute a secure push to our Vercel deployment repository using the secret. Run exactly:
+  `git push https://$GITHUB_TOKEN@github.com/descendant-jpg/trediqsai-Trading-website.git main`
+- STRICT MANDATE: Do not echo or log the actual token in your response.
+
+EXECUTION REQUIREMENT: Confirm exactly what the schema or RLS issue was, confirm the new features are wired up, and report when the Git push is successful.

@@ -19,8 +19,6 @@ const SUPABASE_URL =
   process.env["SUPABASE_URL"] ?? process.env["EXPO_PUBLIC_SUPABASE_URL"] ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = process.env["SUPABASE_SERVICE_ROLE_KEY"] ?? "";
 const ORACLE_LIMITS = { free: 3, pro: 20, elite: 60 } as const;
-const LIVE_MARKET_SNAPSHOT_URL =
-  "https://api.coincap.io/v2/assets?ids=bitcoin,ethereum,solana";
 
 type OracleProfile = {
   tier?: string | null;
@@ -70,71 +68,45 @@ const chartAnalysisRateLimit = rateLimit({
     "Chart analysis is limited to 5 uploads per minute to keep the AI service available. Please try again shortly.",
   key: (_req, res) => requestUserId(res),
 });
-const SYSTEM_PROMPT = [
-  "You are the TradiQs Oracle, the in-app market AI assistant for the TradiQs trading app.",
-  "You help traders think about markets: asset analysis, sentiment, notable movers, risk framing, and trading concepts.",
-  "Style: concise, confident, trader-friendly. Prefer 2-5 short sentences. No markdown headings or bullet walls — plain conversational text suits the chat bubbles.",
-  "You are a real-time market AI. Live asset prices and 24h sentiment will be provided to you at the end of this prompt under 'LIVE MARKET DATA'. Base your analysis strictly on this provided live data.",
-  "Always remind users that nothing you say is financial advice when giving anything resembling a trade idea.",
-].join(" ");
-type CoinCapAsset = { symbol?: unknown; priceUsd?: unknown; changePercent24Hr?: unknown };
-type DiaQuotation = { Price?: unknown };
-const LIVE_MARKET_INSTRUCTION =
-  "You are a real-time market AI. Live asset prices and 24h sentiment are provided below. **CRITICAL INSTRUCTION: If the user asks about an asset, you MUST start your response by explicitly quoting the current price and 24h change from the LIVE MARKET DATA (e.g., 'BTC is currently trading at $X, up Y% in the last 24h').** After quoting the exact data, provide your structural analysis.";
-
-async function fetchLiveMarketSnapshot(): Promise<string | null> {
+async function fetchLiveMarketSnapshot(): Promise<string> {
+  let liveDataString =
+    "\n\nLIVE MARKET DATA STATUS: API UNAVAILABLE. (Tell the user the feed is temporarily down, do NOT say you don't have a feed).";
   try {
-    const response = await fetch(LIVE_MARKET_SNAPSHOT_URL, {
-      signal: AbortSignal.timeout(5_000),
-    });
-    console.log("CoinCap Fetch Status:", response.status);
-    if (!response.ok) throw new Error(`CoinCap returned HTTP ${response.status}`);
-
-    const payload = (await response.json()) as { data?: CoinCapAsset[] };
-    const prices = new Map(
-      (payload.data ?? []).map((asset) => [
-        asset.symbol,
-        {
-          price: Number(asset.priceUsd),
-          change: Number(asset.changePercent24Hr),
+    const response = await fetch(
+      "https://min-api.cryptocompare.com/data/pricemulti?fsyms=BTC,ETH,SOL&tsyms=USD",
+      {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          Accept: "application/json",
         },
-      ]),
+        signal: AbortSignal.timeout(4_000),
+      },
     );
-    const assets = [
-      ["BTC", "BTC"],
-      ["ETH", "ETH"],
-      ["SOL", "SOL"],
-    ] as const;
-    const formatted = assets.map(([symbol, asset]) => {
-      const quote = prices.get(asset);
-      const price = quote?.price;
-      const change = quote?.change;
-      if (typeof price !== "number" || !Number.isFinite(price) || typeof change !== "number" || !Number.isFinite(change)) throw new Error(`CoinCap market data missing for ${symbol}`);
-      return `${symbol}=$${price.toLocaleString("en-US", { maximumFractionDigits: 2 })} (${change >= 0 ? "+" : ""}${change.toFixed(1)}%)`;
-    });
-    return `LIVE MARKET DATA: ${formatted.join(", ")}.\n\n${LIVE_MARKET_INSTRUCTION}`;
-  } catch (coinCapError) {
-    try {
-      const assets = ["BTC", "ETH", "SOL"] as const;
-      const quotations = await Promise.all(
-        assets.map(async (symbol) => {
-          const response = await fetch(`https://api.diadata.org/v1/quotation/${symbol}`, {
-            signal: AbortSignal.timeout(5_000),
-          });
-          if (!response.ok) throw new Error(`DIA ${symbol} returned HTTP ${response.status}`);
-          const quote = (await response.json()) as DiaQuotation;
-          const price = Number(quote.Price);
-          if (!Number.isFinite(price)) throw new Error(`DIA market data missing for ${symbol}`);
-          return `${symbol}=$${price.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
-        }),
-      );
-      return `LIVE MARKET DATA: ${quotations.join(", ")}.\n\n${LIVE_MARKET_INSTRUCTION}`;
-    } catch (error) {
-      console.error("ALL MARKET APIs FAILED", error);
-      logger.warn({ err: coinCapError }, "CoinCap market data unavailable; DIA fallback also failed");
-      return null;
+
+    if (response.ok) {
+      const data = (await response.json()) as {
+        BTC?: { USD?: unknown };
+        ETH?: { USD?: unknown };
+        SOL?: { USD?: unknown };
+      };
+      const btc = data.BTC?.USD;
+      const eth = data.ETH?.USD;
+      const sol = data.SOL?.USD;
+      if (
+        typeof btc === "number" &&
+        Number.isFinite(btc) &&
+        typeof eth === "number" &&
+        Number.isFinite(eth) &&
+        typeof sol === "number" &&
+        Number.isFinite(sol)
+      ) {
+        liveDataString = `\n\nLIVE MARKET DATA: BTC=$${btc}, ETH=$${eth}, SOL=$${sol}.\n\nCRITICAL INSTRUCTION: If the user asks about an asset, you MUST start your response by explicitly quoting this current price (e.g., 'BTC is currently trading at $X'). Do not complain about lacking data.`;
+      }
     }
+  } catch (err) {
+    console.error("CryptoCompare fetch failed:", err);
   }
+  return liveDataString;
 }
 const chartRequestSchema = z.object({
   imageBase64: z.string().min(100).max(8_000_000),
@@ -366,14 +338,12 @@ router.post("/oracle/chat", identity(), oracleRateLimit, async (req, res) => {
 
   try {
     const liveMarketSnapshot = await fetchLiveMarketSnapshot();
-    const systemPrompt = [
-      parsed.data.tradingContext
-        ? `${SYSTEM_PROMPT}\n\n${buildContextPrompt(parsed.data.tradingContext)}`
-        : SYSTEM_PROMPT,
-      liveMarketSnapshot,
-    ]
-      .filter((section): section is string => Boolean(section))
-      .join("\n\n");
+    let systemPrompt =
+      "You are TradiQs Oracle, an elite real-time trading AI. You DO have access to live market data when provided. Be concise, highly analytical, and focus on structure and risk.";
+    if (parsed.data.tradingContext) {
+      systemPrompt += `\n\n${buildContextPrompt(parsed.data.tradingContext)}`;
+    }
+    systemPrompt += liveMarketSnapshot;
     const message = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 1200,

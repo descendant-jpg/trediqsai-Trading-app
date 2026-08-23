@@ -1,0 +1,27 @@
+CRITICAL WORK DIRECTIVE: REMOVE DEFAULT HEADER, FIX BACK NAVIGATION, AND READ REPLIT.MD.
+
+To conserve context window and AI credits, DO NOT read previous chat history. Immediately read the workspace configuration (`replit.md`) to understand the current state.
+
+The mobile CMS dashboard still has the default white Expo Router header showing "(admin)", and the custom back button underneath it is completely unresponsive.
+
+### 1. Nuke the Default White Header (`app/(admin)/_layout.tsx`)
+- Open `app/(admin)/_layout.tsx`.
+- Find the `<Stack>` component. 
+- You MUST add `screenOptions={{ headerShown: false }}` to the `<Stack>` to completely remove the default white header bar. 
+
+### 2. Bulletproof the Back Button (`app/(admin)/index.tsx`)
+- Open `app/(admin)/index.tsx`.
+- Locate the custom header with the "Back" button.
+- **Fix the Action:** `router.back()` might be failing due to the stack context. Import `useRouter` from `expo-router`. Change the `onPress` event of the Back button to explicitly navigate back to the profile tab: `onPress={() => router.navigate('/(tabs)/profile')}`.
+- Ensure the button has an adequate hit slop or padding so it is easy to tap on a mobile device.
+
+### 3. Notch Integration & Polish
+- Ensure the custom dark header utilizes `useSafeAreaInsets` from `react-native-safe-area-context` so it extends up into the device notch with a dark background (`bg-gray-950`), completely replacing the area where the white bar used to be.
+
+### 4. Stage, Commit, and Secure Push
+- Run a typecheck to verify the `useRouter` implementation.
+- Stage the modified `_layout.tsx` and `index.tsx` files.
+- Commit with the message: `fix(admin): remove default header and fix back button routing`
+- Push securely to the active application repository using the credential helper without logging tokens.
+
+EXECUTION REQUIREMENT: Confirm the `screenOptions` were applied to hide the header, confirm the back button now uses `router.navigate`, and confirm the Git push was successful.

@@ -1,0 +1,29 @@
+Review replit.md for our project rules, then completely redesign `NotificationCenterModal.tsx` to match a premium, data-dense institutional style.
+
+### 1. Header Area
+- Title: "Notifications" (Bold, white).
+- Subtitle: Add a small gray dynamic subtitle (e.g., "3 Unread Alerts" or "All caught up").
+- Right action: A clean 'X' icon to close the modal.
+
+### 2. Icon-Based Filter Row
+- Create a horizontally scrollable row of filter buttons.
+- Each button should stack an Icon on top of the text label.
+- Categories: `All` (Inbox icon), `AI Alerts` (Bot icon), `News` (Lightning bolt), `System` (Shield), `Pro Offers` (Gift).
+- Active State: The currently selected filter should have Electric Cyan (#00F0FF) text, a cyan icon, and a 2px cyan underline. Inactive tabs remain muted gray.
+
+### 3. Grouped Sections
+- Add a centered, small, uppercase section header (e.g., "TODAY") with subtle horizontal lines on either side to separate timeframes.
+
+### 4. Advanced Notification Cards (The Feed)
+Render a list of notification cards (Background #16181D, rounded corners, subtle margin).
+- **Unread Indicator:** If `isRead` is false, add a 3px glowing Electric Cyan border to the left edge of the card.
+- **Top Row:** 
+  - Left: An icon wrapped in a dark squircle (e.g., Orange lightning for News, Cyan bot for AI).
+  - Center: Bold white Title (e.g., "US Unemployment Falls").
+  - Right: Timestamp (e.g., "1m ago") in small gray text.
+- **Middle Row:** A 2-line gray text description.
+- **Bottom Row (Tags & Actions):**
+  - Left side: A horizontal row of mini asset tags (e.g., `EUR/USD`, `BTC/USD`) and a category tag (e.g., `• NEWS`). Style these tags with dark backgrounds and colored text/borders (trading green for bullish, red for bearish, cyan for AI).
+  - Right side (New Feature): If the notification type is an AI Alert or Signal, add a clickable "View Setup >" text button aligned to the right.
+
+Ensure all padding is generous, typography is crisp, and colors adhere strictly to the dark terminal theme.

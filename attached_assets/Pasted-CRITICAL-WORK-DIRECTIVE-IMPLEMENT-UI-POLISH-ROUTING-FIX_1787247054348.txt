@@ -1,0 +1,31 @@
+CRITICAL WORK DIRECTIVE: IMPLEMENT UI POLISH, ROUTING FIXES, AND SILENT SECURITY CHECKS.
+
+To conserve context window and AI credits, DO NOT read previous chat history. Read `replit.md` to understand the current state.
+
+We need to execute a crucial UI/UX polish round covering authentication badges, compliance disclaimers, default routing, and startup performance. 
+
+### 1. Add Unique Trust Badges to Auth Screen
+- Open the Sign-In / Sign-Up screens.
+- At the very bottom of the screen (below the social login options), add a flex row containing three trust badges styled with muted gray text and matching small vector icons (e.g., Lucide or Expo icons).
+- The three badges must be: 🛡️ Bank-Grade Security | 🧠 AI-Powered Edge | 🌍 Global Markets.
+
+### 2. Clean Up and Inject Risk Disclaimers
+- **Home Screen (`app/(tabs)/index.tsx`):** Find and DELETE the old, hardcoded text disclaimer ("Trading involves substantial risk of loss..."). Ensure ONLY the `<RiskDisclaimer />` component remains at the bottom of the scroll view.
+- **Signals Screen (`app/(tabs)/signals.tsx`):** Import and add the `<RiskDisclaimer />` component to the very bottom of the main scrollable view.
+
+### 3. Fix Default Landing Route
+- Locate the navigation configuration (likely in `app/(tabs)/_layout.tsx` or the auth root gate).
+- Ensure the `initialRouteName` or the post-login redirect forces the user to land on the **Home** tab (`index`), completely preventing the app from defaulting to the `profile` tab on startup.
+
+### 4. Implement Silent Background Security Check
+- Locate the root layout or auth gate where the "Checking security..." blocking UI is currently rendered.
+- REMOVE this blocking UI screen.
+- Move the security/session check to a silent background `useEffect` (or resolve it during the native splash screen hide process). The app must immediately render the main UI (or auth screen) without showing a intermediate loading text screen to the user.
+
+### 5. Stage, Commit, and Secure Push
+- Run mobile typechecks to ensure routing and component imports are valid.
+- Stage the updated auth, layout, index, and signals files.
+- Commit with the message: `fix(ui): add auth trust badges, clean up disclaimers, fix default route, and make security checks silent`
+- Push securely to the active repository using the credential helper without logging tokens.
+
+EXECUTION REQUIREMENT: Confirm the default route is set to Home, the blocking security screen is removed, and the Git push was successful.

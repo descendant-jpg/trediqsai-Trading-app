@@ -1,0 +1,38 @@
+CRITICAL WORK DIRECTIVE: IMPLEMENT ONE-TIME ONBOARDING FLOW AND EXPERIENCE TRACKING.
+
+To conserve context window and AI credits, DO NOT read previous chat history. Read `replit.md` to understand the current state.
+
+We must implement a premium, one-time onboarding flow for new users to capture their trading experience, save it to their profile, and allow them to edit it later. 
+
+### 1. Database Schema Update (Supabase)
+- Create a forward-only SQL migration to add two columns to the `public.profiles` table:
+  - `trading_experience` (text, nullable)
+  - `has_completed_onboarding` (boolean, default false)
+- Provide the exact SQL output so it can be run manually in the Supabase dashboard.
+
+### 2. Create the Onboarding Screen (`app/(onboarding)/welcome.tsx`)
+- Create a sleek, native-feeling onboarding flow using the app's existing dark theme and primary accent colors.
+- **Screen 1 (Welcome):** "Welcome to TradiQs AI. Let's customize your market intelligence engine." (Include a brief, unique feature overview).
+- **Screen 2 (Experience Selector):** Ask "What is your trading experience?" Provide selectable cards for:
+  - Beginner (New to trading)
+  - Intermediate (Know the basics, placed some trades)
+  - Advanced (Trade regularly, use technical analysis)
+  - Professional (Trade full-time / manage funds)
+- **Completion:** A "Start Trading" button that updates `trading_experience` and sets `has_completed_onboarding` to `true` in Supabase, then navigates the user to the `/(tabs)/index` (Home) screen.
+
+### 3. Route Interceptor (Auth Gate)
+- Locate the root layout or authentication context.
+- Implement logic: After a successful login/signup, if the user's `has_completed_onboarding` is `false`, redirect them to the `/welcome` screen. If `true`, route them to the main tabs. Ensure this does not create a redirect loop.
+
+### 4. Profile Screen Integration (`app/(tabs)/profile.tsx`)
+- Add a new section in the Profile screen called "Trading Experience".
+- Display their currently selected experience.
+- Allow the user to tap it and select a different experience level from a modal or picker, which updates the `trading_experience` column in Supabase.
+
+### 5. Stage, Commit, and Secure Push
+- Run mobile typechecks.
+- Stage the new onboarding screen, updated auth gate, profile screen, and navigation files.
+- Commit with the message: `feat(onboarding): add one-time welcome flow and profile experience tracking`
+- Push securely to the active repository using the credential helper without logging tokens.
+
+EXECUTION REQUIREMENT: Output the exact SQL required for the Supabase migration. Confirm the routing interceptor is secure, and confirm the Git push was successful.

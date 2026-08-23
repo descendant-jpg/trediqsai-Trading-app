@@ -1,0 +1,25 @@
+CRITICAL FORCE WORK DIRECTIVE: YOU ARE FORCED TO IMPLEMENT FULL, COMPLETE, PRODUCTION-READY FUNCTIONALITY. DO NOT LEAVE DUMMY CODE, TODO COMMENTS, OR EMPTY HANDLERS. WRITE EVERY LINE OF STATE MANAGEMENT, FILE SYSTEM CONVERSION, AND API FETCHING.
+
+Review replit.md for our project rules. We are integrating Anthropic Vision AI to analyze captured chart images and return a structured trading bias.
+
+### 1. Dependencies
+- Install `expo-file-system` to handle Base64 image conversion.
+
+### 2. Build the AI Analysis Route (`app/ai-analysis.tsx`)
+- Create a new file in the root `app/` directory.
+- Use Expo Router `useLocalSearchParams` to receive an `imageUri` parameter.
+- **UI State:** Create states for `loading` (boolean, default true) and `analysisResult` (string).
+- **The Core Logic (`useEffect`):**
+  1. Use `FileSystem.readAsStringAsync(imageUri, { encoding: FileSystem.EncodingType.Base64 })` to convert the image.
+  2. Execute a `fetch` POST request to `https://api.anthropic.com/v1/messages`.
+  3. Use the user's existing Anthropic setup (or fallback to `process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY`). Use the `claude-3-5-sonnet-20240620` model.
+  4. In the API payload, pass the base64 image and a strict text prompt: "You are an institutional quantitative analyst. Analyze this trading chart. Provide a concise response with three sections: 1. BIAS (Bullish, Bearish, or Neutral). 2. KEY LEVELS (Support and Resistance). 3. ANALYSIS (Brief explanation of price action and indicators)."
+- **The Premium UI:** 
+  - If `loading` is true, display a pulsing glowing text: "AI Scanning Market Structure..." and an `ActivityIndicator`.
+  - If `loading` is false, render the selected image at the top (`h-48 w-full rounded-xl`), followed by a styled `ScrollView` displaying the Anthropic `analysisResult` text in a premium dark card (`bg-[#16181D]`). Add a "Close Analysis" button.
+
+### 3. Wire the Triggers (Home & Live Chart)
+- **In `app/(tabs)/index.tsx` (Home):** Update the `Camera` and `Gallery` image picker `onPress` functions. If an image is successfully selected, route to the new screen: `router.push({ pathname: '/ai-analysis', params: { imageUri: result.assets[0].uri } })`.
+- **In `app/live-chart.tsx` (Chart):** Update the `Take Snapshot` button's success callback. When `capture()` returns the URI, immediately route to the new screen: `router.push({ pathname: '/ai-analysis', params: { imageUri: uri } })`.
+
+EXECUTION REQUIREMENT: Force the `expo-file-system` implementation and Anthropic API fetch to be 100% written. Ensure the `imageUri` routing parameters match perfectly between the screens.

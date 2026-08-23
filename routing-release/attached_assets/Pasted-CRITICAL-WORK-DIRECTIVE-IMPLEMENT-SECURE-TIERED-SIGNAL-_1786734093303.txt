@@ -1,0 +1,32 @@
+CRITICAL WORK DIRECTIVE: IMPLEMENT SECURE TIERED SIGNAL DESK & PRE-EXECUTION CONFIRMATION.
+
+Review replit.md for our project rules. We will follow your recommended security model: DO NOT transmit raw broker credentials over HTTP to Express. Instead, implement the complete tiered Signal Desk UI with client-side credential verification and a pre-execution confirmation modal.
+
+### 1. Multi-Market Signal Data Model
+- Update the signal types to support all 3 asset classes: `crypto`, `forex`, and `stock`.
+- Ensure each signal includes:
+  - Asset name & pair/ticker (e.g., BTC/USDT, EUR/USD, NVDA)
+  - Direction (`BUY` / `LONG` vs `SELL` / `SHORT`)
+  - `entryZone`, `takeProfits` (array), and `stopLoss`
+  - Market metadata (Pips for Forex, Leverage for Crypto, Target Gain for Stocks).
+
+### 2. Tiered Gating & Display
+- Connect the signal card UI to the existing `accessTier` provider:
+  - **FREE:** Obscure/blur numerical parameters (`entryZone`, `takeProfits`, `stopLoss`). Tapping displays a padlock and triggers the Pro Paywall modal.
+  - **PRO:** Reveal full numerical parameters with a "Copy Parameters" button for manual execution.
+  - **ELITE:** Reveal full parameters AND display the primary "Execute via BrokerSync" button.
+
+### 3. Client-Side Pre-Execution Flow (Elite)
+- When an ELITE user taps "Execute via BrokerSync":
+  - Read `SecureStore` (or `AsyncStorage` on web) to verify if an active broker connection exists for that signal's asset class.
+  - If NO broker is connected: Prompt the user to link their account in BrokerSync.
+  - If a broker IS connected: Open a clean "Trade Confirmation Modal" summarizing the Order Type, Asset, Target TP/SL, and Risk Allocation.
+  - Tapping "Confirm & Dispatch" simulates the handshake with an animated loading state, then renders an "Order Dispatched Successfully" status.
+
+### 4. Push Notification Utility
+- Add a web-safe `registerForPushNotificationsAsync` helper function wrapped in `Platform.OS !== 'web'`.
+
+### 5. Typecheck & Validation
+- Run mobile TypeScript check to ensure zero compiler errors across the Signal Desk, models, and modal components.
+
+EXECUTION REQUIREMENT: Apply these changes to the Signal Desk files. Retain all client-side security boundaries without sending raw credentials to the server.

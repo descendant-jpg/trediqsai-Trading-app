@@ -1,0 +1,33 @@
+CRITICAL WORK DIRECTIVE: WIRE MOBILE CMS, ENFORCE RLS, AND BUILD REGRESSION TRIPWIRES.
+
+To conserve context window and AI credits, DO NOT read previous chat history. Read `replit.md` to understand the current state and database schema. 
+
+We are finalizing the Mobile CMS. It must be wired to the production Supabase backend (Market Insights, Waitlist, Help Desk, Broadcasts) AND secured with a 4-layer defense system to prevent unauthorized access before it ever ships.
+
+### 1. Wire the Mobile CMS to Backend Data
+- Open the 5 placeholder screens in `app/(admin)/`.
+- Wire `write-post.tsx` and `edit-post/[id].tsx` to submit/update to the Supabase posts table.
+- Wire `waitlist.tsx` and `help-desk.tsx` to fetch/display records from their respective tables using a `FlatList`.
+- Wire `broadcast.tsx` to the existing push notification API.
+- Ensure all screens have loading states, error handling, and `expo-haptics` on interaction.
+
+### 2. Frontend Security & Regression Tripwires
+- **Route Guard:** In `app/(admin)/_layout.tsx`, enforce a strict redirect to `/(tabs)/home` if the user's role is NOT `god_admin` AND email is NOT `nextgensynthex@gmail.com`.
+- **Regression Tests:** Create `__tests__/admin-security.test.tsx`. Write tests asserting that (A) Unauthenticated users, and (B) Standard/Pro users are strictly rejected/redirected from the `/(admin)` route, while (C) the master email is granted access.
+
+### 3. Database RLS Lockdown (Row Level Security)
+- You MUST ensure Supabase Row Level Security (RLS) is strictly enforced on the CMS tables (`posts`, `waitlist`, `support_tickets`/`help_desk`).
+- Generate and execute (or provide the SQL for) RLS policies that explicitly REJECT any `INSERT`, `UPDATE`, or `DELETE` commands on these tables unless the authenticated user's `role` in `public.profiles` is `god_admin`.
+
+### 4. API Lockdown & Input Sanitization
+- Audit the Next.js API routes serving the CMS. 
+- Ensure all mutations (`POST`, `PUT`, `DELETE`) verify the `god_admin` role server-side.
+- Ensure all incoming text for Market Insights and Broadcasts is sanitized to prevent XSS injection before touching the database.
+
+### 5. Stage, Commit, and Secure Push
+- Run the new security test suite to prove the tripwires work.
+- Stage the modified CMS screens, tests, API routes, and layout guard.
+- Commit: `feat(admin-security): wire CMS to backend, enforce RLS, and add regression tests`
+- Push securely to the active repository using the credential helper without logging tokens.
+
+EXECUTION REQUIREMENT: Output any raw SQL needed for the RLS policies if manual execution is required. Confirm the regression tests passed, summarize the RLS lockdown, and confirm the Git push was successful.

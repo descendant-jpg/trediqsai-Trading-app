@@ -1,0 +1,52 @@
+Review replit.md for our project rules, then finalize the Social Media Modal and build a Tier-1 Partner Program screen.
+
+### 1. Update `SocialMediaModal.tsx`
+Ensure the bottom sheet list contains these exact 7 platforms, styled as premium dark cards (#16181D) with left-aligned icons and right-aligned external link (↗) arrows:
+1. Facebook
+2. Instagram
+3. YouTube
+4. TikTok
+5. X (Twitter)
+6. Telegram Group
+7. Telegram Channel
+
+### 2. Profile Screen Routing
+In `ProfileScreen.tsx`, ensure the "Partner Program" button in the settings list (or Quick Tools grid) routes to a new `PartnerProgramScreen.tsx`.
+
+### 3. Build `PartnerProgramScreen.tsx` (Premium Affiliate Hub)
+Design this screen as a high-ticket sales page using our dark terminal aesthetic (#0A0B0E background).
+
+- **Hero Section:** 
+  - Title: "Build Your Trading Empire" (Large, bold white).
+  - Subtitle: "Turn your network into passive income."
+  - Highlight Badge: Electric Cyan glowing pill: "$50+ per Pro signup + Recurring Commissions".
+
+- **Interactive Revenue Simulator (Premium Feature):**
+  - Create a card titled "Calculate Your Potential".
+  - Include a mock Slider UI component (ranging from 10 to 1000 referrals).
+  - Below the slider, display a massive glowing number: e.g., "$2,500 / month" in Electric Cyan.
+
+- **Ways to Earn (Grid/List):**
+  - Card 1: `Premium Subscriptions` ($50 recurring).
+  - Card 2: `Broker Signups` ($25 CPA).
+  - Card 3: `Sub-Affiliate Network` (Earn 5% passive income from your network's earnings).
+
+- **Partnership Tiers (Glassmorphic Cards):**
+  - `Ambassador` (5% commission, basic dashboard).
+  - `Elite` (10% commission, marketing materials, 25+ referrals required - styled with a "Popular" badge).
+  - `Master` (15% commission, VIP support, 100+ referrals required - styled with Gold accents).
+
+- **The Marketing Arsenal (New Feature):**
+  - A dark inset box titled "Done-For-You Content".
+  - Subtitle: "Get instant access to high-converting TikTok hooks, Instagram Stories, and X templates the moment you are approved."
+
+- **Leaderboard Podium & List:**
+  - Header: "Top Partners This Month".
+  - A visual top-3 display (1st, 2nd, 3rd) using glowing rings around anonymized avatars (e.g., `al***x`). 
+  - Below the podium, a short list of ranks 4 and 5.
+
+- **Sticky Footer Action:**
+  - Absolute positioned bottom container fading from transparent to solid black.
+  - Button: Full width, Electric Cyan background, black bold text: "Apply for Partner Status".
+
+Ensure the scroll view clears the sticky footer, and all typography looks institutional and highly polished.

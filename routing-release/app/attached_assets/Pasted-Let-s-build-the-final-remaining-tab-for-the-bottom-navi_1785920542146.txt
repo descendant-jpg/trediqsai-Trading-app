@@ -1,0 +1,38 @@
+Let's build the final remaining tab for the bottom navigation: the `LearningScreen.tsx` (TradiQs Academy).
+
+This screen needs to look like a premium, institutional educational hub, strictly following our Terminal Black (#0A0B0E) and Electric Cyan (#00F0FF) aesthetic. 
+
+### 1. Layout & State
+- Background: #0A0B0E.
+- Wrap the entire screen in a `ScrollView` with `SafeAreaView`.
+- State: Add a simple search bar at the top with a state variable `searchQuery` to filter the lessons.
+
+### 2. Header & Search
+- Title: "TradiQs Academy" (Large, bold white text).
+- Search Bar: Background #16181D, subtle border #22252A, placeholder text "Search strategies, indicators, basics...".
+
+### 3. Section 1: Video Masterclasses (Horizontal Scroll)
+- Title: "Premium Video Masterclasses".
+- Create a horizontal `ScrollView` containing 3 large, wide cards (approx 280px width, 160px height).
+- Card UI: 
+  - Background dark gray (#16181D) to simulate a video thumbnail. 
+  - Add a centered Play button icon (Electric Cyan).
+  - Bottom text overlay: Course Title (e.g., "Institutional Order Blocks", "Risk Management 101", "Mastering the AI AutoPilot") and duration (e.g., "1h 45m").
+  - Premium Gate: Make the 2nd and 3rd cards locked. Blur the thumbnail, add a gold padlock, and a "Pro" badge.
+
+### 4. Section 2: Quick Reading Guides (Vertical List)
+- Title: "Essential Trading Guides".
+- Render a vertical list of 4 cards (Background #16181D, Border #22252A).
+- Each card should have:
+  - Left side: A small distinct icon (e.g., a book or a chart).
+  - Center: Title (e.g., "How to Calculate Lot Sizes", "Understanding Market Structure", "Trading Psychology").
+  - Right side: A small reading time indicator (e.g., "5 min read") and a chevron icon indicating it's clickable.
+
+### 5. Section 3: Interactive Trading Tools
+- Title: "Trader's Toolkit".
+- Create a grid of 2 side-by-side square cards.
+- Card 1: "Lot Size Calculator" (Icon + Title).
+- Card 2: "Profit / Loss Simulator" (Icon + Title).
+- These don't need to be fully functional calculators yet, just the UI buttons that users will tap to open the tools in a future update.
+
+Ensure all typography is crisp, spacing is generous, and the dark-mode colors match the rest of the application perfectly.

@@ -1,0 +1,34 @@
+CRITICAL FORCE WORK DIRECTIVE: IMPLEMENT WORKING BIOMETRICS/FACEID AND 2FA SECURITY FLOWS.
+
+Review replit.md for our project rules. In the Profile screen (`app/(tabs)/profile.tsx` or related security components), the "Biometrics / FaceID" toggle and "Two-Factor Auth (2FA)" entries are non-functional placeholders. We must implement complete, end-to-end working flows for both.
+
+### 1. Biometrics / FaceID Integration (`expo-local-authentication` + `expo-secure-store`)
+- Ensure `expo-local-authentication` and `expo-secure-store` are utilized.
+- In `profile.tsx`, when the user taps "Biometrics / FaceID":
+  1. Check device hardware compatibility using `LocalAuthentication.hasHardwareAsync()` and enrollment status via `LocalAuthentication.isEnrolledAsync()`.
+  2. If supported, trigger `LocalAuthentication.authenticateAsync({ promptMessage: 'Authenticate to enable FaceID / Biometrics' })`.
+  3. If successful, persist `tradiqs_biometrics_enabled` to SecureStore/AsyncStorage and update the profile status badge dynamically to "ON" (in green).
+  4. If toggled off, prompt biometric verification once more before disabling.
+  5. If running in a web browser or unsupported simulator, display a clean modal toast: "Biometric authentication is only available on supported iOS/Android devices with FaceID or Fingerprint enabled."
+
+### 2. App-Level Biometric Lock Guard
+- Add an app lock check in the root layout or auth wrapper: if `tradiqs_biometrics_enabled` is true, trigger `authenticateAsync()` when the app launches or returns from background (`AppState === 'active'`) before rendering protected screens.
+
+### 3. Two-Factor Authentication (2FA) Modal & TOTP Flow
+- Tapping "Two-Factor Auth (2FA)" must open a security modal (`TwoFactorAuthModal.tsx`):
+  - **Status Check:** Check if the user already has an active MFA factor via `supabase.auth.mfa.listFactors()` (or locally stored MFA state).
+  - **Enrollment Flow:**
+    - Call `supabase.auth.mfa.enroll({ factorType: 'totp', issuer: 'TradiQs AI' })`.
+    - Display the generated TOTP secret key with a "Copy Key" button, along with setup instructions for Google Authenticator / Authy.
+    - Provide a 6-digit numeric OTP input field with an auto-submit / "Verify & Enable" button.
+    - Call `supabase.auth.mfa.challengeAndVerify()` to activate the factor.
+  - **Success & Backup Codes:** Display a set of generated one-time recovery codes with a "Copy All" button upon successful verification.
+  - **Active State:** If 2FA is already enabled, show "Status: ENABLED" with a button to "Disable 2FA" (requiring password/OTP confirmation).
+
+### 4. UI Polish & Status Badges
+- In the Security list on the Profile screen:
+  - "Biometrics / FaceID" row must render a dynamic badge: `ON` (green) or `OFF` (muted gray).
+  - "Two-Factor Auth (2FA)" row must render: `ENABLED` (green) or `DISABLED` (muted gray).
+- Ensure modal animations, dark theme styling, and safe-area insets align with the TradiQs design system.
+
+EXECUTION REQUIREMENT: Wire the biometric authentication triggers, implement the complete TOTP 2FA enrollment modal, persist configuration in storage/Supabase, and verify both features compile cleanly.

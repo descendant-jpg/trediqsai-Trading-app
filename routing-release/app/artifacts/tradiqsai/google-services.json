@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "1083273066456",
+    "project_id": "tradiqsai",
+    "storage_bucket": "tradiqsai.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1083273066456:android:67b0c1c9e2ba300c9024ad",
+        "android_client_info": {
+          "package_name": "com.tradiqsai.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1083273066456-tghofqjnibjlk1s5aoopvfgsu351kj2s.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.tradiqsai.app",
+            "certificate_hash": "203e75edd9bd8b9f0347ebaba7bb1721ab1195ad"
+          }
+        },
+        {
+          "client_id": "1083273066456-7f3501mccqmj8ao00112ttnn0mv5v8np.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAC5Y4CdaZw8TxNi6EjBjSeeKNgtk5-BTA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1083273066456-7f3501mccqmj8ao00112ttnn0mv5v8np.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "1083273066456-rqu14snh9r484u9vm5k0nn008hr72uj5.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.tradiqsai.app"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

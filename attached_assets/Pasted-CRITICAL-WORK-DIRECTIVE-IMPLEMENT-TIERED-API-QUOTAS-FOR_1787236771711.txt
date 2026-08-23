@@ -1,0 +1,35 @@
+CRITICAL WORK DIRECTIVE: IMPLEMENT TIERED API QUOTAS FOR THE AI ORACLE.
+
+To conserve context window and AI credits, DO NOT read previous chat history. Read `replit.md` to understand the current state.
+
+We must protect our Anthropic API budget by implementing strict, server-enforced daily limits for the "Ask AI Oracle" feature based on the user's subscription tier.
+
+### 1. Database Schema Update (Supabase)
+- Create a forward-only SQL migration to add two columns to the `public.profiles` table: 
+  - `oracle_daily_usage` (integer, default 0)
+  - `oracle_last_reset` (timestamp with time zone, default NOW())
+- Provide the SQL so it can be run in the Supabase dashboard.
+
+### 2. Server-Side API Enforcement (Backend)
+- Locate the API route handling the AI Oracle requests to Anthropic.
+- Implement the following logic BEFORE calling Anthropic:
+  - Authenticate the user via Supabase JWT. Guests (`is_anonymous: true`) get **0 requests** (Return 403 Forbidden).
+  - Fetch the user's `tier`, `oracle_daily_usage`, and `oracle_last_reset`.
+  - If `oracle_last_reset` is older than 24 hours, reset `oracle_daily_usage` to 0 and update `oracle_last_reset` to NOW().
+  - Enforce limits: Free Tier = Max 3 requests/day. Pro Tier = Max 20 requests/day. Elite Tier = Max 60 requests/day. 
+  - If the user is at their limit, return a `429 Too Many Requests` error.
+  - If they are under the limit, proceed with the Anthropic API call and increment `oracle_daily_usage` by 1 upon success.
+
+### 3. Mobile UI Integration & Upsell
+- Update the Oracle chat screen to fetch the user's current usage and tier limits.
+- Display a small indicator above the chat input (e.g., "2/3 Free Messages Remaining").
+- If the limit is reached, disable the text input and replace the send button with a prominent "Upgrade to Pro/Elite" CTA that routes to the subscription/upgrade screen.
+- Ensure proper error handling if the API returns a 429 status.
+
+### 4. Stage, Commit, and Secure Push
+- Run mobile and API typechecks.
+- Stage the migration file, the updated API route, and the mobile chat screen.
+- Commit with the message: `feat(ai): implement server-enforced tiered daily quotas for Oracle`
+- Push securely to the active repository using the credential helper without logging tokens.
+
+EXECUTION REQUIREMENT: Output the exact SQL required for the Supabase migration. Confirm the backend enforces the tiers before calling Anthropic, and confirm the Git push was successful.

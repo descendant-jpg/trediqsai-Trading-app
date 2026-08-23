@@ -1,0 +1,27 @@
+Review replit.md for our project rules. We are building a "Glass Box" AI analysis feature for the Signals tab to show users exactly *why* a signal was generated. 
+
+Update the database and overhaul the signal cards in `app/(tabs)/signals.tsx` to include an expandable AI confidence breakdown.
+
+### 1. Database Upgrade (Supabase)
+- Create a migration to add a `confluence_factors` column to the `ai_signals` table. The type must be `jsonb` (defaulting to an empty array). 
+- *Context: This array will store strings like ["4H Order Block Retest", "Bullish RSI Divergence", "Institutional Volume Spike"].*
+
+### 2. The Confidence Meter UI (`signals.tsx`)
+- On the main Signal Card, upgrade the `confidence_score` display.
+- Build a horizontal progress bar (`h-2 w-full bg-gray-800 rounded-full overflow-hidden mt-4`).
+- The inner fill of the bar should map to the `confidence_score` percentage. 
+- Color logic: If score >= 85, use `#00F0FF` (Electric Cyan) with a subtle shadow/glow. If 70-84, use `#FBBF24` (Amber). If < 70, use `#EF4444` (Red).
+
+### 3. The Expandable AI Analysis (The "Brain")
+- Add a state toggle to the Signal Card component: `const [isExpanded, setIsExpanded] = useState(false)`.
+- Add a clickable row at the bottom of the unexpanded card: `flex-row justify-between items-center py-3 border-t border-gray-800`. Text: "View AI Analysis" with a chevron icon that rotates based on `isExpanded`.
+- **Expanded State UI:**
+  - When `isExpanded` is true, reveal a dark inner panel (`bg-[#0A0B0E] p-4 rounded-xl mt-2 border border-white/5`).
+  - Title: "Technical Confluence" (`text-xs text-gray-500 uppercase tracking-widest mb-3`).
+  - Map through the `confluence_factors` JSON array. Render each factor as a row with a small checkmark icon (`text-[#00F0FF]`) and the text in white.
+  - Add a final "AI Thesis" block at the bottom displaying the `rationale` string in italicized gray text.
+
+### 4. Mock Data Injection
+- Update the Supabase fetch fallback or dummy data to ensure the UI can be tested immediately. Provide at least one dummy signal with a score of 92 and an array of 3 technical factors.
+
+Do not explain your steps. Execute the migration and write the complete, functional React Native code for the upgraded `signals.tsx` screen with strict error handling so nothing crashes if `confluence_factors` is null.

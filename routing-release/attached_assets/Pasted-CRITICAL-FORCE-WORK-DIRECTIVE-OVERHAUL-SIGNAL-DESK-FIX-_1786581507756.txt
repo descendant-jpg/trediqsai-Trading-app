@@ -1,0 +1,26 @@
+CRITICAL FORCE WORK DIRECTIVE: OVERHAUL SIGNAL DESK, FIX SUBSCRIPTION GATE, AND BUILD ADMIN BROADCASTER.
+
+Review replit.md for our project rules. The Signals tab (`app/(tabs)/signals.tsx`) is displaying a "Couldn't verify subscription" network error and an empty state. We must wire the global signal feed and implement admin broadcasting tools.
+
+### 1. Fix the Subscription & Entitlement Check
+- Audit the `signals.tsx` screen. Remove the broken subscription verification hook that is causing the error banner.
+- Implement the unified role/plan check: `const isPremium = role === 'admin' || plan === 'pro' || plan === 'elite'`.
+- Ensure the user's tier properly unlocks the "Premium" filter chips without throwing network offline errors.
+
+### 2. Database Migration (Broadcast Signals)
+- Create a new Supabase migration (e.g., `019_broadcast_signals.sql`) for a `public.broadcast_signals` table:
+  `id`, `asset` (text), `direction` (text: BUY/SELL), `entry` (numeric), `take_profit` (numeric), `stop_loss` (numeric), `status` (text: pending, active, won, lost), `is_premium` (boolean default true), `created_at`.
+- Apply RLS: ANYONE can read, but ONLY users with `role === 'admin'` in `public.profiles` can insert/update.
+
+### 3. Backend Routes & Signal Card UI
+- Create Express routes: `GET /api/signals/broadcast` (returns all signals) and `POST /api/signals/broadcast` (admin only).
+- In the frontend, map the fetched signals into premium interactive cards showing Asset, Direction, Entry, TP, SL, Status, and a Free/Premium badge.
+- If a user is not Premium, blur out the Entry/TP/SL text on `is_premium: true` signals and overlay a sleek "Upgrade to Unlock" button.
+- Wire the filter chips (All, Free, Premium, Active, Pending) to filter the rendered list dynamically.
+
+### 4. Admin-Only Broadcast Terminal
+- On the `signals.tsx` screen, conditionally render a Floating Action Button (FAB) or a top-header "+" icon ONLY if `role === 'admin'`.
+- This button must open a "Publish New Signal" modal with form inputs for Asset, Direction, Entry, TP, SL, Status, and a toggle for "Is Premium".
+- On submit, post to the backend to create the signal in `public.broadcast_signals` and refresh the feed.
+
+EXECUTION REQUIREMENT: Prepare the migration, fix the subscription crash, render the premium signal cards with paywall blur for free users, and build the admin-only publishing form. Ensure strict TypeScript types.

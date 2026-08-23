@@ -1,0 +1,32 @@
+Review replit.md for our project rules, then completely overhaul the frontend design of the website landing page. Currently, the deployed site looks like unstyled HTML because Tailwind CSS is either misconfigured or not imported globally.
+
+### 1. Fix Tailwind & Global CSS (CRITICAL)
+- Verify `tailwind.config.ts` (or `.js`) exists and the `content` array includes `./app/**/*.{js,ts,jsx,tsx}` and `./components/**/*.{js,ts,jsx,tsx}`.
+- Ensure `app/globals.css` exists and includes the `@tailwind base; @tailwind components; @tailwind utilities;` directives.
+- Open `app/layout.tsx` and ensure `import './globals.css';` is at the very top. 
+- Set the `<body>` background to `#0A0B0E` and text color to white.
+
+### 2. Hero Section (`app/page.tsx`)
+- Wrap the main hero in a `min-h-screen flex flex-col justify-center items-center text-center px-4` container.
+- Make the main headline ("The Institutional Edge in Your Pocket") massive (`text-5xl md:text-7xl font-bold`).
+- Create a beautiful call-to-action (CTA) row:
+  - "Download the app" should be a prominent Electric Cyan (`bg-[#00F0FF] text-black font-semibold`) pill-shaped button.
+  - "See how it works" should be a hollow button with an Electric Cyan border.
+
+### 3. Live Ticker & Data
+- Style the financial ticker as a sticky or smoothly scrolling flex row with a dark gray background (`bg-[#16181D] border-y border-gray-800`). Use green for positive numbers and red for negative.
+
+### 4. Features Section (Signal Generator, AutoPilot, etc.)
+- Title: "Everything serious traders need, without the noise." (Centered, `text-3xl font-bold mb-12`).
+- Convert the features into a responsive CSS Grid (`grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto`).
+- Style each feature card: `bg-[#16181D] p-8 rounded-2xl border border-gray-800 hover:border-[#00F0FF] transition-all duration-300`. Include space for a Lucide React icon at the top of each card.
+
+### 5. FAQ Section
+- Wrap the FAQs in a narrow container (`max-w-3xl mx-auto`).
+- Style each question as a clickable accordion row (`flex justify-between items-center py-4 border-b border-gray-800`). The question text should be bold, with a chevron icon on the right.
+
+### 6. Footer
+- Build a premium footer spanning the full width (`bg-black border-t border-gray-800 py-12`).
+- Organize links (Explore, Legal, Contact) into a multi-column grid (`grid-cols-1 md:grid-cols-4`). Mute the link text colors (`text-gray-400 hover:text-[#00F0FF]`).
+
+Ensure all components are fully responsive (using standard Tailwind `md:` and `lg:` prefixes) and maintain our premium dark-terminal aesthetic.

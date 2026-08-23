@@ -19,12 +19,12 @@ import * as TradeService from '@/services/TradeService';
 import { useTrading, type TradeResult } from '@/context/TradingContext';
 import colors from '@/constants/colors';
 import { RiskDisclaimer } from '@/components/RiskDisclaimer';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PaywallModal } from '@/components/PaywallModal';
 import { LatestInsightsModal } from '@/components/LatestInsightsModal';
 import { MultiTFAnalysisModal } from '@/components/MultiTFAnalysisModal';
-import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { ErrorBoundary as WidgetErrorBoundary } from '@/components/ErrorBoundary';
 import type { ErrorFallbackProps } from '@/components/ErrorFallback';
 import * as ImagePicker from 'expo-image-picker';
 
@@ -250,8 +250,9 @@ type TwelveDataQuote = {
 };
 type TwelveDataResponse = {
   status?: string;
+  code?: number | string;
   message?: string;
-  [symbol: string]: TwelveDataQuote | string | undefined;
+  [symbol: string]: TwelveDataQuote | string | number | undefined;
 };
 
 function isTicker(value: unknown): value is Ticker {
@@ -298,6 +299,7 @@ function greetingForHour(hour: number) {
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const [isHomeFocused, setIsHomeFocused] = useState(false);
   const [now, setNow] = useState(() => new Date());
   const [paywallOpen, setPaywallOpen] = useState(false);
   const [insightsOpen, setInsightsOpen] = useState(false);
@@ -306,11 +308,18 @@ export default function HomeScreen() {
   const [tickerLoading, setTickerLoading] = useState(true);
   const [primaryTickerWidth, setPrimaryTickerWidth] = useState(0);
   const [pickerMessage, setPickerMessage] = useState<string | null>(null);
-  const tickerOffset = useRef(new Animated.Value(0)).current;
+  const translateX = useRef(new Animated.Value(0)).current;
   const { profile } = useProfile();
   const topInset = Platform.OS === 'web' ? 38 : (insets?.top ?? 0) + 10;
   const bottomInset = insets?.bottom ?? 0;
   const liveTickers = useMemo(() => tickers.filter(isTicker), [tickers]);
+
+  useFocusEffect(
+    useCallback(() => {
+      setIsHomeFocused(true);
+      return () => setIsHomeFocused(false);
+    }, []),
+  );
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -320,6 +329,7 @@ export default function HomeScreen() {
   }, []);
 
   useEffect(() => {
+    if (!isHomeFocused) return;
     let active = true;
 
     const loadTickers = async () => {
@@ -337,24 +347,27 @@ export default function HomeScreen() {
         }
 
         const parsedJson = JSON.parse(rawText) as TwelveDataResponse;
-        if (parsedJson.status === 'error') {
-          throw new Error(parsedJson.message || 'Twelve Data API request failed.');
+        if (parsedJson.status === 'error' || parsedJson.code) {
+          throw new Error(parsedJson.message || 'Twelve Data API blocked the request.');
         }
 
-        const dataArray = Object.values(parsedJson);
+        const dataArray = Object.values(parsedJson).filter(
+          (item): item is TwelveDataQuote => typeof item === 'object' && item !== null && typeof item.symbol === 'string',
+        );
         const quotesBySymbol = new Map<string, { price: number; changePercent: number }>();
-        for (const item of dataArray) {
-          if (!item || typeof item !== 'object') continue;
-          const quote = item as TwelveDataQuote;
-          const price = Number.parseFloat(String(quote.close || quote.previous_close));
-          const changePercent = Number.parseFloat(String(quote.percent_change));
-          if (
-            typeof quote.symbol === 'string'
-            && Number.isFinite(price)
-            && Number.isFinite(changePercent)
-          ) {
-            quotesBySymbol.set(quote.symbol, { price, changePercent });
-          }
+        for (const quote of dataArray) {
+          if (!quote.symbol) continue;
+          const rawPrice = quote?.close
+            ? Number.parseFloat(String(quote.close))
+            : quote?.previous_close
+              ? Number.parseFloat(String(quote.previous_close))
+              : 0;
+          const rawChange = quote?.percent_change
+            ? Number.parseFloat(String(quote.percent_change))
+            : 0;
+          const price = Number.isFinite(rawPrice) ? rawPrice : 0;
+          const changePercent = Number.isFinite(rawChange) ? rawChange : 0;
+          quotesBySymbol.set(quote.symbol, { price, changePercent });
         }
         const updatedTickers = STOCK_SYMBOLS.flatMap((symbol) => {
           const quote = quotesBySymbol.get(symbol);
@@ -376,20 +389,26 @@ export default function HomeScreen() {
     loadTickers();
     const timer = setInterval(loadTickers, 60_000);
     return () => { active = false; clearInterval(timer); };
-  }, []);
+  }, [isHomeFocused]);
 
   useEffect(() => {
-    if (!primaryTickerWidth) return;
-    tickerOffset.setValue(0);
+    if (!isHomeFocused || !primaryTickerWidth) {
+      translateX.stopAnimation();
+      translateX.setValue(0);
+      return;
+    }
+
+    translateX.stopAnimation();
+    translateX.setValue(0);
     const animation = Animated.loop(
       Animated.sequence([
-        Animated.timing(tickerOffset, {
+        Animated.timing(translateX, {
           toValue: -primaryTickerWidth,
           duration: Math.max(18_000, primaryTickerWidth * 28),
           easing: Easing.linear,
           useNativeDriver: true,
         }),
-        Animated.timing(tickerOffset, {
+        Animated.timing(translateX, {
           toValue: 0,
           duration: 0,
           useNativeDriver: true,
@@ -397,8 +416,12 @@ export default function HomeScreen() {
       ]),
     );
     animation.start();
-    return () => animation.stop();
-  }, [primaryTickerWidth, tickerOffset]);
+    return () => {
+      animation.stop();
+      translateX.stopAnimation();
+      translateX.setValue(0);
+    };
+  }, [isHomeFocused, primaryTickerWidth, translateX]);
 
   const openGallery = async () => {
     try {
@@ -468,7 +491,7 @@ export default function HomeScreen() {
                <Text style={styles.tickerStatusText}>Loading live market data…</Text>
              </View>
            ) : liveTickers.length > 0 ? (
-             <Animated.View style={[styles.tickerRow, { transform: [{ translateX: tickerOffset }] }]}>
+            <Animated.View style={[styles.tickerRow, { transform: [{ translateX }] }]}>
                {[0, 1].map((copy) => (
                  <View
                    key={`ticker-copy-${copy}`}
@@ -476,10 +499,16 @@ export default function HomeScreen() {
                    onLayout={copy === 0 ? (event) => setPrimaryTickerWidth(event.nativeEvent.layout.width) : undefined}
                  >
                    {liveTickers.map((ticker) => {
-                     const isPositive = ticker.changePercent > 0;
-                     const isNegative = ticker.changePercent < 0;
+                    const rawPrice = ticker?.price ? Number.parseFloat(String(ticker.price)) : 0;
+                    const price = Number.isFinite(rawPrice) ? rawPrice.toFixed(2) : '0.00';
+                    const rawChange = ticker?.changePercent ? Number.parseFloat(String(ticker.changePercent)) : 0;
+                    const change = Number.isFinite(rawChange) ? rawChange.toFixed(2) : '0.00';
+                    const numericChange = Number.parseFloat(change);
+                    const isPositive = numericChange > 0;
+                    const isNegative = numericChange < 0;
                      const changeColor = isPositive ? '#00FF00' : isNegative ? '#FF0000' : c.mutedForeground;
-                     return <View key={`${ticker.symbol}-${copy}`} style={styles.tickerPill}><Text style={styles.tickerSymbol}>{ticker.symbol}</Text><Text style={styles.tickerPrice}>${ticker.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text><Text style={[styles.tickerChange, { color: changeColor }]}>{`${isPositive ? '+' : ''}${ticker.changePercent.toFixed(2)}%`}</Text></View>;
+                    const formattedPrice = Number.parseFloat(price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    return <View key={`${ticker.symbol}-${copy}`} style={styles.tickerPill}><Text style={styles.tickerSymbol}>{ticker?.symbol || '—'}</Text><Text style={styles.tickerPrice}>${formattedPrice}</Text><Text style={[styles.tickerChange, { color: changeColor }]}>{`${isPositive ? '+' : ''}${change}%`}</Text></View>;
                    })}
                  </View>
                ))}
@@ -592,18 +621,18 @@ export default function HomeScreen() {
 
         <RiskDisclaimer />
       </ScrollView>
-      <ErrorBoundary
+      <WidgetErrorBoundary
         FallbackComponent={HomeWidgetFallback}
         onError={(error) => console.warn('Paywall widget failed to render.', error)}
       >
         <PaywallModal visible={paywallOpen} onClose={() => setPaywallOpen(false)} />
-      </ErrorBoundary>
-      <ErrorBoundary
+      </WidgetErrorBoundary>
+      <WidgetErrorBoundary
         FallbackComponent={HomeWidgetFallback}
         onError={(error) => console.warn('Insights widget failed to render.', error)}
       >
         <LatestInsightsModal visible={insightsOpen} onClose={() => setInsightsOpen(false)} />
-      </ErrorBoundary>
+      </WidgetErrorBoundary>
       <MultiTFAnalysisModal
         symbol={analysisSymbol}
         onClose={() => setAnalysisSymbol(null)}

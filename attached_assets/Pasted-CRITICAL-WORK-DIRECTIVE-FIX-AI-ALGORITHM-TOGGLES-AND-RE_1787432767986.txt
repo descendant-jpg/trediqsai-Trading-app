@@ -1,0 +1,32 @@
+CRITICAL WORK DIRECTIVE: FIX AI ALGORITHM TOGGLES AND REPAIR TEST SUITE REGRESSIONS.
+
+To conserve context window and AI credits, DO NOT read previous chat history. Read `replit.md` to understand the current state.
+
+The toggle switches on the "AI Tools" screen (Scalp Oracle, Breakout Engine, etc.) are unresponsive. I need them overhauled to feel premium, instantaneous, and strictly tied to our backend tier logic. Additionally, you must clear out any failing tests.
+
+### 1. Implement Optimistic UI
+- Locate the component rendering the AI algorithms (e.g., `app/(tabs)/ai-tools.tsx` or `components/AlgorithmCard.tsx`).
+- Introduce local component state for the toggle value. When pressed, immediately flip the local state so the UI updates instantly without waiting for the network.
+
+### 2. Add Premium Haptics
+- Import `expo-haptics`.
+- Trigger `Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)` exactly when the toggle is pressed.
+
+### 3. Handle Backend Sync & Rollback
+- Wire the toggle's `onValueChange` or `onPress` to fire the respective API call to start/pause the trading bot.
+- Implement a `try/catch` block. If the API request fails (e.g., 403 tier limit, 500 server error), revert the local toggle state back to its previous value and surface the specific API error via a Toast or Alert.
+
+### 4. Enforce Tier Badges (Pro/Elite)
+- For algorithms explicitly marked as "PRO ONLY" or "ELITE ONLY", intercept the toggle press. If the user's active session role does not meet the requirement, do not flip the toggle. Instead, trigger the paywall/upgrade modal directly.
+
+### 5. Fix Mobile Test Suite Failures
+- Fix the mobile test suite failures that can hide regressions.
+- Ensure the new optimistic UI, state rollback logic, and haptic function calls are properly mocked and covered in the tests so this premium functionality is protected moving forward.
+- The test suite MUST be 100% green before committing.
+
+### 6. Verify & Push
+- Run full workspace typechecks and execute the mobile test suite.
+- Commit: `feat(ai-tools): implement optimistic toggles, haptics, paywall guards, and fix test regressions`
+- Push securely to the active repository.
+
+EXECUTION REQUIREMENT: Confirm which file handles the toggle state, verify the rollback logic is in place, and output the final test suite passing results.

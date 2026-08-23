@@ -1,0 +1,83 @@
+Please execute a full audit, implementation, and deployment plan for PetVault to address Apple App Store submission requirements and complete our v1.1 security release.
+
+Follow these 5 distinct phases systematically:
+
+---
+
+### Phase 1: RevenueCat Configuration & Entitlement Alignment
+1. **Public SDK Keys & Initialization:**
+   - Verify that RevenueCat SDK initializes properly using the platform-specific public API keys:
+     - iOS: `EXPO_PUBLIC_RC_APPLE_KEY` (or the configured Apple public key `appl_...`)
+     - Android: `EXPO_PUBLIC_RC_GOOGLE_KEY` (or the configured Google public key `goog_...`)
+   - Fallback safely if keys are missing in local dev mode.
+
+2. **Entitlement Identifier Match:**
+   - Standardize the active entitlement check across the entire client app. In RevenueCat dashboard, the identifier is strictly set to:
+     `Petvault Pro`
+   - Audit all subscription guards (`customerInfo.entitlements.active['...']`) to ensure they query `'Petvault Pro'` (exact match with casing and space) rather than legacy strings like `'pro'` or `'plus'`.
+
+3. **Verify Product IDs & Offerings:**
+   - Audit `PLUS_PRODUCT_IDS` / paywall product constants to match our store setups:
+     - Apple App Store ID: `petvault_plus_monthly`
+     - Google Play Store ID: `petvault_plus_monthly:petvault-plus-monthly`
+     - Default Package: `$rc_monthly`
+   - Ensure the paywall screen dynamically fetches the offering package from `Purchases.getOfferings()` to display the real localized price instead of static hardcoded text.
+
+4. **Entitlement Gating:**
+   - Ensure all premium features (unlimited pet profiles, AI Pet Translator, symptom checks, certificate exports, etc.) are strictly gated behind the `Petvault Pro` entitlement.
+   - Verify that the "Upgrade to Plus" button invokes `Purchases.purchasePackage()` and ONLY grants pro access upon receiving a validated active transaction.
+   - Wire the "Restore purchases" button to call `Purchases.restorePurchases()` and update state based on restored entitlements.
+
+---
+
+### Phase 2: App & Endpoint Security Audit
+1. **Remove Client-Side State Bypasses:**
+   - Audit client storage (AsyncStorage/SecureStore) to verify that a user cannot manually inject or manipulate local flags (e.g., `isPro: true`) without an active entitlement or server validation.
+2. **Places API Platform Switch:**
+   - Ensure client calls to Google Places API route through the platform-restricted key switch logic according to `Platform.OS` (iOS bundle ID, Android keystore SHA-1, and Web domain restrictions).
+
+---
+
+### Phase 3: Database Migration & v1.1 Deployment (Droplet)
+1. **Database Schema & Migration:**
+   - Apply the `migrate-write-tokens.sql` migration on the production PostgreSQL database:
+     ```sql
+     BEGIN;
+     ALTER TABLE pet_profiles
+     ADD COLUMN IF NOT EXISTS write_token_hash text,
+     ADD COLUMN IF NOT EXISTS owner_user_id integer REFERENCES users(id) ON DELETE SET NULL,
+     ADD COLUMN IF NOT EXISTS claimed_at timestamp;
+     CREATE INDEX IF NOT EXISTS pet_profiles_owner_user_id_idx ON pet_profiles (owner_user_id);
+     COMMIT;
+     ```
+   - Update the Drizzle ORM schema (`petProfiles.ts`) to match the new fields (`writeTokenHash`, `ownerUserId`, `claimedAt`).
+
+2. **Server-Side Authorization Middleware:**
+   - Deploy `writeToken.ts` middleware (`requireProfileWriteAccess`) on the API server.
+   - Apply the middleware to all profile mutation routes:
+     - `POST /profile/:petId/photos`
+     - `PUT /profile/:petId`
+     - `DELETE /profile/:petId`
+   - Ensure CORS configuration explicitly allows the `X-Write-Token` header.
+
+3. **Client-Side Token Management:**
+   - Implement client `writeToken.ts` using `expo-crypto` and `expo-secure-store` (with `AsyncStorage` fallback on web).
+   - Ensure `getOrCreateWriteToken(petId)` automatically attaches the `X-Write-Token` header on all create, edit, photo upload, and delete requests.
+
+---
+
+### Phase 4: Automated Testing & Race Condition Handling
+1. **Concurrency Tests for Claim Races:**
+   - Add integration tests covering write-token claim race conditions:
+     - *Test Case 1 (First-Writer-Wins):* Two concurrent requests attempt to claim an unclaimed profile (`writeTokenHash == null`). Verify the first request sets the claim and the second request with a different token receives `403 Forbidden`.
+     - *Test Case 2 (Legacy Profile):* Verify that un-tokened writes to existing legacy profiles still succeed until a write token is supplied to claim it.
+     - *Test Case 3 (Rate Limiting):* Verify that 10 failed token attempts within 15 minutes trigger a `429 Too Many Requests`.
+
+---
+
+### Phase 5: Verification & Status Report
+Provide a summary confirming:
+1. All files updated and audited.
+2. Drizzle and DB migration status.
+3. Test suite execution results for write-token race conditions.
+4. Clean build confirmation ready for packaging.

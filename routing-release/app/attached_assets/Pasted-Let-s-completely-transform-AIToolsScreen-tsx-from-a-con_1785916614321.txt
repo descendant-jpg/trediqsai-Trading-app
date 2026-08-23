@@ -1,0 +1,42 @@
+Let's completely transform `AIToolsScreen.tsx` from a conversational Q&A chat into an "AI AutoPilot & Algorithmic Trading Bot Hub". 
+
+Remove the old text chat interface completely and replace it with a high-tech algorithmic trading control panel.
+
+### 1. Layout & Theme
+- Background: #0A0B0E (Terminal Black).
+- Accent Colors: Electric Cyan (#00F0FF) for active states, Trading Green (#00E676) for profits, Muted Crimson (#E54B4B) for risk/stops.
+
+### 2. Screen Header: AutoPilot Summary Card
+- Display a card at the top (Background #16181D, Border #22252A):
+  - Left: Title "TradiQs AutoPilot" with a glowing green pulse dot indicating "System Active".
+  - Right: A prominent Master Toggle Switch (Active / Paused).
+  - Metrics Grid (3 columns):
+    1. "Active Bots" (e.g., 2 Running).
+    2. "Capital Deployed" (e.g., $25,000).
+    3. "Today's Bot P&L" (e.g., +$1,420.50 in #00E676).
+
+### 3. Real-Time Bot Terminal Log (Live Console)
+- Create a dark, code-editor style container (#050608 background, subtle green monospace text):
+  - Height: ~140px, scrollable.
+  - Header: "System Live Logs" with a small trash icon to clear logs.
+  - Populate with realistic auto-scrolling log lines that simulate live algorithmic execution (e.g., scanning market structures, placing limit orders, adjusting trailing stops).
+
+### 4. Bot Roster & Marketplace
+- Add a section title: "Available AI Algorithms".
+- Render a list of 4 Bot Cards (Background #16181D, Border #22252A):
+  - **Bot 1: Scalp Oracle AI** (Tags: Crypto / 5m Scalper | Risk: Low | Historical Win Rate: 78.4% | Status: RUNNING).
+  - **Bot 2: Breakout Engine Pro** (Tags: Forex & Stocks / Momentum | Risk: Medium | Historical Win Rate: 71.2% | Status: PAUSED).
+  - **Bot 3: Grid Matrix AI** (Tags: Range Trading | Risk: Low | Historical Win Rate: 82.1% | Status: PAUSED).
+  - **Bot 4: Quantum Institutional AI** (Badge: PRO ONLY | Locked with a blur overlay and a gold "Upgrade to Unlock" button).
+
+### 5. Card Interactive Elements
+- Each unlocked bot card must feature:
+  - An **ON/OFF Switch** or "Deploy Bot" button.
+  - A small "Configure Settings" gear icon.
+  - Key Metrics: Win Rate, Risk Level badge, 30-Day Return %, and Total Trades Executed.
+  - Tapping "Configure Settings" opens a Modal allowing the user to select Capital Allocation ($) and Max Bot Drawdown %.
+
+### 6. Integration
+- Connect the bot switches to local component state so toggling a bot updates the active count and appends a new log line to the live terminal feed (e.g., "Scalp Oracle AI initialized with $10,000 capital allocation.").
+
+Ensure all UI elements use React Native primitives, proper SafeAreaView padding, and clean dark-mode styling consistent with the rest of the application.

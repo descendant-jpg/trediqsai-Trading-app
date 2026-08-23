@@ -1,0 +1,30 @@
+CRITICAL WORK DIRECTIVE: FINALIZE REVENUECAT INITIALIZATION, VERIFY SUPABASE SUBSCRIPTION FUNCTIONS, AND TEST END-TO-END SANDBOX FLOW.
+
+Review our project rules. Both platform keys and webhook credentials are in place:
+- EXPO_PUBLIC_REVENUECAT_IOS_KEY
+- EXPO_PUBLIC_REVENUECAT_ANDROID_KEY
+- REVENUECAT_WEBHOOK_SECRET
+
+### 1. Platform-Specific SDK Initialization
+- Update the Purchases initialization logic in the mobile app root (e.g., `app/_layout.tsx` or `index.tsx`):
+  - Dynamically select the correct API key using `Platform.OS === 'ios' ? process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY : process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY`.
+  - Ensure the user's Supabase auth `user.id` is passed to `Purchases.logIn(user.id)` upon authentication so the RevenueCat `app_user_id` directly maps to Supabase `profiles.id`.
+
+### 2. Verify Supabase Database Functions & Schema
+- Inspect our Supabase migrations/schema for user profile tiers (`public.profiles`).
+- Ensure the database column/function responsible for locking in and persisting subscription tiers (e.g., `subscription_tier` enum/text: `'free'`, `'pro'`, `'elite'`, along with `subscription_status` and `subscription_expires_at`) is active and valid.
+- If a dedicated RPC function or migration is required to safely update tiers from the webhook service role, ensure the SQL migration file exists and is documented.
+
+### 3. Webhook Handling & Profile Tier Sync
+- Verify the webhook handler endpoint at `/api/revenuecat/webhook`:
+  - Validates the incoming `Authorization: Bearer <REVENUECAT_WEBHOOK_SECRET>`.
+  - Correctly parses the event payload (`INITIAL_PURCHASE`, `RENEWAL`, `PRODUCT_CHANGE`, `EXPIRATION`).
+  - Maps the RevenueCat entitlement/product identifier directly to the appropriate tier (`pro` or `elite`).
+  - Uses the Supabase service role client to update `public.profiles` for the corresponding user.
+
+### 4. End-to-End Verification Test
+- Execute a test/dry-run of the purchase flow:
+  - Confirm a sandbox purchase event flows seamlessly from the client/webhook handler directly into the Supabase user profile.
+  - Verify that upon a successful sandbox event, the database tier updates to `pro` or `elite`, and the mobile app's local state immediately reflects the unlocked status.
+
+EXECUTION REQUIREMENT: Confirm all code changes, outline the exact SQL/functions used in Supabase, and report the results of the sandbox verification flow.

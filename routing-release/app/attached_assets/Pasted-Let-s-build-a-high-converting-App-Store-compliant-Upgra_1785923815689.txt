@@ -1,0 +1,38 @@
+Let's build a high-converting, App Store-compliant "Upgrade to Pro" Subscription Paywall modal (`PaywallModal.tsx` / `ProScreen.tsx`).
+
+This screen should be callable as a Modal from any tab whenever a user clicks a locked feature, "Upgrade to Pro" button, or Pro signal.
+
+### 1. Theme & Header Layout
+- Background: #0A0B0E (Terminal Black).
+- Top Right: A clean 'X' close button to allow users to dismiss the modal.
+- Header Visual: A subtle glowing badge or icon at the top with text "TRADIQS PRO".
+- Headline: "Trade Like an Institution" (Large, bold white text).
+- Subtitle: "Unlock unblurred real-time signals, automated trading bots, and full AI Oracle market intelligence."
+
+### 2. Interactive Billing Toggle (Monthly vs. Annual)
+- Create a segmented button or toggle control:
+  - Option 1: "Monthly" ($29.99/mo).
+  - Option 2: "Annual" ($199.99/yr) with a prominent "SAVE 45%" badge in Electric Cyan (#00F0FF).
+- State: Save the selected billing cycle in a local `billingCycle` state variable ('monthly' | 'annual').
+
+### 3. Feature Value List
+Render a vertical list of feature rows with bright checkmark icons (#00E676):
+- **Real-Time Signal Targets:** Instant access to Entry, TP1/TP2/TP3, and SL for all assets.
+- **AI AutoPilot Execution:** Deploy high-yield automated bots directly on your balance.
+- **TradiQs Oracle AI:** Unlimited market analysis, chart breakdowns, and setup checks.
+- **VIP Telegram Alerts:** Real-time push notifications sent directly to your phone and Telegram.
+- **Advanced Analytics:** Detailed win-rate tracking, equity curves, and risk metrics.
+
+### 4. Primary Call To Action (CTA) Button
+- Button Text: If Annual selected, "Start 7-Day Free Trial", then "$199.99/year". If Monthly selected, "Subscribe Now - $29.99/month".
+- Styling: Large, full-width button with a vibrant gradient or solid Electric Cyan (#00F0FF) background and bold black text.
+- Action: When pressed, simulate a 1.5-second loading spinner, then update the user's local profile status to 'PRO', show a celebratory success Alert ("Welcome to TradiQs Pro!"), and dismiss the modal.
+
+### 5. App Store Legal Footer (CRITICAL FOR APPROVAL)
+At the bottom of the scrollable container, add horizontal link buttons:
+- "Restore Purchases" (Triggers a toast/alert "Checking App Store receipts...").
+- "Terms of Use (EULA)" (Opens the Terms modal or external link).
+- "Privacy Policy" (Opens the Privacy Policy modal).
+- Add micro-text at the very bottom: "Subscriptions auto-renew unless cancelled at least 24 hours before the end of the current period. Manage subscriptions in your App Store / Play Store account settings."
+
+Ensure the entire modal uses smooth animations, crisp dark-mode styling, and clean React Native primitives.

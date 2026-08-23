@@ -1,0 +1,31 @@
+CRITICAL WORK DIRECTIVE: GLOBAL ROUTING OVERHAUL - FIX PROFILE AND ADMIN REDIRECT BUGS.
+
+To conserve context window and AI credits, DO NOT read previous chat history. Read `replit.md` to understand the current state.
+
+Your previous navigation fixes failed and introduced regressions. Currently:
+1. Authenticated users are STILL being routed to the Profile page on launch/login.
+2. Free/Standard users are somehow being routed to the `/(admin)` CMS dashboard on launch, resulting in a 403 error screen.
+
+You must stop patching individual layouts and fix the global routing logic. 
+
+### 1. Search and Destroy Rogue Profile Redirects
+- Perform a global text search in the workspace for `router.replace('/(tabs)/profile')`, `router.replace('/profile')`, and `<Redirect href="/(tabs)/profile" />`.
+- Search specifically inside `app/index.tsx`, `app/_layout.tsx`, and your Auth/Session provider context.
+- Change EVERY instance of a post-login or session-restore redirect to point explicitly to `/(tabs)/index` (the Home screen). 
+
+### 2. Fix the Root Entry Point (`app/index.tsx`)
+- The absolute root `index.tsx` file must handle the initial session check cleanly. 
+- If `session` exists, return `<Redirect href="/(tabs)/index" />`.
+- If no session exists, return `<Redirect href="/(auth)/login" />` (or your respective auth gateway).
+- Ensure it does NOT redirect to `/(admin)` under any circumstances.
+
+### 3. Audit the Auth Listener (`useProtectedRoute` or similar)
+- Check the `useEffect` that listens to `supabase.auth.onAuthStateChange`.
+- Ensure the `SIGNED_IN` event strictly routes to `/(tabs)/index`. Remove any logic that attempts to push users to Profile or Admin on load.
+
+### 4. Verify & Push
+- Run full workspace typechecks.
+- Commit: `fix(navigation): overhaul global auth routing to force Home tab on launch and prevent Admin/Profile misroutes`
+- Push securely to the active repository.
+
+EXECUTION REQUIREMENT: Output the exact file paths and line numbers where you found the rogue Profile and Admin redirects. Do not guess; verify the routing behavior before committing.

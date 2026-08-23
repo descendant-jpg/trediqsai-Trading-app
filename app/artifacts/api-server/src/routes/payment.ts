@@ -3,9 +3,12 @@ import { identity, requestUserId, ANONYMOUS_USER } from '../middlewares/identity
 import { getUncachableStripeClient, getStripeCredentials } from '../stripeClient.js';
 import { grantEliteTier } from '../lib/supabaseAdmin.js';
 import { logger } from '../lib/logger.js';
-import { ELITE_AMOUNT_CENTS, ELITE_CURRENCY, isElitePayment } from '../lib/elitePlan.js';
 
 const router: IRouter = Router();
+
+/** $49.00 in cents */
+const ELITE_AMOUNT_CENTS = 4900;
+const ELITE_CURRENCY = 'usd';
 
 /**
  * GET /api/payment/config
@@ -107,7 +110,8 @@ router.post('/payment/confirm', identity(), async (req, res, next) => {
     // for the correct amount/currency — preventing a user from submitting a
     // cheaper or unrelated PaymentIntent to unlock Elite.
     const ownerMatch = intent.metadata.userId === userId;
-    const productMatch = isElitePayment(intent);
+    const planMatch = intent.metadata.plan === 'elite';
+    const amountMatch = intent.amount === ELITE_AMOUNT_CENTS && intent.currency === ELITE_CURRENCY;
 
     if (!ownerMatch) {
       logger.warn(
@@ -118,7 +122,7 @@ router.post('/payment/confirm', identity(), async (req, res, next) => {
       return;
     }
 
-    if (!productMatch) {
+    if (!planMatch || !amountMatch) {
       logger.warn(
         { userId, plan: intent.metadata.plan, amount: intent.amount, currency: intent.currency },
         'PaymentIntent plan/amount mismatch on /confirm',
@@ -127,10 +131,8 @@ router.post('/payment/confirm', identity(), async (req, res, next) => {
       return;
     }
 
-    const eventAt = new Date(intent.created * 1000);
-    // Same replay-safe RPC used by the webhook handler. The PaymentIntent ID
-    // is the idempotency key across both delivery paths.
-    await grantEliteTier(userId, intent.id, eventAt);
+    // Same idempotent write used by the webhook handler.
+    await grantEliteTier(userId);
 
     logger.info({ userId, paymentIntentId }, 'Elite tier granted via /confirm (fast-path)');
     res.json({ success: true });

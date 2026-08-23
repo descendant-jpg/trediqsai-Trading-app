@@ -1,0 +1,30 @@
+Review replit.md for our project rules. We are building the `AutoPilot Bots` and `BrokerSync` screens from the Profile tab. They must be production-ready with functional state management.
+
+CRITICAL: Create all new files in the ROOT directory `./app/profile/`. DO NOT put them in an `artifacts` folder.
+
+### 1. Hardwire Navigation (`app/(tabs)/profile.tsx`)
+- Locate the "AutoPilot Bots" button. Add: `onPress={() => router.push('/profile/autopilot')}`
+- Locate the "BrokerSync" button. Add: `onPress={() => router.push('/profile/brokersync')}`
+
+### 2. Database Update (Supabase)
+- Create a migration to add an `active_bot` column (type text, nullable) and an `allocated_capital` column (numeric, nullable) to the `profiles` table.
+
+### 3. Build AutoPilot Screen (`app/profile/autopilot.tsx`)
+- **Theme:** `#0A0B0E`. Title: 'Algorithmic AutoPilot'.
+- **UI:** 
+  - Array of 3 bots: "Pulse Scalper", "Swing Master", "News Sniper". Show mock Win Rate and Drawdown for each.
+  - When a bot card is tapped, expand it to show a percentage allocation slider (10% to 100%) and a massive "Deploy Bot" button.
+- **Logic:** 
+  - On "Deploy", update the `profiles` table setting `active_bot` to the bot's name and `allocated_capital`. 
+  - Render the active bot at the top of the screen with a pulsing `#00F0FF` border and a "Deactivate" button that clears the database state.
+
+### 4. Build BrokerSync Screen (`app/profile/brokersync.tsx`)
+- **Theme:** `#0A0B0E`. Title: 'Exchange Integration'.
+- **UI:**
+  - A 2x2 grid of mock broker buttons (Binance, Bybit, Exness, Oanda). 
+  - When a broker is selected, reveal a secure API form below it: `API Key` input and `Secret Key` input (`secureTextEntry={true}`).
+- **Logic:**
+  - Use `AsyncStorage` to save the API keys locally. 
+  - On submit, show an `ActivityIndicator` for 2 seconds to simulate connecting, then replace the form with a green "🟢 Status: Connected" card and a toggle switch: "Mirror AI Signals to Live Account".
+
+Do not explain your steps. Ensure files are placed in the root `./app/profile/` directory, execute the Supabase migration, and write the complete React Native code for both screens.

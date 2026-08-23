@@ -1,0 +1,29 @@
+CRITICAL WORK DIRECTIVE: IMPLEMENT GOOGLE, APPLE, AND GUEST AUTH WITH PROFILE MAPPING.
+
+To conserve context window and AI credits, DO NOT read previous chat history. Read `replit.md` to understand the current state. 
+
+The Supabase providers for Google, Apple, and Anonymous Auth have been enabled. We must implement the full mobile authentication suite, map the profile data, and restrict premium features for guests.
+
+### 1. Wire Mobile OAuth (Google & Apple)
+- Open `app/(auth)/sign-in.tsx` (or the relevant auth screen).
+- Add a "Continue with Apple" button styled to match Apple's iOS design guidelines (usually white text on a black background, or vice versa, with the Apple logo).
+- Implement `signInWithOAuth` for BOTH the Google and Apple providers.
+- **CRITICAL:** You must use `expo-web-browser` and `makeRedirectUri` from `expo-auth-session` to handle the OAuth redirects securely on mobile. Ensure both buttons have proper loading states.
+
+### 2. Implement Guest Login
+- Add a "Continue as Guest" text button below the OAuth buttons.
+- Wire this button to `supabase.auth.signInAnonymously()`. 
+
+### 3. Profile Mapping & Guest Restrictions (`app/(tabs)/profile.tsx`)
+- Open the Profile screen. 
+- **OAuth Users:** Read the user's name from `user.user_metadata.full_name` (or Apple's equivalent metadata) and their email from `user.email`. 
+- **Guest Users:** If `user.is_anonymous` is true, display "Guest Trader" as their name and hide the email field completely. 
+- **Prop Trading Gate:** Guest users MUST NOT see the live $10,000 demo stats. Instead, replace the Evaluation/Prop Trading card content with a locked state: "Create an account to start your $10,000 evaluation." Add a button routing them back to the sign-up screen.
+
+### 4. Stage, Commit, and Secure Push
+- Run a typecheck to ensure `expo-auth-session` logic is sound.
+- Stage the modified Auth and Profile screens.
+- Commit with the message: `feat(auth): implement Google, Apple, and Guest login with profile access controls`
+- Push securely to the active repository using the credential helper without logging tokens.
+
+EXECUTION REQUIREMENT: Confirm the `makeRedirectUri` logic used for both providers, confirm the Guest UI logic on the Profile screen, and confirm the Git push was successful.

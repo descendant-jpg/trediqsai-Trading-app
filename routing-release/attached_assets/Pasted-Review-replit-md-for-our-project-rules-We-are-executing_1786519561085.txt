@@ -1,0 +1,31 @@
+Review replit.md for our project rules. We are executing a massive overhaul of the TradiQs Academy screen to make it a premium, interactive learning hub.
+
+CRITICAL INSTRUCTION: You MUST write this file directly to the root directory at `./app/profile/app-guide.tsx`. DO NOT under any circumstances write this to the `artifacts` folder.
+
+### 1. File Structure & Imports
+- Target: `./app/profile/app-guide.tsx`
+- Import `ScrollView`, `TextInput`, `Linking`, and `TouchableOpacity` from `react-native`. 
+- Use a dark institutional theme: `#0A0B0E` background, `#16181D` for cards, `#00F0FF` for accents.
+
+### 2. YouTube Masterclasses (Horizontal Hub)
+- Build a horizontal `ScrollView` at the top.
+- Create 3 highly styled video cards: "Beginner Bootcamp", "Mastering AI Signals", "AutoPilot Oracle Setup".
+- Wire the `onPress` for these cards to execute `Linking.openURL('https://youtube.com')` to route users to the YouTube app.
+
+### 3. Structured Curriculum (Expandable Accordions)
+- Create a vertical list of expandable course modules.
+- **Module 1: Trading 101** (Sub-items: Candlestick Anatomy, Chart Reading, How to Buy & Sell).
+- **Module 2: TradiQs AI Signals** (Sub-items: Reading the Feed, Confluence, Entry/Exit Rules).
+- **Module 3: The AI Oracle** (Sub-items: BrokerSync Connection, AutoPilot Allocation, Risk Guardrails).
+
+### 4. Searchable Trading Dictionary
+- Add a section titled "Trading Dictionary".
+- Build a sleek `TextInput` search bar (`bg-[#12141A] text-white border-gray-800`).
+- Create a local state array with definitions for: Pip, Lot Size, Spread, Order Block, Liquidity, Bullish, Bearish, FVG.
+- Implement search logic so typing in the bar instantly filters the visible dictionary terms below it.
+
+### 5. Trader's Toolkit
+- Build a 2x2 grid of tool cards: "Lot Size Calculator", "P/L Simulator", "Risk/Reward Planner", "Margin Calculator".
+- Give them a premium UI with glowing borders. (Leave them as non-functional UI placeholders for this iteration, but remove the "Coming Soon" text).
+
+Do not explain your steps. Write the complete, production-ready React Native code strictly to `./app/profile/app-guide.tsx` and ensure it has a flawless, scrollable layout.

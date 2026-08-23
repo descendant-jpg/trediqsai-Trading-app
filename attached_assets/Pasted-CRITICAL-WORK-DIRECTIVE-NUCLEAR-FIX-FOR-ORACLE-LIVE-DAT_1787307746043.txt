@@ -1,0 +1,34 @@
+CRITICAL WORK DIRECTIVE: NUCLEAR FIX FOR ORACLE LIVE DATA & SYSTEM PROMPT.
+
+To conserve context window and AI credits, DO NOT read previous chat history. Read `replit.md` to understand the current state.
+
+The Oracle is STILL saying "I don't have a live feed." The previous API fetches are failing because they lack a `User-Agent` header, causing them to be blocked as bots. Additionally, there are lingering contradictory instructions in the base system prompt. We will rewrite the prompt completely and use the most resilient API.
+
+### 1. Complete System Prompt Rewrite
+- Open `oracle.ts`. Delete the CURRENT `system` prompt string definition entirely.
+- Define a brand new, clean base system prompt exactly like this:
+  `let systemPrompt = "You are TradiQs Oracle, an elite real-time trading AI. You DO have access to live market data when provided. Be concise, highly analytical, and focus on structure and risk.";`
+
+### 2. Bulletproof CryptoCompare Fetch with Headers
+- Replace the fetch logic entirely with this single fetch to CryptoCompare:
+```javascript
+let liveDataString = "\n\nLIVE MARKET DATA STATUS: API UNAVAILABLE. (Tell the user the feed is temporarily down, do NOT say you don't have a feed).";
+try {
+  const response = await fetch("[https://min-api.cryptocompare.com/data/pricemulti?fsyms=BTC,ETH,SOL&tsyms=USD](https://min-api.cryptocompare.com/data/pricemulti?fsyms=BTC,ETH,SOL&tsyms=USD)", {
+    headers: {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+      "Accept": "application/json"
+    },
+    signal: AbortSignal.timeout(4000)
+  });
+  if (response.ok) {
+    const data = await response.json();
+    if (data.BTC && data.ETH && data.SOL) {
+      liveDataString = `\n\nLIVE MARKET DATA: BTC=$${data.BTC.USD}, ETH=$${data.ETH.USD}, SOL=$${data.SOL.USD}.\n\nCRITICAL INSTRUCTION: If the user asks about an asset, you MUST start your response by explicitly quoting this current price (e.g., 'BTC is currently trading at $X'). Do not complain about lacking data.`;
+    }
+  }
+} catch (error) {
+  console.error("CryptoCompare fetch failed:", error);
+}
+// Append to system prompt
+systemPrompt += liveDataString;

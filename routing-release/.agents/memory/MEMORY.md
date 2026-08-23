@@ -1,0 +1,12 @@
+- [Expo/API port conflicts](expo-web-port-conflicts.md) — blank mobile preview or EADDRINUSE usually means a stray dev server holds an artifact's port; kill it before editing config.
+- [Expo artifact dependencies](expo-artifact-dependencies.md) — Expo imports must be installed in the artifact workspace; root-only packages can produce opaque web 500/white screens.
+- [Native-only modules in Expo](expo-native-only-modules.md) — native-only SDKs need `.web.tsx` stub wrappers; a direct import in the root layout white-screens the whole web bundle.
+- [Expo web font gating](expo-web-font-gating.md) — never gate the root render on useFonts; a font gate makes slow web font loads look exactly like a fatal crash.
+- [Which directory Expo serves](expo-live-route-directory.md) — prove the live route dir with a marker-in-bundle test; never infer it from folder names, and never trust typecheck as evidence.
+- [pnpm workspace root is app/](pnpm-workspace-root.md) — the workspace root is `app/`, not the repo root; installing from the repo root writes a stray package-lock.json.
+- [Entitlement is server-owned](entitlement-is-server-owned.md) — tier/subscription columns must never be client-writable; RLS alone can't scope columns, so pair it with GRANT UPDATE (col).
+- [Payout ledger trust](payout-ledger-trust.md) — a definer trigger isn't provenance; real payouts need trades priced by the server and stamped, or clients forge profit.
+- [Applied migrations are immutable](applied-migrations-are-immutable.md) — fix forward in a new file; tests reading one migration assert a definition the live DB may no longer run.
+- [Supabase schema drift](supabase-schema-drift.md) — migrations in the repo are often NOT applied; probe PostgREST before trusting a table/RPC exists, and DDL needs the SQL editor.
+- [Anthropic model availability](anthropic-model-availability.md) — Claude 3/3.5 ids 404 on this account; list /v1/models before hardcoding, mocked tests won't catch it.
+- [RevenueCat web key requirements](revenuecat-web-key-requirements.md) — native sandbox keys are rejected by RevenueCat web; only configure web with a Web Billing key.

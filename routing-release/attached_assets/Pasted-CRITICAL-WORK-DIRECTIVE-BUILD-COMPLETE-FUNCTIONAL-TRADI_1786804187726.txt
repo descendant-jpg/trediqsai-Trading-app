@@ -1,0 +1,67 @@
+CRITICAL WORK DIRECTIVE: BUILD COMPLETE FUNCTIONAL TRADIQS AI CMS ADMIN PANEL & LIVE BLOG SYNC.
+
+Review our project rules. All work must occur strictly inside the `website/` directory (Next.js App Router). We are building a comprehensive, dark-mode Fintech CMS at `/admin` that manages live blog posts, waitlist leads, contact inquiries, and site configuration.
+
+### 1. Database Schema & API Setup (`website/app/api/`)
+Ensure Supabase client helpers interact with the following tables (create mock fallbacks/in-memory handlers if tables do not yet exist in Supabase):
+- `blog_posts`: id, title, slug, excerpt, content, asset_class ('Forex'|'Crypto'|'Stocks'), category ('Analysis'|'News'|'Strategy'|'Psychology'|'Discussion'|'Signals'|'Education'|'Results'), ai_badge (e.g. '🟢 BULLISH BIAS', '⚡ AI 94%'), author ('TradiQs Research Desk'), upvotes, status ('draft'|'published'), created_at.
+- `waitlist`: id, name, email, created_at.
+- `contact_messages`: id, name, email, message, status ('open'|'resolved'), created_at.
+- `comments`: id, post_id, author_name, content, status ('pending'|'approved'), created_at.
+
+Create full CRUD API endpoints:
+- `website/app/api/admin/posts/route.ts` (GET, POST, PUT, DELETE)
+- `website/app/api/admin/waitlist/route.ts` (GET, DELETE)
+- `website/app/api/admin/messages/route.ts` (GET, PATCH, DELETE)
+- `website/app/api/admin/auth/route.ts` (POST - authenticate God Admin `nextgensynthex@gmail.com`)
+
+### 2. Admin Authentication Gateway (`website/app/admin/login/page.tsx` & `/admin/page.tsx`)
+- Implement a sleek, dark-mode login card at `/admin/login`.
+- Allow God Admin login with email `nextgensynthex@gmail.com` and secure password verification (support Supabase Auth / secure session cookie).
+- Protect all `/admin/*` routes. If unauthenticated, redirect to `/admin/login`.
+
+### 3. CMS Dashboard Layout (`website/app/admin/`)
+Design the CMS with a persistent dark sidebar (`bg-[#0D0D0D] border-r border-gray-800`) and main content area (`bg-[#050505]`):
+- **Sidebar Tabs:**
+  - 📊 Dashboard
+  - 📝 Market Insights (Blog Posts)
+  - 🏷️ Categories & Tags
+  - 👥 Waitlist Leads
+  - 💬 Help Desk (Contact Messages)
+  - 🛡️ Comments Moderation
+  - ⚙️ System Settings
+
+### 4. CMS Module Implementations:
+- **Dashboard Section:**
+  - 4 Stat Cards: Total Waitlist Signups, Active Pro/Elite Subscribers, Published Market Insights, Open Support Tickets.
+  - Recent Posts widget with quick Edit/Delete links.
+  - Quick Action Buttons: "+ Write New Post", "View Waitlist", "Check Help Desk".
+- **Market Insights (Posts) Section:**
+  - Post list table showing Title, Asset Class badge (Forex/Crypto/Stocks), Category tag, Status (Published/Draft), Date, and Action icons (Edit, Delete).
+  - Modal / Editor Form for "+ New Post":
+    - Inputs: Title, Slug, Excerpt, Full Content (Markdown/Rich Text).
+    - Dropdowns: Asset Class (`Forex`, `Crypto`, `Stocks`), Category (`Discussion`, `Analysis`, `News`, `Strategy`, `Psychology`, `Brokers`, `Signals`, `Education`, `Results`).
+    - AI Badge text input (e.g. `⚡ AI CONFIDENCE 94%`).
+    - Publish Status switch (`Draft` vs `Published`).
+- **Waitlist Leads Section:**
+  - Table displaying all captured waitlist entries (Name, Email, Date). Search bar to filter by name/email. "Export CSV" button.
+- **Help Desk Section:**
+  - Ticket cards for every submission from `/contact`. Displays Name, Email, Timestamp, and Message. Toggle button to switch status between "Open" (Red badge) and "Resolved" (Green badge).
+- **Comments Moderation Section:**
+  - Moderation queue to approve or delete public user discussions.
+- **System Settings Section:**
+  - Diagnostic indicators: Database (Connected 🟢), Supabase Auth (Active 🟢), Finnhub API (Connected 🟢), AutoPilot Engine (Active 🟢), Server Uptime.
+  - Admin account details displaying `nextgensynthex@gmail.com` with God Admin privileges.
+
+### 5. Live Frontend Synchronization (`website/app/blog/page.tsx`)
+- Update the public blog page to dynamically fetch from `/api/admin/posts` (or directly from Supabase).
+- When a post is created and marked "Published" in `/admin`, it must render immediately on `https://www.tradiqsai.com/blog`.
+- Connect all frontend filter pills (All, Forex, Crypto, Stocks, Discussion, Analysis, Strategy, Psychology, Hot, New, Top) so they filter the live dynamic posts in real time.
+- Include a live Search Bar on `/blog` that filters posts by keywords, tags, or ticker symbols.
+
+### 6. Validation & Deployment
+- Ensure strict TypeScript compliance across all new API routes and React components.
+- Run `npm run build` inside `website/` to verify zero build errors.
+- Commit all changes to the `main` branch so Vercel automatically deploys the CMS to production.
+
+EXECUTION REQUIREMENT: Build a 100% functional, responsive, and visually stunning admin suite matching the dark institutional theme (`#00FFFF` and `#FFD700` accents). Do not leave non-functional stubs.

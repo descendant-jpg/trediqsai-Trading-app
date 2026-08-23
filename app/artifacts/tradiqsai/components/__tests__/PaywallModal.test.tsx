@@ -41,13 +41,17 @@ const subscription = vi.hoisted(() => ({
   offerings: undefined as any,
   isPurchasing: false,
   isRestoring: false,
-  purchase: vi.fn(async () => ({})),
+  // Mirrors RevenueCat: purchasePackage resolves with fresh CustomerInfo
+  // carrying the active entitlement.
+  purchase: vi.fn(async () => ({ entitlements: { active: { pro: {} } } })),
   restore: vi.fn(async () => ({})),
   refreshProfileEntitlement: vi.fn(async () => ({})),
 }));
 
 vi.mock('@/lib/revenuecat', () => ({
   useSubscription: () => subscription,
+  REVENUECAT_ENTITLEMENT_IDENTIFIER: 'pro',
+  REVENUECAT_ELITE_ENTITLEMENT_IDENTIFIER: 'elite',
 }));
 
 function press(testID: string) {
@@ -59,7 +63,7 @@ describe('PaywallModal', () => {
     subscription.offerings = {
       current: { availablePackages: [monthlyPackage, annualPackage] },
     };
-    subscription.purchase = vi.fn(async () => ({}));
+    subscription.purchase = vi.fn(async () => ({ entitlements: { active: { pro: {} } } }));
     subscription.restore = vi.fn(async () => ({}));
     subscription.refreshProfileEntitlement = vi.fn(async () => ({}));
     vi.spyOn(window, 'alert').mockImplementation(() => {});
@@ -93,9 +97,9 @@ describe('PaywallModal', () => {
     expect(subscription.purchase).toHaveBeenCalledWith(monthlyPackage);
   });
 
-  it('stays open when the purchase is cancelled', async () => {
+  it('stays open silently when the user cancels in the store sheet', async () => {
     subscription.purchase = vi.fn(async () => {
-      throw new Error('cancelled');
+      throw Object.assign(new Error('cancelled'), { userCancelled: true });
     });
     const onClose = vi.fn();
     render(<PaywallModal visible onClose={onClose} />);

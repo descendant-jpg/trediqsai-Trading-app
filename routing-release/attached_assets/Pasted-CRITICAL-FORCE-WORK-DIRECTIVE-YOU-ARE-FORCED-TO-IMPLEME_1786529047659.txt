@@ -1,0 +1,18 @@
+CRITICAL FORCE WORK DIRECTIVE: YOU ARE FORCED TO IMPLEMENT FULL, COMPLETE, PRODUCTION-READY FUNCTIONALITY. DO NOT LEAVE DUMMY CODE, STALE STATICS, OR PLATFORM CRASHES. WRITE ALL PLATFORM-CONDITIONAL LOGIC, ANIMATION HOOKS, AND STOCK API FETCHING.
+
+Review replit.md for our project rules. Fix the Live Chart web platform crash and convert the Home ticker into an auto-scrolling stock marquee.
+
+### 1. Fix Live Chart Platform Crash (`app/live-chart.tsx`)
+- Import `Platform` from 'react-native'.
+- Implement platform conditional rendering for the TradingView chart container:
+  - If `Platform.OS === 'web'`, render an HTML `<iframe>` pointing directly to a TradingView embed URL (`https://s.tradingview.com/widgetembed/?frameElementId=tradingview_widget&symbol=AAPL&interval=D&hidesidetoolbar=0&symboledit=1&saveimage=1&toolbarbg=f1f3f6&studies=[]&theme=dark&style=1&timezone=Etc%2FUTC`).
+  - If `Platform.OS !== 'web'`, render the native `<WebView>` from `react-native-webview`.
+- Ensure the container takes `flex: 1` and spans full screen height so the TradingView candlestick chart renders on both web preview and mobile devices.
+
+### 2. Implement Animated Stock Ticker Marquee (`app/(tabs)/index.tsx`)
+- Replace the crypto ticker with real stock tickers: `AAPL` (Apple), `TSLA` (Tesla), `META` (Meta), `GOOGL` (Google), `MSFT` (Microsoft), `AMZN` (Amazon), `NVDA` (Nvidia).
+- Implement live stock price polling from `https://query1.finance.yahoo.com/v7/finance/quote?symbols=AAPL,TSLA,META,GOOGL,MSFT,AMZN,NVDA` or Finnhub stock endpoint with reliable fallback stock data so cards never display empty `--` lines.
+- Wrap the stock items in an auto-scrolling horizontal container or Animated loop so the ticker continuously glides from right to left smoothly.
+- Each pill must feature: Ticker Symbol, Live Price ($), and 24h Change % (colored green `#00FF00` or red `#FF0000`).
+
+EXECUTION REQUIREMENT: Ensure `app/live-chart.tsx` loads the TradingView chart on the web preview without red error text, and verify the top stock ticker moves right-to-left with valid prices.

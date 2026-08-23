@@ -10,3 +10,7 @@
 - [Supabase schema drift](supabase-schema-drift.md) — migrations in the repo are often NOT applied; probe PostgREST before trusting a table/RPC exists, and DDL needs the SQL editor.
 - [Anthropic model availability](anthropic-model-availability.md) — Claude 3/3.5 ids 404 on this account; list /v1/models before hardcoding, mocked tests won't catch it.
 - [RevenueCat web key requirements](revenuecat-web-key-requirements.md) — native sandbox keys are rejected by RevenueCat web; only configure web with a Web Billing key.
+- [GitHub publishing fallback](github-publishing-fallback.md) — if a normal Git push rejects its legacy credential, use the managed GitHub connection to advance the branch without exposing tokens.
+- [AutoPilot free-tier policy](autopilot-free-tier-policy.md) — free = 1 non-Pro bot, master/asset paid, unresolved tiers fail closed; entitlement limits must be claimed atomically in Postgres (advisory lock), in-memory checks are fast-paths only.
+- [Private channel entitlement gating](private-channel-entitlement-gating.md) — Telegram access must use a current, unexpired entitlement; cached state must never authorize external private links.
+- [Twelve Data credit limits](twelve-data-credit-limits.md) — the configured free plan allows fewer quote credits per minute than the full marquee symbol batch consumes.

@@ -15,7 +15,11 @@ alter table taxonomy_terms enable row level security;
 create index if not exists taxonomy_terms_kind_name_idx
   on taxonomy_terms (kind, name);
 
--- Seed the current editorial categories (no-op when already present).
+-- Seed the current editorial categories and tags (no-op when already present).
 insert into taxonomy_terms (name, kind)
 select unnest(array['Discussion', 'Analysis', 'News', 'Strategy', 'Psychology', 'Brokers', 'Signals', 'Education', 'Results']), 'category'
+on conflict (name, kind) do nothing;
+
+insert into taxonomy_terms (name, kind)
+select unnest(array['Analysis', 'News', 'Educational']), 'tag'
 on conflict (name, kind) do nothing;

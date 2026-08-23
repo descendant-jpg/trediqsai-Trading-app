@@ -86,8 +86,8 @@ export function isAuthorizedAdmin(identity: AdminIdentity): boolean {
   const role = identity.role?.trim().toLowerCase();
   return (
     role === "admin" ||
-    // Preserve access for any profile assigned before the canonical role was
-    // standardized as `admin`.
+    // Retain support for profiles assigned before the role constraint was
+    // standardized to `user` / `admin`.
     role === "god_admin" ||
     identity.email?.trim().toLowerCase() === MASTER_EMAIL
   );

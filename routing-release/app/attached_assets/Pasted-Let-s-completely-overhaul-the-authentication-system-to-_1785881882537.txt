@@ -1,0 +1,39 @@
+Let's completely overhaul the authentication system to make it fully functional using Supabase. We need to add Username support, Forgot Password, and Apple/Google OAuth, while maintaining the Terminal Black (#0A0B0E) and Electric Cyan (#00F0FF) aesthetic.
+
+First, install the necessary Expo Auth packages: `npm install expo-auth-session expo-apple-authentication expo-crypto`
+
+Update `AuthScreen.tsx` with the following requirements:
+
+1. State Management:
+   - Add state variables: `isLoginMode` (boolean, default true), `emailOrUsername` (string), `password` (string), `username` (string - only for signup), and `loading` (boolean).
+
+2. The UI Layout:
+   - Header: Display "TradiQs AI" prominently.
+   - Mode Toggle: A simple text toggle at the top to switch between "Sign In" and "Create Account" modes.
+   - Inputs for Sign In Mode: 
+     - "Email or Username" (Input field)
+     - "Password" (Input field, secureTextEntry)
+   - Inputs for Create Account Mode:
+     - "Choose Username" (Input field)
+     - "Email Address" (Input field)
+     - "Password" (Input field)
+   - Action Button: A large #00F0FF button executing the primary action (Sign In or Sign Up). Show a loading spinner inside it when `loading` is true.
+   - Forgot Password: A small text link below the Sign In button reading "Forgot Password?".
+   - Social Auth Separator: A styled divider with text "OR".
+   - Social Buttons: 
+     - "Continue with Apple" (White background, Black text, Apple icon).
+     - "Continue with Google" (Dark gray background #16181D, White text, Google icon).
+
+3. The Logic (Supabase Integration):
+   - `handleSignUp`: Call `supabase.auth.signUp({ email, password, options: { data: { username: username } } })`. Upon success, automatically insert the `username` and `user_id` into a `profiles` table so it can be referenced later.
+   - `handleSignIn`: 
+     - First, check if `emailOrUsername` contains an '@' symbol. 
+     - If it does NOT contain an '@', treat it as a username. Execute a Supabase query: `supabase.from('profiles').select('email').eq('username', emailOrUsername).single()`. 
+     - Once you have the email (either directly from the input or from the username lookup), call `supabase.auth.signInWithPassword({ email, password })`.
+   - `handleForgotPassword`: Call `supabase.auth.resetPasswordForEmail(emailOrUsername)`. Show an alert telling the user to check their inbox.
+   - `handleAppleLogin`: Implement the standard `expo-apple-authentication` flow and pass the identity token to `supabase.auth.signInWithIdToken({ provider: 'apple', token })`.
+   - `handleGoogleLogin`: Set up the boilerplate for `supabase.auth.signInWithOAuth({ provider: 'google' })`.
+
+4. Styling & UX:
+   - All text inputs must have a background of #16181D, text color #FFFFFF, and a subtle border of #22252A.
+   - Wrap the main actions in try/catch blocks and use React Native `Alert.alert` to display any Supabase error messages (e.g., "Invalid credentials" or "Username already taken") directly to the user.

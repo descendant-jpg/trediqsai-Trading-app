@@ -1,0 +1,28 @@
+CRITICAL WORK DIRECTIVE: IMPLEMENT COMPLIANCE RISK DISCLAIMER COMPONENT.
+
+To conserve context window and AI credits, DO NOT read previous chat history. Read `replit.md` to understand the current state.
+
+To comply with Apple App Store and Google Play Store financial app regulations, we must display a prominent risk disclaimer across our main tab screens.
+
+### 1. Create a Reusable Disclaimer Component
+- Create a new component at `components/RiskDisclaimer.tsx`.
+- Style it to match the existing app design language: a dark card with a subtle border, a yellow/orange warning icon (⚠), and muted gray text.
+- Use this expanded, compliance-ready text:
+  **⚠ RISK DISCLAIMER**
+  Trading involves substantial risk of loss and is not suitable for every investor. Past performance does not guarantee future results. The content provided is for educational and informational purposes only and does not constitute financial, legal, or investment advice. Always conduct your own due diligence and consult a licensed professional before making any financial decisions.
+
+### 2. Implement Across Tab Screens
+- Import and insert the `<RiskDisclaimer />` component at the very bottom of the main scrollable areas (just above the bottom tab bar) in the following screens:
+  - `app/(tabs)/ai-tools.tsx`
+  - `app/(tabs)/profile.tsx`
+  - `app/(tabs)/signals.tsx`
+  - `app/(tabs)/index.tsx` (Ensure it is present here as well).
+- Ensure the padding and margins allow the user to easily scroll to the bottom and read it without the tab bar covering it.
+
+### 3. Stage, Commit, and Secure Push
+- Run mobile typechecks to ensure the component imports are valid.
+- Stage the new component and the updated tab screens.
+- Commit with the message: `feat(ui): add reusable compliance risk disclaimer to main tabs`
+- Push securely to the active repository using the credential helper without logging tokens.
+
+EXECUTION REQUIREMENT: Confirm the exact screens the disclaimer was added to, and confirm the Git push was successful.

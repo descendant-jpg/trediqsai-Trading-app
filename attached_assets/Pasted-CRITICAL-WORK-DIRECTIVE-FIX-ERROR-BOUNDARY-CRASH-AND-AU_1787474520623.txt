@@ -1,0 +1,29 @@
+CRITICAL WORK DIRECTIVE: FIX ERROR BOUNDARY CRASH AND AUDIT NAVIGATION STATE.
+
+To conserve context window and AI credits, DO NOT read previous chat history. Read `replit.md` to understand the current state.
+
+The user is experiencing a fatal ErrorBoundary crash ("Something went wrong" screen) when navigating: Profile -> Admin Panel -> Home. 
+
+This indicates an unhandled exception during the render cycle, likely caused by a broken navigation link or a component attempting to read undefined state (e.g., `session` or `user` data) during a context switch.
+
+### 1. Fix the Admin -> Home Navigation Link
+- Locate the Admin layout or header component where the "Home" button/link is defined (e.g., `app/(admin)/_layout.tsx` or a custom drawer/header).
+- Check the `router.push()` or `href` value for the Home button. Ensure it perfectly matches the resolved root tab route (e.g., `/(tabs)`). 
+- If it is using a complex router action, simplify it to a standard `router.replace('/(tabs)')` to cleanly unmount the admin stack.
+
+### 2. Defend Against Undefined State (The Crash Fix)
+- Open the Home screen component. 
+- Audit every instance where auth state, user profiles, or subscription tiers are read.
+- Enforce strict optional chaining (`?.`) and nullish coalescing (`??`) on all data reads (e.g., `session?.user?.id`, `profile?.role`). The component must render safely even if context is momentarily undefined during a route transition.
+
+### 3. Global Crash Audit
+- Perform a workspace-wide audit on all `_layout.tsx` files and main tab screens (AI Tools, Signals, Profile).
+- Ensure no navigation action forces an unmount that strands a component trying to read destroyed state.
+- Ensure all explicit redirects between the `(auth)`, `(tabs)`, and `(admin)` groups use valid, confirmed route strings.
+
+### 4. Verify & Push
+- Run full workspace typechecks.
+- Commit: `fix(navigation): resolve fatal ErrorBoundary crash on Admin-to-Home route and implement defensive state reads globally`
+- Push securely to the active repository.
+
+EXECUTION REQUIREMENT: Output the exact component and line of code that caused the fatal crash, and confirm the global optional-chaining audit is complete.

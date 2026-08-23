@@ -1216,7 +1216,7 @@ alter table if exists public.profiles
 
 alter table if exists public.profiles
   add constraint profiles_role_check
-  check (role in ('user', 'admin', 'god_admin'));
+  check (role in ('user', 'admin'));
 
 -- ============================================================
 -- migrations/016_market_news.sql

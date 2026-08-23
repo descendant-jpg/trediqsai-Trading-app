@@ -94,6 +94,27 @@ export function isProTier(tier: string | null | undefined): boolean {
   return !!tier && PRO_TIERS.has(tier.trim().toLowerCase());
 }
 
+/**
+ * Resolve the caller's raw tier string, or null when it cannot be
+ * determined (anonymous, no profile row, unconfigured or failed lookup).
+ * Fails closed to null exactly like the access checks — callers must treat
+ * null as "no entitlement whatsoever", never as "free tier".
+ */
+export async function resolveAccessTier(
+  userId: string,
+  lookup?: TierLookup,
+): Promise<string | null> {
+  if (!userId || userId === ANONYMOUS) return null;
+  const resolve = lookup ?? supabaseTierLookup;
+  if (!lookup && !isEntitlementConfigured) return null;
+  try {
+    return await resolve(userId);
+  } catch (err) {
+    logger.error({ err, userId }, "Tier resolution failed");
+    return null;
+  }
+}
+
 /** True when the tier string grants Elite-only access. */
 export function isEliteTier(tier: string | null | undefined): boolean {
   return !!tier && ELITE_TIERS.has(tier.trim().toLowerCase());

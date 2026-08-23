@@ -78,6 +78,22 @@ describe('customFetch 401 recovery', () => {
     expect(onFailure).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps persistent 401s inline without auth side effects when suppressed', async () => {
+    const refresher = vi.fn().mockResolvedValue('fresh-token');
+    setAuthSessionRefresher(refresher);
+    const onFailure = vi.fn();
+    setAuthFailureHandler(onFailure);
+
+    fetchMock.mockResolvedValue(jsonResponse({ message: 'expired' }, 401));
+
+    await expect(
+      customFetch('/api/admin/dashboard', { suppressAuthFailure: true }),
+    ).rejects.toBeInstanceOf(ApiError);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(refresher).not.toHaveBeenCalled();
+    expect(onFailure).not.toHaveBeenCalled();
+  });
+
   it('does not retry when no refresher is registered', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ message: 'expired' }, 401));
 

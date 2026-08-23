@@ -1,0 +1,35 @@
+CRITICAL WORK DIRECTIVE: FINALIZE PROFILE, COMPETITION, VIP SIGNALS, AND WORKSPACE INTEGRITY.
+
+To conserve context window and AI credits, DO NOT read previous chat history. Read `replit.md` to understand the current state.
+
+I am finalizing production features. Execute the following updates exactly as specified. No dummy data; wire everything for live production APIs.
+
+### 1. Profile Screen: Elite Channel Button
+- Locate the Profile screen (e.g., `app/(tabs)/profile.tsx`).
+- Find the button currently labeled "Join the TradiQs Elite Community".
+- Change the text to read: "Join the TradiQs Elite Channel".
+- Wrap this button in a strict conditional rendering block. It MUST ONLY be visible if the authenticated user's active role evaluates to 'elite' (or equivalent highest tier). Hide it completely for lower tiers.
+
+### 2. Competition Screen: Live Leaderboard UI
+- Locate the Competition screen.
+- Remove the hardcoded "Unable to load leaderboard" error boundary.
+- Implement a `FlatList` to render ranking rows (displaying Rank, Username, Profit, Win Rate).
+- Wire a `useEffect` fetch request to point to `/api/competition/leaderboard`. 
+- Implement a graceful loading state (spinner) while fetching, and only show a retry button if the live network request actually fails.
+
+### 3. VIP Signals Screen: Purchase Wiring & Expiration Guard
+- Locate the VIP Signals screen.
+- Wire the "Pro", "Elite", and "Whale" tier buttons to trigger the active app purchase flow (e.g., RevenueCat, Paystack, or your billing provider).
+- Implement a strict ownership and expiration check: Verify the user has an *active, unexpired* subscription or lifetime access.
+- CRITICAL: Keep paid Telegram channels private after a subscription ends. If a subscription has lapsed or was cancelled, the "PRIVATE TELEGRAM CHANNEL" link must be locked/hidden, and the purchase buttons must reappear.
+
+### 4. Workspace Integrity: Clean Install Typechecks
+- Ensure that a clean install (e.g., `npm install` or `pnpm install`) passes the full workspace typecheck. 
+- Fix any lingering dependency, symlink, or missing type interface issues that cause fresh environments to fail the build.
+
+### 5. Verify & Push
+- Run a clean install, followed by full workspace typechecks.
+- Commit: `feat(core): lock profile channel, build live leaderboard, secure VIP signals expiration, and fix clean install typechecks`
+- Push securely to the active repository.
+
+EXECUTION REQUIREMENT: Output the exact files modified, confirm the workspace typecheck passed on a clean install, and verify the endpoint URL configured for the leaderboard fetch.

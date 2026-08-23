@@ -1,0 +1,30 @@
+Review replit.md for our project rules. We are building a gamified Global Leaderboard for the app to drive daily active users (DAU). 
+
+Completely build out the `app/(tabs)/competition.tsx` screen and update the Supabase database schema to support competitive ranking.
+
+### 1. Supabase Schema Updates
+- Create a migration to update the `profiles` table. Add these columns (if they don't exist):
+  `simulated_pnl` (numeric, default 0)
+  `win_rate` (numeric, default 0)
+  `rank_tier` (text, default 'Bronze')
+- *Note: Do not write complex triggers yet. We just need the columns ready so the frontend can query the top users.*
+
+### 2. The Data Fetching Logic (`competition.tsx`)
+- Fetch the top 50 users from the `profiles` table, ordered by `simulated_pnl` descending.
+- Separate the data into `topThree` (index 0, 1, 2) and `restOfLeaderboard` (index 3 to 49).
+- Fetch the current authenticated user's exact rank and data to display in a sticky footer.
+
+### 3. The Premium UI Build (Dark Theme #0A0B0E)
+- **Header:** "Global Leaderboard" with a subtext "Only the top 50 traders qualify for seasonal rewards."
+- **The Podium (Top 3):**
+  - Build a flex row for the top 3 users. #1 should be slightly larger and centered. 
+  - Use glowing borders for the cards: #1 gets a Gold border (`#FFD700`), #2 gets Silver (`#C0C0C0`), #3 gets Bronze (`#CD7F32`).
+  - Display their Username, Rank Tier icon/text, and massive green `simulated_pnl` (e.g., +$14,250).
+- **The Ranks List (4-50):**
+  - A `FlatList` or `ScrollView` rendering clean, dark rows (`bg-[#16181D] border-b border-gray-800`).
+  - Each row shows: Rank Number (left), Username + Rank Tier (middle), and Win Rate + PnL (right).
+- **The Personal Sticky Footer:**
+  - `absolute bottom-0 w-full bg-[#12141A] border-t border-[#00F0FF] p-4 flex-row justify-between items-center`.
+  - Display the current user's Username, their exact Rank Number, and their PnL. Include text: "Trades to next rank: X".
+
+Do not explain your steps. Execute the Supabase migration for the `profiles` table, and write the complete, functional React Native code for the new Competition screen with strict error handling and loading skeletons.

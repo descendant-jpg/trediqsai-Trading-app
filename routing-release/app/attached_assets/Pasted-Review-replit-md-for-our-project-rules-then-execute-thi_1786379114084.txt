@@ -1,0 +1,88 @@
+Review replit.md for our project rules, then execute this full UI, navigation, and feature consolidation update across the application.
+
+### 1. Navigation & Architecture Consolidation (Strict 5 Bottom Tabs)
+Update the main tab navigator to strictly render 5 clean bottom tabs in this exact order:
+1. `Home` (Icon: Grid / Dashboard)
+2. `TradiQsAI` (Icon: Line Chart - Houses our Prop-Firm Demo Trading Engine with $100k balance, drawdown bar, and live charts)
+3. `AITools` (Center Icon: Glowing Cyan Chip - AutoPilot Bot Hub)
+4. `Signals` (Icon: Lightning Bolt)
+5. `Profile` (Icon: User - Houses Account Settings, Portfolio History, and the Academy Modal)
+
+Remove `Learning` and `Portfolio` as standalone bottom tabs. Move Portfolio history into ProfileScreen.tsx.
+
+### 2. New Institutional Home Dashboard (`HomeScreen.tsx`)
+Redesign `HomeScreen.tsx` into a high-density, dark terminal dashboard (#0A0B0E):
+- **Header:** 
+  - Left: Lightbulb / Quote icon (Tapping opens `QuotesModal.tsx`).
+  - Center: Title "TradiQs AI".
+  - Right: Notification Bell with unread badge (Tapping opens `NotificationCenterModal.tsx`).
+- **Greeting Row:** "Good Afternoon, Trader" with a pulsing green "Online" indicator.
+- **Top Session Bar:** Ticker showing Sydney, Tokyo, London, New York. Tapping ANY city routes to `SessionIntelligenceScreen.tsx`.
+- **Hero Widgets Row:**
+  - *Fear & Greed Index:* Semi-circle dial metric.
+  - *MTF Bias:* Multi-timeframe trend table for top pairs.
+- **Quick Action 8-Grid:** 
+  1. `Competition` (Leaderboard modal)
+  2. `Calendar` (Opens `EconomicCalendarScreen.tsx`)
+  3. `VIP Signals` (Opens `VIPSignalsScreen.tsx`)
+  4. `Shop` (Opens `ShopScreen.tsx`)
+  5. `Game` (Opens `TradingArcadeScreen.tsx`)
+  6. `AI Signals` (Routes to Signals tab)
+  7. `Trade Journal` (Opens journal modal)
+  8. `Community` (Opens `CommunityScreen.tsx`)
+- **Pro Banner:** Upgrade card linking to `PaywallModal.tsx`. Strictly NO third-party broker ads.
+- **Risk Disclaimer Footer:** App Store compliant risk statement at the bottom.
+
+### 3. Session Intelligence (`SessionIntelligenceScreen.tsx`)
+- Header with live UTC clock.
+- Volatility Hero Card: Percentage dial, overlap count, 24-hour liquidity block bar.
+- Active Kill Zone Alert card (e.g., "London Close Kill Zone").
+- Session Cards: Active sessions (Green LIVE tag) vs Upcoming sessions (Countdowns).
+- Pro Strategy Lock card linking to PaywallModal.
+- "Trade Active Session" internal shortcut buttons routing to TradiQsAI demo trading floor.
+
+### 4. Daily Quotes & Motivation (`QuotesModal.tsx`)
+- Toggle: "Trading Edge" vs "Mindset".
+- Dark card with glowing cyan quotes, category tag, "TradiQs Oracle" credit, and date stamp.
+- Functional "Save Image", "Share", and "Generate New Wisdom" buttons.
+- Pre-populate state with 7 rich trading & financial freedom quotes.
+
+### 5. Notification Center (`NotificationCenterModal.tsx`)
+- Top category pills: All, AI Alerts, News, System, Pro Offers.
+- Unread cards feature Electric Cyan glowing left borders.
+- Asset tags (`BTC/USD`, `XAU/USD`) displayed as terminal chips on cards.
+
+### 6. Economic Calendar (`EconomicCalendarScreen.tsx`)
+- Date strip selector and top session indicator.
+- 4-Column Impact Metric (All, High, Med, Low) + Volatility progress meter + Currency filter chips.
+- Event list split into RELEASED (with ✓ DONE and ACTUAL vs FORECAST data) and UPCOMING (with countdown timer).
+
+### 7. VIP Signals & Paywall (`VIPSignalsScreen.tsx`)
+- Lock card: "VIP Signals Channel - Private Telegram channel".
+- In-line Paywall card: Displays Pro ($150 lifetime), Elite ($500 lifetime), and Whale ($5,000 lifetime) plans.
+- Clicking any plan triggers `PaywallModal.tsx`.
+
+### 8. TradiQsAI Shop (`ShopScreen.tsx`)
+- Storefront card: "TradiQsAI Shop - Indicators, Bots, Masterclasses".
+- Category filter pills: All, Indicators, Bots, Videos.
+- Empty State: Shopping bag icon with text "Coming Soon - The TradiQsAI marketplace is under construction."
+
+### 9. Community & AutoCopy (`CommunityScreen.tsx`)
+- Article card from "TradiQsAI Oracle" explaining AutoCopy requirements.
+- Checklist: Broker registration link + 30 trading lots required.
+- Detailed "Why is this required?" breakdown.
+- Bottom CTA Button: "Join the Verified Telegram Community" using `Linking.openURL`.
+
+### 10. Trading Arcade (`TradingArcadeScreen.tsx`)
+- Player Rank card + Level progress + 4 Stats columns (Played, Streak, Today, Rank).
+- Featured Banner: "CHART MASTER" (SMC pattern reader game).
+- 2x3 Game Catalog Grid:
+  1. `Candle Runner` (Endless chart obstacle runner)
+  2. `Pip Sniper` (Precision entry timing crosshair game)
+  3. `Margin Call` (3-lane market volatility survival runner)
+  4. `Bull Breaker` (Brick breaker order block game)
+  5. `Pattern Guesser` (5-second chart pattern quiz)
+  6. `Whale Hunt` (Orderflow liquidity tracking game)
+- Tapping any game opens a launch modal.
+
+Ensure all screens strictly follow the dark #0A0B0E / #16181D theme, utilize React Native SafeAreaView, and use crisp typography.

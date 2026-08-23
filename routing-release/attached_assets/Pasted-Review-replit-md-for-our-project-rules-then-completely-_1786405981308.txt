@@ -1,0 +1,30 @@
+Review replit.md for our project rules, then completely overhaul the landing page design in `website/app/page.tsx` and `website/app/layout.tsx`. The current deployed site looks like unstyled HTML. We need a premium, institutional SaaS layout using strict Tailwind CSS utility classes.
+
+### 1. Global Layout (`website/app/layout.tsx`)
+- Ensure the `<body>` has `bg-[#0A0B0E] text-white flex min-h-screen font-sans`.
+- We will build the Sidebar directly into the `page.tsx` for now to keep the code localized, so just ensure the body is ready for a flex container.
+
+### 2. The Sidebar & Main Content Wrapper (`website/app/page.tsx`)
+Completely overwrite `page.tsx` with a top-level Flexbox container:
+- **Left Sidebar:** A fixed `w-20 md:w-64` height-screen sidebar with `bg-[#16181D] border-r border-gray-800 p-6 flex flex-col justify-between`.
+  - Top of sidebar: "TradiQs AI" logo text (Electric Cyan `#00F0FF`, bold).
+  - Bottom of sidebar: A section titled "GET THE APP" containing two highly styled buttons mimicking the Apple App Store and Google Play Store badges (rounded-xl, black bg, white borders, hover:border-[#00F0FF]).
+- **Right Main Content:** A scrollable `flex-1 ml-20 md:ml-64 flex flex-col`.
+
+### 3. Hero Section & Ticker (Inside Main Content)
+- **Hero:** `min-h-[80vh] flex flex-col justify-center items-center text-center p-12`. 
+  - Eyebrow text: "MARKET INTELLIGENCE, REIMAGINED" (tracking-widest, text-[#00F0FF] text-sm mb-4).
+  - H1: "The Institutional Edge in Your Pocket" (`text-5xl md:text-7xl font-extrabold mb-6`).
+  - Subtitle: "Trade with the clarity of a desk and the discipline of a system." (`text-xl text-gray-400 max-w-2xl`).
+- **Live Ticker:** A full-width `bg-[#16181D] border-y border-gray-800 py-3 px-6 flex space-x-8 overflow-hidden text-sm font-mono text-gray-300`.
+
+### 4. Features & FAQ
+- **Features Grid:** `grid grid-cols-1 md:grid-cols-3 gap-8 p-12 max-w-7xl mx-auto`. Each card: `bg-[#16181D] p-8 rounded-2xl border border-gray-800 hover:border-[#00F0FF] transition-all`. (AI Signal Generator, AutoPilot Bots, Risk Management).
+- **FAQ:** `max-w-4xl mx-auto p-12 w-full`. Questions must have bottom borders and bold white text (`py-6 border-b border-gray-800`).
+
+### 5. The Footer
+- Build a premium footer at the very bottom of the Main Content area: `bg-[#0A0B0E] border-t border-gray-800 py-16 px-12 mt-20`.
+- Create a CSS grid for the menu (`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8`).
+- **Menu Links:** Add proper `<a>` tags with `text-gray-400 hover:text-[#00F0FF] transition-colors` for: About, Contact, Privacy Policy, and Terms & Conditions. Do NOT leave them as default blue links.
+
+Do not explain, just write the complete, perfectly styled React code for `page.tsx` integrating this layout.

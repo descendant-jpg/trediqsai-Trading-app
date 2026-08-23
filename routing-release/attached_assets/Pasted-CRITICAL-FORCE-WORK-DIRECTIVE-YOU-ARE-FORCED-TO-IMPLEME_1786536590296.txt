@@ -1,0 +1,32 @@
+CRITICAL FORCE WORK DIRECTIVE: YOU ARE FORCED TO IMPLEMENT FULL, COMPLETE, PRODUCTION-READY LOGIC. DO NOT USE MISSING RPC FUNCTIONS. FIX THE SUPABASE CRASH, WIRE ANTHROPIC AI TO THE BOTS, AND BUILD THE LIVE TERMINAL UI.
+
+Review replit.md for our project rules. We are fixing a fatal deployment crash on the AutoPilot Bot screen and upgrading it to use our Anthropic AI engine.
+
+### 1. Fix the Supabase RPC Crash
+- Locate the bot deployment logic (likely in `app/(tabs)/autopilot.tsx`, `components/BotCard.tsx`, or similar).
+- The app is currently crashing with: `Could not find the function public.set_active_bot`.
+- REMOVE the `supabase.rpc('set_active_bot', ...)` call entirely.
+- REPLACE it with a standard database call wrapped in a strict try/catch:
+  `const { error } = await supabase.from('active_bots').upsert({ bot_name: name, capital_percent: percent });`
+- If this fails, DO NOT throw a fatal error. Catch the error, `console.warn` it, and allow the frontend state to transition to "Deployed" anyway for a seamless user experience.
+
+### 2. Wire the Anthropic AI Brain
+- When the user presses "Deploy Bot", trigger an API call to the Anthropic API (Claude 3.5 Sonnet) using the existing API key setup.
+- The prompt should be: `You are an institutional trading bot named [Bot_Name]. Generate 1 sentence of highly technical trading parameters you are currently monitoring based on a [Capital_Percent]% allocation.`
+- Store Claude's response in a local state variable called `aiStrategyLog`.
+
+### 3. Build the Live Terminal Deployment UI
+- Replace the static "Deploying..." spinner with a sleek, dark `#0A0B0E` Terminal View that renders conditionally when the bot is active.
+- Create an array of simulated startup logs that appear sequentially using `setTimeout` or an animation hook:
+  1. `> SYSTEM BOOT: [Bot_Name]`
+  2. `> ALLOCATING [Capital_Percent]% MARGIN...`
+  3. `> CONNECTING ANTHROPIC NEURAL ENGINE...`
+  4. `> [Claude_Response_Here]`
+  5. `> STATUS: ACTIVE AND SCANNING.`
+- Use a monospace font for these terminal logs with a neon green (`#00FF00`) text color.
+- Add a red "TERMINATE BOT" button at the bottom of the active terminal to reset the state.
+
+### 4. Enforce Paywall Routing
+- Ensure that tapping to deploy premium bots (like "Swing Master" or "News Sniper") strictly routes the user to the Master Paywall with the ELITE parameter: `router.push({ pathname: '/paywall', params: { defaultTier: 'ELITE' } })`.
+
+EXECUTION REQUIREMENT: The fatal RPC crash must be completely removed. The bot deployment must seamlessly transition into the Live Terminal UI, fetching real intelligence from Anthropic without breaking the application.

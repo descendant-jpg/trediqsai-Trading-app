@@ -1,0 +1,57 @@
+Let's build a fully functional `NotificationSettingsScreen.tsx`. This needs to be a highly detailed, scrollable settings page that persists user preferences using `AsyncStorage` and can fire local notifications using `expo-notifications`.
+
+### 1. Setup & State Management
+- Install `expo-notifications` and `@react-native-async-storage/async-storage` if not already installed.
+- Setup `useEffect` to request notification permissions on mount and load saved settings from `AsyncStorage`.
+- State variables needed (save to AsyncStorage every time they change): 
+  - `masterPush` (boolean)
+  - `soundMode` ('Default' | 'Silent')
+  - `selectedPairs` (array of strings, default to all pairs selected)
+  - `marketAlerts` (boolean)
+  - `calendarIcon` (boolean)
+
+### 2. UI Layout & Theming
+- Background: #0A0B0E. 
+- Use a `ScrollView` with standard React Native `SafeAreaView`.
+- Section Headers: Small, bold, white text with top margin.
+- Cards: Background #16181D, rounded corners, subtle borders (#22252A).
+
+### 3. Screen Sections (Top to Bottom)
+
+**A. Push Notifications**
+- Card with a yellow bell icon, text "Push Notifications", subtext "Receive alerts for new signals", and a working Toggle Switch linked to `masterPush`.
+
+**B. Telegram VIP Channel**
+- Text: "Premium members get real-time signals in the private VIP channel".
+- Card with a blue send icon, text "Connect Telegram", and a right chevron.
+- Action: `onPress` should use `Linking.openURL` to open a placeholder telegram link.
+
+**C. Sound Enabled**
+- Text: "Default sound will play for all notifications. Select Silent for vibration only."
+- Card containing a list of radio-style options:
+  - "Default" (Selectable, show an Electric Cyan checkmark if active).
+  - "Silent" (Selectable, show checkmark if active).
+  - "Chime", "Bell", "Alert", "Success" (Grayed out text, with a lock icon on the right instead of a checkmark. Unselectable).
+
+**D. Custom Alert Sounds**
+- Text: "Currently available: Default and Silent. Custom sounds coming with app store release."
+- Card with 4 list items: "Signal Alerts", "Sell Signals", "TP Hit Alerts", "SL Hit Alerts". Each has a colored icon on the left, "Default" as subtext, and a right chevron.
+
+**E. Signal Pair Filter**
+- Text: "You receive notifications for all trading signals. Tap pairs below to only get alerts for specific instruments."
+- Card containing a categorized grid of selectable chips (Tags). 
+- Categories to map:
+  - METALS: XAUUSD, XAG/USD
+  - CRYPTO: BTC/USD, ETH/USD
+  - FOREX: EUR/USD, GBP/USD, USD/JPY, GBP/JPY, EUR/JPY, AUD/USD, NZD/USD, USD/CAD, USD/CHF, EUR/GBP, EUR/AUD, EUR/NZD, GBP/AUD, GBP/NZD, AUD/NZD, AUD/CAD
+  - INDICES: US30, NAS100
+  - COMMODITIES: US Oil
+- Chip UI: If the pair is in the `selectedPairs` array, the chip background is transparent with an Electric Cyan (#00F0FF) border and text. If NOT selected, the chip border and text are muted gray (#444). Pressing a chip adds/removes it from the state and saves to AsyncStorage.
+
+**F. System Alerts**
+- **Market Open Alerts:** Toggle linked to `marketAlerts`.
+- **Economic Calendar:** Toggle linked to `calendarIcon`.
+- **Volatility Alerts:** A card that looks like a toggle, but the switch is replaced by a blue "Pro" badge. Clicking it shows an alert to upgrade.
+- **Send test notification:** A button card with a yellow paper plane icon. `onPress` should trigger `Notifications.scheduleNotificationAsync({ content: { title: "TradiQs AI", body: "Test notification received successfully! 🚀" }, trigger: null })`.
+
+Ensure the UI is perfectly spaced, uses clear typography, and all toggles/buttons provide immediate visual feedback.

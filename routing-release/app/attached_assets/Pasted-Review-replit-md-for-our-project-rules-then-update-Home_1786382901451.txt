@@ -1,0 +1,34 @@
+Review replit.md for our project rules, then update HomeScreen.tsx with these exact layout enhancements:
+
+### 1. Fix Quick Actions Grid Layout (4 Items Per Row)
+Reorganize the Quick Actions grid so it strictly renders 4 items per row across 2 clean rows:
+- **Row 1:** Competition | Calendar | VIP Signals | Shop
+- **Row 2:** Game | AI Signals | Trade Journal | Community
+Ensure the card widths, padding, and text labels adjust smoothly to fit 4 columns on all phone screen sizes.
+
+### 2. Multi-Asset Featured Cards (USOIL, Crypto, Forex, Stocks)
+Below the Quick Actions grid, render a vertical stack of 4 featured market cards matching our reference design (Background #16181D, subtle border #22252A, rounded corners):
+- **Card 1 (Commodities):** Asset `USOIL`, Direction Badge `BUY` (Cyan), Entry `78.50`, Right side: Glowing Green `• LIVE >`.
+- **Card 2 (Crypto):** Asset `BTC/USD`, Direction Badge `BUY` (Cyan), Entry `96,210`, Right side: Glowing Green `• LIVE >`.
+- **Card 3 (Forex):** Asset `EUR/USD`, Direction Badge `SELL` (Red), Entry `1.0850`, Right side: Glowing Green `• LIVE >`.
+- **Card 4 (Stocks):** Asset `NVDA`, Direction Badge `BUY` (Cyan), Entry `128.40`, Right side: Glowing Green `• LIVE >`.
+Tapping any of these cards should navigate the user directly to the Signals tab.
+
+### 3. "Latest Insights" Banner & Modal (`LatestInsightsModal.tsx`)
+- Add a banner card below the asset cards:
+  - Left: Book / Article icon.
+  - Title: "Latest Insights".
+  - Subtitle: "Free strategies, AI signal reviews & market analysis".
+  - Right: Chevron right arrow (`>`).
+- Create `LatestInsightsModal.tsx` that opens when this card is tapped. It should display a list of 3 detailed strategy articles:
+  1. *Mastering 15m Liquidity Order Blocks with TradiQs AI*
+  2. *Navigating High-Impact News Events (NFP & CPI)*
+  3. *How the AutoPilot Risk Engine Protects Your Drawdown*
+- Each article card should include a reading time tag (e.g., "4 min read"), article category, and full expandable reading text.
+
+### 4. Boxed Risk Disclaimer Card
+At the very bottom of `HomeScreen.tsx`, wrap the Risk Disclaimer inside a distinct dark container card (Background #16181D, border 1px solid #332200):
+- Header: Amber/Gold warning icon (⚠️) + Bold Amber text "RISK DISCLAIMER".
+- Body Text: "Trading involves substantial risk of loss. Past performance does not guarantee future results. This content is for educational and informational purposes only and does not constitute financial advice. Always do your own research."
+
+Ensure all typography remains clean, responsive, and adheres strictly to the dark terminal theme.

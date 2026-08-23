@@ -1,0 +1,42 @@
+CRITICAL WORK DIRECTIVE: WIRE UP ALGORITHM TOGGLE SWITCHES AND MAKE THEM FULLY FUNCTIONAL.
+
+To conserve context window and AI credits, DO NOT read previous chat history. Read `replit.md` to understand the current state.
+
+The algorithm cards display configuration profiles, but the toggle switches on the AI Tools screen are unresponsive. Fix the switch component wiring, ensure persistent state, add visual feedback, and wire tier gating.
+
+### 1. Fix Switch Component & State Binding
+- Open the AI Tools / Algorithms screen file (e.g., `client/src/screens/AIToolsScreen.tsx` or `algorithms.tsx`).
+- Verify that each toggle switch is using React Native's `<Switch>` (or custom toggle component) with:
+  - `value={activeAlgorithms[algo.id] ?? false}`
+  - `onValueChange={(value) => handleToggleAlgorithm(algo.id, value)}`
+- Ensure parent container `TouchableOpacity` or `Pressable` components do NOT swallow or block the switch's touch events (`pointerEvents="auto"`).
+
+### 2. Implement `handleToggleAlgorithm` Logic & Tier Gating
+Inside the screen component:
+```typescript
+const handleToggleAlgorithm = async (algoId: string, newValue: boolean) => {
+  const algo = algorithms.find(a => a.id === algoId);
+
+  // 1. Pro-Only Gating
+  if (newValue && algo?.isProOnly && !isProUser) {
+    showUpgradeModal("Upgrade to Pro to deploy Institutional & Order Flow bots.");
+    return;
+  }
+
+  // 2. Free Tier Max Active Limit (1 Bot Limit)
+  const currentlyActiveCount = Object.values(activeAlgorithms).filter(Boolean).length;
+  if (newValue && !isProUser && currentlyActiveCount >= 1) {
+    showUpgradeModal("Free tier is limited to 1 active algorithm. Upgrade to run multi-bot strategies.");
+    return;
+  }
+
+  // 3. Update & Persist State
+  const updated = { ...activeAlgorithms, [algoId]: newValue };
+  setActiveAlgorithms(updated);
+  await AsyncStorage.setItem("@tradiqs_active_algorithms", JSON.stringify(updated));
+
+  // 4. Feedback Toast
+  if (newValue) {
+    showToast(`🟢 ${algo?.name || 'Algorithm'} is now ACTIVE`);
+  }
+};

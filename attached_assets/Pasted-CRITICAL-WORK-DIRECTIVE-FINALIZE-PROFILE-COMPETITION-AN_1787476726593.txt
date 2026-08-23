@@ -1,0 +1,30 @@
+CRITICAL WORK DIRECTIVE: FINALIZE PROFILE, COMPETITION, AND VIP SIGNALS FEATURES.
+
+To conserve context window and AI credits, DO NOT read previous chat history. Read `replit.md` to understand the current state.
+
+I am finalizing production features. Execute the following three feature updates exactly as specified. No dummy data; wire everything for live production APIs.
+
+### 1. Profile Screen: Elite Channel Button
+- Locate the Profile screen (`app/(tabs)/profile.tsx` or similar).
+- Find the button currently labeled "Join the TradiQs Elite Community".
+- Change the text to read: "Join the TradiQs Elite Channel".
+- Wrap this button in a strict conditional rendering block. It MUST ONLY be visible if the authenticated user's role/tier evaluates to 'elite' (or your equivalent highest tier). Do not show a disabled button to lower tiers; hide it completely.
+
+### 2. Competition Screen: Live Leaderboard UI
+- Locate the Competition screen (e.g., `app/competition.tsx` or `app/(tabs)/competition.tsx`).
+- Remove the hardcoded "Unable to load leaderboard" error boundary.
+- Implement a `FlatList` to render ranking rows (displaying Rank, Username, Profit, Win Rate).
+- Wire a `useEffect` fetch request to point to `/api/competition/leaderboard`. 
+- Implement a graceful loading state (spinner) while fetching, and only show a retry button if the live network request actually fails.
+
+### 3. VIP Signals Screen: Purchase Wiring & Unlock
+- Locate the VIP Signals screen (`app/vip-signals.tsx` or similar).
+- Wire the "Pro", "Elite", and "Whale" tier buttons to trigger the active app purchase flow (e.g., `Purchases.purchasePackage` or your equivalent billing service).
+- Implement an ownership check: If the authenticated user already owns the required lifetime access, hide the purchase buttons and render a clickable action (using `Linking.openURL`) on the "PRIVATE TELEGRAM CHANNEL" element to route them to the Telegram link.
+
+### 4. Verify & Push
+- Run full workspace typechecks to ensure no broken imports or undefined variable crashes.
+- Commit: `feat(core): lock profile channel to elites, build competition leaderboard UI, and wire VIP signals purchase flow`
+- Push securely to the active repository.
+
+EXECUTION REQUIREMENT: Output the exact files modified and confirm the endpoint URL configured for the leaderboard fetch.

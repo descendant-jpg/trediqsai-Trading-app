@@ -1,0 +1,27 @@
+CRITICAL WORK DIRECTIVE: BUILD NATIVE MOBILE COMMAND CENTER AND REMOVE DEBUG TEXT.
+
+To conserve context window and AI credits, do not read previous chat history. The Admin Command Center card successfully routes to `/(admin)`, but the route throws a 404. We need to scaffold the mobile admin dashboard and clean up temporary debug UI.
+
+### 1. Clean Up Profile Screen
+- Open `app/(tabs)/profile.tsx`.
+- Remove the temporary debug text (`Debug - Role: ... | Email: ...`) that was placed under the profile header. Access is now verified.
+
+### 2. Scaffold the Admin Layout (`app/(admin)/_layout.tsx`)
+- Create the `(admin)` route group if it doesn't exist.
+- Build a Stack layout with a premium dark-mode header titled "TradiQs CMS".
+- **Security Guard:** In the layout, fetch the user session. If the user's role is NOT `god_admin` AND their email is NOT `nextgensynthex@gmail.com`, instantly redirect them back to `/(tabs)/home`.
+
+### 3. Build the Mobile Dashboard (`app/(admin)/index.tsx`)
+- **Data Fetching:** Write Supabase queries to fetch the 4 core metrics: Total Waitlist Signups, Active Pro/Elite Subscribers, Published Market Insights, and Open Support Tickets.
+- **Pull-to-Refresh:** Wrap the screen in a `ScrollView` with a `RefreshControl` that triggers `expo-haptics` and re-fetches the metrics.
+- **UI - Stat Grid:** Create a 2x2 mobile-friendly grid of cards for the 4 core metrics. Use Tailwind `bg-gray-900`, `border-cyan-500/30`, and prominent white numbers.
+- **UI - Quick Actions:** Below the stats, create a section for Quick Actions (Write New Post, View Waitlist, Check Help Desk, Broadcast Signal). Style these as touchable wide buttons with icons.
+- **UI - Recent Posts:** Fetch the 3 most recent blog posts and map them into a list with their title, date, and an "Edit" text button.
+
+### 4. Stage, Commit, and Secure Push
+- Run a typecheck to ensure Expo Router recognizes the new `(admin)` paths.
+- Stage `profile.tsx` and the new `app/(admin)` directory files.
+- Commit with the message: `feat(admin): build native mobile CMS dashboard and remove debug text`
+- Push securely to the active application repository using the credential helper without logging tokens.
+
+EXECUTION REQUIREMENT: Confirm the debug text was removed, verify the file paths created, and confirm the Git push was successful.

@@ -1,0 +1,29 @@
+CRITICAL WORK DIRECTIVE: FIX TAXONOMY MIGRATION AND MIRROR WEB COMPOSER ON MOBILE.
+
+To conserve context window and AI credits, DO NOT read previous chat history. Read `replit.md` to understand the current state.
+
+We need the Mobile CMS Post Composer to exactly mirror the Web CMS Post Composer, including dynamic Category, Tag, and Status selections. However, the Web CMS is currently throwing a taxonomy fetch error.
+
+### 1. Fix the Supabase Taxonomy Migration (Backend)
+- The Web CMS `admin/categories` route is showing: "Failed to fetch taxonomy. If this persists, confirm the taxonomy_terms migration has been applied in Supabase."
+- You MUST create and apply the necessary Supabase SQL migration to create the `taxonomy_terms` (or equivalent) table so the web and mobile apps can dynamically fetch Categories (e.g., Forex, Crypto) and Tags (e.g., Analysis, News).
+- Provide the raw SQL in your response if I need to run it manually in the Supabase SQL editor.
+
+### 2. Upgrade Mobile Post Composer UI (`write-post.tsx` & `edit-post/[id].tsx`)
+- Open the mobile composer screens in `app/(admin)/`.
+- Ensure all Web CMS fields are present: Title, Slug (auto-generated if blank), Excerpt, Cover Image URL, and Full Content (Markdown supported).
+- Build premium native selection UI (e.g., dark-mode pickers, bottom sheets, or segmented controls) for three selections:
+  - **Category** (fetch from the fixed taxonomy table, fallback to ['Forex', 'Crypto', 'Stocks'] if loading)
+  - **Tag/Type** (fetch from taxonomy, fallback to ['Analysis', 'News', 'Educational'])
+  - **Status** (['Draft', 'Published'])
+
+### 3. Wire the Payload
+- Ensure the submission payload from the mobile app matches the exact schema expected by the Supabase `posts` table and Web CMS API, specifically passing the selected category, tag, and status correctly.
+
+### 4. Stage, Commit, and Secure Push
+- Run a typecheck to ensure the new UI components and API payloads are valid.
+- Stage the modified mobile screens and any backend route/migration files.
+- Commit with the message: `feat(cms): fix taxonomy database migration and sync mobile composer fields with web`
+- Push securely to the active repository using the credential helper without logging tokens.
+
+EXECUTION REQUIREMENT: Output the raw SQL for the taxonomy migration. Confirm the web taxonomy error is resolved, confirm the mobile UI now includes the dropdowns, and confirm the Git push was successful.

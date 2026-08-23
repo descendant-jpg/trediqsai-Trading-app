@@ -1,0 +1,24 @@
+CRITICAL WORK DIRECTIVE: FIX MISSING ADMIN CARD, ADD PULL-TO-REFRESH, AND LOCK AUTOPILOT API.
+
+To conserve context window and AI credits, do not read previous chat history. Read the workspace configuration and focus on `app/(tabs)/profile.tsx` and the AutoPilot API routes.
+
+The Admin Command Center card is not rendering for the `god_admin` user in the Expo preview. This indicates the `role` column is likely not being fetched or mapped to the state correctly. Furthermore, we need to finalize backend security for AutoPilot.
+
+### 1. Fix Profile State & Add Pull-to-Refresh
+- Locate `app/(tabs)/profile.tsx`.
+- **Data Fetch Fix:** Audit the Supabase query fetching the user profile. Ensure `role` is explicitly selected (`.select('..., role')`) and properly saved to the component's state or global store so the `role === 'god_admin'` gate evaluates correctly.
+- **Pull-to-Refresh:** Wrap the Profile screen's main `ScrollView` with a native `RefreshControl`. Implement a `onRefresh` function that re-fetches the Supabase profile data (tier, role, balances) and triggers a light `expo-haptics` vibration when pulled.
+- **Skeleton Loaders:** Ensure that while the profile is initially fetching, a sleek dark-mode skeleton loader is displayed to maintain a premium feel.
+
+### 2. Lock Down AutoPilot APIs
+- Stop free accounts from controlling or reading AutoPilot through direct API calls.
+- Audit all `GET`, `POST`, and `PATCH` routes related to AutoPilot state and execution. 
+- Enforce strict server-side checks: if the authenticated user's tier is `free` or `starter`, instantly reject the request with a 403 Forbidden. Do not rely on client-side UI hiding.
+
+### 3. Stage, Commit, and Secure Push
+- Validate the typecheck to ensure the new RefreshControl and API routes build cleanly.
+- Stage `profile.tsx` and the modified AutoPilot API routes.
+- Commit with the message: `fix: resolve missing admin card state, add pull-to-refresh, and lock AutoPilot API`
+- Push securely to the active repository using the credential helper. Do not log tokens.
+
+EXECUTION REQUIREMENT: Confirm exactly why the Admin card was failing to render previously, verify the AutoPilot API rejection logic, and confirm the Git push was successful.

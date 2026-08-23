@@ -246,10 +246,6 @@ export default function SessionIntelligenceScreen() {
     .filter((session) => !session.isLive)
     .sort((a, b) => a.minutesUntilOpen - b.minutesUntilOpen)[0];
 
-  const goToTradingFloor = () => {
-    router.push('/(tabs)/tradiqsai' as never);
-  };
-
   return (
     <View style={styles.container}>
       <ScrollView
@@ -423,7 +419,12 @@ export default function SessionIntelligenceScreen() {
                 </Text>
                 <TouchableOpacity
                   style={[styles.tradeButton, !session.isLive && styles.tradeButtonMuted]}
-                  onPress={goToTradingFloor}
+                  onPress={() =>
+                    router.push({
+                      pathname: '/session-details',
+                      params: { sessionName: session.city },
+                    } as never)
+                  }
                   activeOpacity={0.82}
                   accessibilityLabel={`Trade active ${session.city} session`}
                   testID={`trade-active-${session.id}`}

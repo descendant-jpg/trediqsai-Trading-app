@@ -14,6 +14,7 @@ vi.mock('expo-haptics', () => ({
 vi.mock('expo-router', () => ({
   useLocalSearchParams: () => ({}),
   useRouter: () => ({ push: vi.fn() }),
+  useFocusEffect: vi.fn(),
 }));
 vi.mock('@/hooks/useProfile', () => ({ useProfile: () => ({ profile: null, refresh: vi.fn() }) }));
 vi.mock('@/hooks/useLiveMarket', () => ({

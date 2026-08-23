@@ -1,0 +1,26 @@
+CRITICAL WORK DIRECTIVE: CATCH GUEST-ACCESS REGRESSIONS BEFORE TRADERS SEE EVALUATION DATA.
+
+To conserve context window and AI credits, DO NOT read previous chat history. Read `replit.md` to understand the current state.
+
+We must implement automated regression tests and defense-in-depth protections to guarantee anonymous/guest users can NEVER access evaluation data, see payout history, or leak cached session data.
+
+### 1. Create Comprehensive Client Regression Tests
+Create an automated test suite (e.g., `__tests__/guest-evaluation-regression.test.tsx`):
+- **Scenario A (Profile UI Gating):** Render `ProfileScreen` with an anonymous session (`user.is_anonymous: true`). Assert that the Evaluation Card, Payout History, and Live Metrics are NOT in the component tree, and that the locked "Create an account to start your $10,000 evaluation" CTA is rendered.
+- **Scenario B (Hook Inactivation):** Test evaluation and payout hooks (e.g., `usePayouts`, `useEvaluation`). Assert that when initialized with an anonymous user, they immediately return disabled/empty state and dispatch 0 fetch/RPC requests.
+- **Scenario C (Direct Navigation Gate):** Assert that attempting to mount or navigate to any evaluation-specific subroutes/modals as a guest immediately triggers a redirect or lock screen.
+
+### 2. State & Cache Purge on Session Transition
+- In the session context / auth handler, ensure that whenever a user transitions from an authenticated account to a guest session (or vice-versa), all query/state caches (TanStack Query, SWR, or local stores) are completely purged so no lingering evaluation data remains in memory.
+
+### 3. Server-Side RPC Contract Tests
+- Add a test or automated verification asserting that the evaluation and payout RPC endpoints strictly reject any payload bearing an `is_anonymous: true` JWT claim with an unauthorized error.
+
+### 4. Stage, Commit, and Secure Push
+- Run the test suite and verify all regression assertions pass.
+- Run mobile and API typechecks.
+- Stage the test files and session management updates.
+- Commit with the message: `test(auth): add regression coverage to prevent guest evaluation data access and session leaks`
+- Push securely to the active repository using the credential helper without logging tokens.
+
+EXECUTION REQUIREMENT: Output the test results showing all guest-access scenarios passing, confirm cache purge logic on auth change, and confirm the Git push was successful.

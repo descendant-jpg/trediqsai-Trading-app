@@ -1,0 +1,56 @@
+CRITICAL WORK DIRECTIVE: FORCE-FIX ALGORITHM TOGGLE SWITCHES (TOUCH INTERCEPTION & STATE).
+
+To conserve context window and AI credits, DO NOT read previous chat history. Read `replit.md` to understand the current state.
+
+The algorithm toggle switches on the AI Tools screen are visually present but still completely unresponsive to touch. This is due to React Native touch event interception (parent containers swallowing the touch) and state decoupling.
+
+### 1. Fix Touch Interception & Hierarchy
+- Open the file rendering the Algorithm cards (e.g., `client/src/screens/AIToolsScreen.tsx`, `algorithms.tsx`, or the specific Card component).
+- Locate the `<Switch />` component.
+- **CRITICAL:** Ensure the `<Switch />` is NOT wrapped inside a parent `<TouchableOpacity>` or `<Pressable>` that is stealing its touch events. 
+- Wrap the `<Switch />` in a dedicated `<View pointerEvents="box-none">` if necessary, or ensure the parent container uses `pointerEvents="auto"`.
+
+### 2. Implement Unbreakable Local State
+- Create a dedicated local state specifically for the UI toggles to force immediate repaints:
+  `const [localActiveStates, setLocalActiveStates] = useState<Record<string, boolean>>({});`
+- When the screen mounts, sync this local state from `AsyncStorage`.
+- Update the `<Switch />` props:
+  `value={localActiveStates[algo.id] || false}`
+  `onValueChange={(val) => handleForceToggle(algo.id, val, algo.isProOnly)}`
+
+### 3. Bulletproof Toggle Logic with Explicit Alerts
+Implement this exact fallback logic to ensure silent failures are impossible:
+
+```typescript
+import { Alert } from 'react-native';
+
+const handleForceToggle = async (id: string, newValue: boolean, isProOnly: boolean) => {
+  // Safe-check the user tier (default to false if undefined)
+  const userIsPro = isProUser ?? false; 
+  
+  if (newValue) {
+    if (isProOnly && !userIsPro) {
+      Alert.alert("Pro Tier Required", "Upgrade to Pro to deploy this algorithm.");
+      // Optional: trigger your custom upgrade modal here
+      return;
+    }
+
+    const currentActiveCount = Object.values(localActiveStates).filter(Boolean).length;
+    if (!userIsPro && currentActiveCount >= 1) {
+      Alert.alert("Limit Reached", "Free tier allows 1 active bot. Upgrade for unlimited.");
+      return;
+    }
+  }
+
+  // Force instant UI update
+  const updatedStates = { ...localActiveStates, [id]: newValue };
+  setLocalActiveStates(updatedStates);
+
+  // Background persistence
+  try {
+    await AsyncStorage.setItem("@tradiqs_active_algorithms", JSON.stringify(updatedStates));
+    // Also dispatch your backend API sync here if it exists
+  } catch (error) {
+    console.error("Failed to save algo state", error);
+  }
+};

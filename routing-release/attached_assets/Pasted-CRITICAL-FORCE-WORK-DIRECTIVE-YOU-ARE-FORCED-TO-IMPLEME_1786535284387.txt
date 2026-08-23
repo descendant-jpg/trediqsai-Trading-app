@@ -1,0 +1,34 @@
+CRITICAL FORCE WORK DIRECTIVE: YOU ARE FORCED TO IMPLEMENT FULL, COMPLETE, PRODUCTION-READY UI. DO NOT LEAVE DUMMY CODE, EMPTY HANDLERS, OR STATIC HARDCODED SINGLE TIERS. WRITE ALL STATE LOGIC AND PLATFORM-SPECIFIC BUTTONS.
+
+Review replit.md for our project rules. We are upgrading the Subscription Paywall screen to support a dual-tier system (PRO vs. ELITE) and integrating native platform payment buttons.
+
+### 1. Locate the Active Paywall
+- Search the codebase for the text "Trade Like an Institution" or "Real-Time Signal Targets" to find the active paywall screen (likely in `app/paywall.tsx`, `components/PaywallModal.tsx`, or similar). Apply all updates to this file.
+
+### 2. Implement Tier State & Switcher UI
+- Import `useState` and `Platform` from react-native.
+- Create state: `const [selectedTier, setSelectedTier] = useState<'PRO' | 'ELITE'>('PRO');`
+- Create a sleek horizontal segmented toggle switch above the main title. The toggle should have two options: "TradiQs Pro" and "TradiQs Elite".
+- When "ELITE" is selected, the accent color of the screen should transition from Cyan (`#00F0FF`) to a premium Gold or deep Violet to denote exclusivity.
+
+### 3. Dynamic Tier Content
+- Dynamically render the pricing and features based on `selectedTier`.
+- **PRO TIER:** Keep the existing pricing ($29.99/mo, $199.99/yr) and existing features (Real-Time Signal Targets, AI AutoPilot Execution, TradiQs Oracle AI, VIP Telegram Alerts, Advanced Analytics).
+- **ELITE TIER:** 
+  - Title: "The Institutional Quant Edge"
+  - Pricing: $49.99/mo, $399.99/yr (Save 33%).
+  - Features: Include everything in Pro, PLUS:
+    1. "Whale Wallet Tracking": Live alerts for institutional block trades and dark pool activity.
+    2. "Direct API Webhooks": Connect AI signals directly to MT4/MT5/NinjaTrader.
+    3. "Zero-Delay Execution": Highest priority server routing for AutoPilot.
+    4. "Dedicated AI Quant": Personalized risk-parameter generation.
+
+### 4. Native Payment Button Integration (Apple Pay / Google Pay)
+- Replace the standard "Start 7-Day Free Trial" button with platform-specific native payment UI.
+- Implement conditional rendering based on device:
+  - `if (Platform.OS === 'ios')`: Render a black, rounded button with the Apple logo and text "Pay with  Apple Pay".
+  - `if (Platform.OS === 'android')`: Render a dark standard Google Pay button with the G-Pay logo styling.
+  - `if (Platform.OS === 'web')`: Render a standard "Continue to Checkout" button.
+- Ensure the selected price is clearly displayed above or inside the payment button.
+
+EXECUTION REQUIREMENT: Force the `selectedTier` state to update the UI instantly without lag. The payment buttons must dynamically switch based on the emulator/device platform. Do not remove the existing monthly/annual toggle; stack it cleanly with the new tier switcher.

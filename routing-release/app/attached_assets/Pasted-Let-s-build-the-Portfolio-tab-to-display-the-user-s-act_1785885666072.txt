@@ -1,0 +1,26 @@
+Let's build the "Portfolio" tab to display the user's active and historical trades from Supabase.
+
+Requirements for the Portfolio Screen:
+1. State Management & Data Fetching:
+   - Create two state variables: `openTrades` and `tradeHistory` (arrays).
+   - Create a state variable `refreshing` for pull-to-refresh functionality.
+   - Write a `fetchTrades` function that queries the Supabase `trades` table for the authenticated user. Sort the results by `created_at` descending. 
+   - Filter the results into the `openTrades` (where status is 'OPEN') and `tradeHistory` (where status is 'CLOSED') arrays.
+   - Use a `useEffect` to call `fetchTrades` on component mount, and also hook it up to a pull-to-refresh `RefreshControl` on the main ScrollView/FlatList.
+
+2. UI Layout (Terminal Black Aesthetic):
+   - Set the main background to #0A0B0E.
+   - Add a sticky top toggle to switch between "Active Positions" and "History".
+   
+3. Active Positions View:
+   - Map over `openTrades` to render a Card for each trade (Background: #16181D, Border: 1px solid #22252A).
+   - Display the `asset` (e.g., BTC/USD), the `side` (BUY or SELL in Electric Cyan #00F0FF for Buy, Muted Crimson #E54B4B for Sell), and the `entry_price`.
+   - Add a prominent "Close Position" button (Background: #E54B4B) at the bottom of the card. 
+   - When "Close Position" is pressed, call a function to update that trade row in Supabase to status 'CLOSED' and pass the current live price as `close_price`. Re-fetch the trades afterward to update the UI. Add a loading state while it processes.
+
+4. Trade History View:
+   - Map over `tradeHistory` to render past trades.
+   - Display the `asset`, `side`, `entry_price`, and `close_price`.
+   - Prominently display the `profit_loss`. If the number is positive, color it #2ECA8B (Muted Mint) with a '+' prefix. If negative, color it #E54B4B (Muted Crimson).
+
+Ensure all code uses standard React Native primitives and strictly adheres to the dark mode color palette.

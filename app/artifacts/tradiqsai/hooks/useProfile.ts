@@ -13,6 +13,14 @@ export interface Profile {
 const POLL_MS = 15_000;
 
 /**
+ * Unique suffix for every realtime channel instance. `supabase.removeChannel`
+ * resolves asynchronously, so on a fast unmount/remount the previous channel
+ * can still be subscribed under the same topic — reusing the topic then throws
+ * "cannot add 'postgres_changes' callbacks ... after 'subscribe()'".
+ */
+let profileChannelSeq = 0;
+
+/**
  * Loads the signed-in trader's server-owned profile (balance,
  * daily starting balance, account status) and keeps it fresh:
  * - Subscribes to Supabase realtime UPDATEs on the profile row, so a
@@ -68,7 +76,7 @@ export function useProfile() {
     refresh();
 
     const channel = supabase
-      .channel(`profile-${userId}`)
+      .channel(`profile-${userId}-${++profileChannelSeq}`)
       .on(
         'postgres_changes',
         {
@@ -95,7 +103,14 @@ export function useProfile() {
     return () => {
       mounted.current = false;
       clearInterval(poll);
-      supabase.removeChannel(channel);
+      try {
+        channel.unsubscribe();
+        supabase.removeChannel(channel).catch((error) => {
+          console.warn('Failed to remove profile realtime channel.', error);
+        });
+      } catch (error) {
+        console.warn('Failed to tear down profile realtime channel.', error);
+      }
     };
   }, [userId, refresh]);
 

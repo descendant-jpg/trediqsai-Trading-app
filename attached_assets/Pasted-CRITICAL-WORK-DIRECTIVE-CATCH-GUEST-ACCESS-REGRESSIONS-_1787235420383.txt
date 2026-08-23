@@ -1,0 +1,23 @@
+CRITICAL WORK DIRECTIVE: CATCH GUEST-ACCESS REGRESSIONS BEFORE TRADERS SEE EVALUATION DATA.
+
+To conserve context window and AI credits, DO NOT read previous chat history. Read `replit.md` to understand the current state.
+
+We must implement automated regression tests and defense-in-depth protections to guarantee anonymous/guest users can NEVER access evaluation data, see payout history, or leak cached session data.
+
+### 1. Create Comprehensive Client Regression Tests
+Create an automated test suite (e.g., `__tests__/guest-evaluation-regression.test.tsx`):
+- **Scenario A (Profile UI Gating):** Render the Profile screen with an anonymous session (`user.is_anonymous: true`). Assert that the Evaluation Card and Payout History are hidden, and the locked "Create an account to start your $10,000 evaluation" CTA is rendered.
+- **Scenario B (Hook Inactivation):** Assert that evaluation/payout data hooks immediately return a disabled/empty state and dispatch 0 fetch/RPC requests when initialized with an anonymous user.
+- **Scenario C (Route Gating):** Assert that attempting to mount any nested evaluation-specific subroutes as a guest immediately triggers a redirect or lock screen.
+
+### 2. State & Cache Purge on Session Transition
+- In the auth context/session handler, ensure that whenever a user transitions from an authenticated account to a guest session (or signs out), the local state and query caches are completely purged so no lingering evaluation data remains in memory.
+
+### 3. Stage, Commit, and Secure Push
+- Run the test suite and verify all regression assertions pass.
+- Run mobile and API typechecks.
+- Stage the test files and session management updates.
+- Commit with the message: `test(auth): add regression coverage and cache purge to prevent guest evaluation data access`
+- Push securely to the active repository using the credential helper without logging tokens.
+
+EXECUTION REQUIREMENT: Output the test results showing all guest-access scenarios passing, confirm the cache purge logic on auth change, and confirm the Git push was successful.

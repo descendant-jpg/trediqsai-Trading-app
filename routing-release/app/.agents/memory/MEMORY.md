@@ -1,0 +1,9 @@
+- [Stale API client declarations](api-client-stale-dist.md) — phantom TS2305 missing-export errors mean rebuild lib dist (`tsc --build --force`), not missing code.
+- [Blank white screen on Expo web](web-render-collapse.md) — GestureHandlerRootView has no default flex on web; non-router screens collapse without `style={{flex:1}}`.
+- [RNW Modal unmount in jsdom](rnw-modal-jsdom.md) — closed Modals never unmount in jsdom (portal + animationend); assert the exit-state class instead. Switch = role="switch".
+- [react-query async notifications in tests](react-query-test-batching.md) — setQueryData updates arrive via setTimeout; set notifyManager scheduler sync or use findBy* in jsdom tests.
+- [API test db fake](api-tests-real-db.md) — autopilot tests mock @workspace/db in-memory; drizzle eq() with fake columns hides the bound value as a raw string chunk, broken filters silently return [].
+- [Full-file rewrites clobber merges](rewrite-clobbers-merges.md) — check `git log` on a file before wholesale rewrites; parallel task agents may have just merged into it.
+- [Supabase token verification](supabase-token-verification.md) — server verifies bearer tokens via Supabase /auth/v1/user (no JWT secret available); reuse identity() middleware for per-user state.
+- [Cross-task test breakage](cross-task-test-breakage.md) — full-suite validation fails on parallel-merge test/subject mismatches; confirm via git stash, repair the test harness minimally.
+- [Dev DB schema drift](dev-db-schema-drift.md) — schema merges don't migrate the dev DB; API 500s with Failed query mean drop dev-only tables + drizzle push (non-TTY prompts block plain push).

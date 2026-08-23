@@ -1,0 +1,28 @@
+CRITICAL WORK DIRECTIVE: IMPLEMENT ADMIN OVERRIDE, DISMISSABLE PAYWALLS, AND CLEAN PREMIUM UI.
+
+To conserve context window and AI credits, DO NOT read previous chat history. Read `replit.md` to understand the current state.
+
+We must fix severe UX issues regarding premium feature gating. The master admin is being locked out, paywall modals are trapping users, and premium users are still seeing upsell banners.
+
+### 1. Implement Admin "God Mode" Override
+- Locate the central authentication/profile context or hook that determines a user's subscription tier.
+- Add an override: If `user.email === 'nextgensynthex@gmail.com'` or their database role is `admin`, automatically resolve their effective tier to `elite` (or your highest tier flag) granting them full access to all features bypasses.
+
+### 2. Fix Trapping Premium Modals (Signal Desk & AutoPilot)
+- Locate the premium paywall modal shown in the application (specifically the "AutoPilot is a Premium Feature" modal triggered from the Signal desk or floating action button).
+- **Add Dismissal:** Add an explicit "Close" (X) icon button at the top right of the modal.
+- Ensure the modal can be closed by tapping the backdrop/overlay outside the modal.
+- Users MUST be able to dismiss this paywall and return to exploring the app.
+
+### 3. Clean Up the Subscriber UI (Hide Upsells)
+- Locate the "Go Pro" / "Upgrade" banners on the Home screen and any other main tabs.
+- Wrap these upsell components in a conditional render. If the user's effective tier is `pro`, `elite`, or they are an admin, these banners MUST be hidden entirely.
+- Ensure that tapping the premium features (like the AutoPilot trigger) actually routes Pro/Elite/Admin users to the feature instead of showing the paywall modal.
+
+### 4. Stage, Commit, and Secure Push
+- Run mobile typechecks to ensure tier logic and modal properties are sound.
+- Stage the modified context/auth hooks, the modal components, and the screens containing the upsell banners.
+- Commit with the message: `fix(auth): implement admin override, dismissable paywalls, and hide premium upsells for subscribers`
+- Push securely to the active repository using the credential helper without logging tokens.
+
+EXECUTION REQUIREMENT: Confirm the exact files modified for the modal dismissal, confirm the admin email override is in place, and confirm the Git push was successful.

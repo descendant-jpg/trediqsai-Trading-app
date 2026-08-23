@@ -1,0 +1,63 @@
+Review replit.md for our project rules, then restore the Refer & Earn button in ProfileScreen.tsx and build an institutional ReferAndEarnScreen.tsx that surpasses competitor standards.
+
+### 1. Update ProfileScreen.tsx Navigation Buttons
+Ensure `ProfileScreen.tsx` includes BOTH growth features clearly separated:
+- **Button 1:** `Refer & Earn` (Inside Quick Tools grid or settings list, with a glowing `+$0.50` badge). Clicking navigates to `ReferAndEarnScreen.tsx`.
+- **Button 2:** `Partner Program` (Dedicated high-priority item with `EARN PASSIVE INCOME` badge). Clicking navigates to `PartnerProgramScreen.tsx`.
+
+### 2. Build `ReferAndEarnScreen.tsx`
+Design the screen using our dark terminal aesthetic (#0A0B0E background, #16181D cards, Electric Cyan #00F0FF & Amber accents).
+
+#### A. Hero Invite Card
+- Title: "Invite Friends & Earn"
+- Subtitle: "Get $0.50 credited instantly for every friend who joins and activates on a unique mobile device."
+- **Referral Code Block:** Displays user's unique code (e.g., `TRADIQS-X89K`).
+- **Share Link Bar:** Input-style display showing the full URL (`https://tradiqs.ai/get?ref=TRADIQS-X89K`).
+- **Action Buttons (Row):**
+  - `Copy Link` (1-click clipboard copy with toast feedback).
+  - `Share Link` (Launches native OS share sheet).
+  - `Show QR Code` (Opens `ReferralQRModal.tsx` displaying a custom QR code).
+
+#### B. Gamified Referral Milestones (New Feature)
+Add a card titled "Unlock Bonus Milestone Rewards":
+- Progress bar showing total invites.
+- Milestone 1: 3 Invites -> Free 1-Month Pro Upgrade badge.
+- Milestone 2: 10 Invites -> $10 Cash Bonus.
+- Milestone 3: 25 Invites -> VIP Signal Channel Access.
+
+#### C. Apply Referral Code Card
+- Section Title: "Have a Friend's Referral Code?"
+- Subtitle: "Enter a code below to link accounts and claim your $0.50 welcome bonus."
+- Input field with an `Apply` action button.
+
+#### D. Earnings Breakdown Grid (4 Metrics)
+Render a 4-card metric row:
+1. `Total Invites`
+2. `Total Earned ($)`
+3. `Credited & Paid`
+4. `Pending Activation`
+
+#### E. Live Referral Activity Ledger (New Feature)
+- Section Title: "Recent Referral Activity"
+- List showing the last 3 invited accounts, their timestamp, and dynamic status pill (`Verified ✓` in Green or `Pending Activation ⏳` in Yellow).
+
+#### F. How It Works Timeline Card
+Numbered 4-step vertical card:
+1. **Share Your Link** — Send link or QR code to trader friends.
+2. **They Sign Up** — Friend downloads TradiQs AI on a mobile device.
+3. **Device Activation** — Automatic AI security verification confirms unique hardware ID.
+4. **Instant Credit** — $0.50 credited directly to your withdrawable wallet.
+
+#### G. AI Sentinel Anti-Fraud & Compliance Section
+Create a dark red-tinted security container (#1A0808 background, #FF5252 border):
+- Header: Amber/Red Shield icon + "TradiQs AI Fraud Protection & Policy".
+- Warning Text: "Our real-time AI security engine continuously monitors referral patterns. Zero-tolerance policy applies."
+- **Prohibited Activities Cards (Grid/List with red 'X' badges):**
+  - *Cross-Referrals* (Swapping codes between accounts).
+  - *Fake & Ghost Accounts* (Automated scripts, bots, or disposable emails).
+  - *Device Manipulation* (Emulators, factory resetting, or device ID spoofing).
+  - *VPN & Proxy Abuse* (Masking locations to generate fake signups).
+- **Consequences Box:** Bullet list outlining permanent forfeiture of earnings, account bans, and frozen wallet balances.
+- Footer Seal: Centered text "🛡️ Protected by TradiQs AI Real-Time Fraud Sentinel".
+
+Ensure smooth scrolling, full SafeAreaView coverage, and clean responsive layout styling.

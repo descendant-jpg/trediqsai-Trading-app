@@ -1,0 +1,623 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: signals
+    description: AI trading signals
+  - name: leaderboard
+    description: Trader leaderboard
+  - name: oracle
+    description: TradiQs Oracle AI chat
+  - name: autopilot
+    description: AutoPilot trading bots
+paths:
+  /autopilot:
+    get:
+      operationId: getAutopilot
+      tags: [autopilot]
+      summary: Get the caller's AutoPilot state (roster, config, logs, P&L)
+      description: >-
+        AutoPilot state is scoped per user. Authenticated callers (bearer
+        token) get their own independent state; unauthenticated callers share
+        a single anonymous state.
+      security:
+        - bearerAuth: []
+        - {}
+      responses:
+        "401":
+          description: Invalid or expired auth token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutopilotError"
+        "200":
+          description: Current AutoPilot state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutopilotState"
+  /autopilot/history:
+    get:
+      operationId: getAutopilotHistory
+      tags: [autopilot]
+      summary: Get recent daily AutoPilot P&L history (most recent first)
+      description: >-
+        History is scoped per user, like the rest of AutoPilot state.
+      security:
+        - bearerAuth: []
+        - {}
+      responses:
+        "401":
+          description: Invalid or expired auth token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutopilotError"
+        "200":
+          description: Recent finished-day P&L results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutopilotPnlHistory"
+  /autopilot/master:
+    put:
+      operationId: setAutopilotMaster
+      tags: [autopilot]
+      summary: Pause or resume the caller's AutoPilot system
+      security:
+        - bearerAuth: []
+        - {}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AutopilotMasterUpdate"
+      responses:
+        "200":
+          description: Updated AutoPilot state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutopilotState"
+  /autopilot/asset:
+    put:
+      operationId: setAutopilotAsset
+      tags: [autopilot]
+      summary: Select the caller's AutoPilot execution market
+      description: >-
+        Forex and Crypto require Pro access. Stocks requires Elite access.
+        The server independently validates the caller's current subscription.
+      security:
+        - bearerAuth: []
+        - {}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AutopilotAssetUpdate"
+      responses:
+        "200":
+          description: Updated AutoPilot state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutopilotState"
+        "403":
+          description: Current subscription does not permit the selected asset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutopilotError"
+  /autopilot/bots/{botId}:
+    put:
+      operationId: updateAutopilotBot
+      tags: [autopilot]
+      summary: Update one of the caller's bots (running state or configuration)
+      security:
+        - bearerAuth: []
+        - {}
+      parameters:
+        - name: botId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AutopilotBotUpdate"
+      responses:
+        "200":
+          description: Updated AutoPilot state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutopilotState"
+        "404":
+          description: Unknown bot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutopilotError"
+  /autopilot/logs:
+    delete:
+      operationId: clearAutopilotLogs
+      tags: [autopilot]
+      summary: Clear the caller's AutoPilot log buffer
+      security:
+        - bearerAuth: []
+        - {}
+      responses:
+        "200":
+          description: Updated AutoPilot state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutopilotState"
+  /oracle/chat:
+    post:
+      operationId: sendOracleChat
+      tags: [oracle]
+      summary: Send a chat message to the TradiQs Oracle AI
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OracleChatRequest"
+      responses:
+        "200":
+          description: AI reply
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OracleChatResponse"
+        "503":
+          description: AI backend unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OracleChatError"
+  /oracle/strategy-brief:
+    post:
+      operationId: sendStrategyBrief
+      tags: [oracle]
+      summary: Generate a one-sentence AutoPilot strategy brief
+      description: >-
+        Returns a single sentence of technical parameters an AutoPilot
+        strategy is monitoring, used by the deployment terminal. Runs on the
+        server so the Anthropic key is never shipped in the app bundle.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StrategyBriefRequest"
+      responses:
+        "200":
+          description: Generated strategy brief
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StrategyBriefResponse"
+        "503":
+          description: AI backend unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OracleChatError"
+  /signals:
+    get:
+      operationId: getSignals
+      tags: [signals]
+      summary: List AI trading signals
+      responses:
+        "200":
+          description: List of signals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Signal"
+  /leaderboard:
+    get:
+      operationId: getLeaderboard
+      tags: [leaderboard]
+      summary: List leaderboard traders
+      responses:
+        "200":
+          description: Ranked list of traders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Trader"
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Supabase access token identifying the calling trader.
+  schemas:
+    SignalEntry:
+      type: object
+      properties:
+        price:
+          type: number
+      required: [price]
+    SignalStopLoss:
+      type: object
+      properties:
+        price:
+          type: number
+        pips:
+          type: number
+        isBreakeven:
+          type: boolean
+      required: [price, pips, isBreakeven]
+    SignalTakeProfit:
+      type: object
+      properties:
+        id:
+          type: number
+          enum: [1, 2, 3]
+        price:
+          type: number
+        pips:
+          type: number
+        percentage:
+          type: string
+        isHit:
+          type: boolean
+      required: [id, price, pips, percentage, isHit]
+    SignalTimeline:
+      type: object
+      properties:
+        created:
+          type: string
+        closed:
+          type: string
+      required: [created]
+    Signal:
+      type: object
+      properties:
+        id:
+          type: string
+        asset:
+          type: string
+        name:
+          type: string
+        direction:
+          type: string
+          enum: [BUY, SELL]
+        timeframe:
+          type: string
+        status:
+          type: string
+          enum: [Won, SL Hit, Active, Pending]
+        rr:
+          type: string
+        confidence:
+          type: string
+        risk:
+          type: string
+          enum: [Low, Medium, High]
+        potentialPips:
+          type: string
+        entry:
+          $ref: "#/components/schemas/SignalEntry"
+        stopLoss:
+          $ref: "#/components/schemas/SignalStopLoss"
+        takeProfits:
+          type: array
+          items:
+            $ref: "#/components/schemas/SignalTakeProfit"
+        timeline:
+          $ref: "#/components/schemas/SignalTimeline"
+        isPremium:
+          type: boolean
+        time:
+          type: string
+        rationale:
+          type: string
+      required:
+        - id
+        - asset
+        - name
+        - direction
+        - timeframe
+        - status
+        - rr
+        - confidence
+        - risk
+        - potentialPips
+        - entry
+        - stopLoss
+        - takeProfits
+        - timeline
+        - isPremium
+        - time
+        - rationale
+    Trader:
+      type: object
+      properties:
+        id:
+          type: string
+        rank:
+          type: number
+        name:
+          type: string
+        handle:
+          type: string
+        pnl:
+          type: number
+        pnlPct:
+          type: number
+        winRate:
+          type: number
+        trades:
+          type: number
+        pro:
+          type: boolean
+      required:
+        - id
+        - rank
+        - name
+        - handle
+        - pnl
+        - pnlPct
+        - winRate
+        - trades
+        - pro
+    OracleChatMessage:
+      type: object
+      properties:
+        role:
+          type: string
+          enum: [user, assistant]
+        content:
+          type: string
+      required:
+        - role
+        - content
+    OracleTradingContext:
+      type: object
+      description: >-
+        Snapshot of the caller's simulated trading account, used to
+        personalise Oracle answers. All monetary values are USD.
+      properties:
+        balance:
+          type: number
+        equity:
+          type: number
+        openPosition:
+          type: object
+          nullable: true
+          properties:
+            side:
+              type: string
+              enum: [LONG, SHORT]
+            symbol:
+              type: string
+            entryPrice:
+              type: number
+            size:
+              type: number
+            unrealizedPnl:
+              type: number
+          required:
+            - side
+            - symbol
+            - entryPrice
+            - size
+            - unrealizedPnl
+        drawdownUsed:
+          type: number
+          description: Fraction (0-1) of the daily drawdown limit consumed.
+        distanceToPayout:
+          type: number
+          description: Dollars of profit still needed to reach payout.
+      required:
+        - balance
+        - equity
+        - drawdownUsed
+        - distanceToPayout
+    OracleChatRequest:
+      type: object
+      properties:
+        messages:
+          type: array
+          minItems: 1
+          maxItems: 40
+          items:
+            $ref: "#/components/schemas/OracleChatMessage"
+        tradingContext:
+          $ref: "#/components/schemas/OracleTradingContext"
+      required:
+        - messages
+    OracleChatResponse:
+      type: object
+      properties:
+        reply:
+          type: string
+      required:
+        - reply
+    OracleChatError:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+    AutopilotBot:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        tags:
+          type: string
+        risk:
+          type: string
+          enum: [Low, Medium, High]
+        winRate:
+          type: string
+        return30d:
+          type: string
+        totalTrades:
+          type: number
+        proOnly:
+          type: boolean
+        running:
+          type: boolean
+        capital:
+          type: number
+        drawdown:
+          type: number
+          description: Max drawdown limit in percent.
+      required:
+        - id
+        - name
+        - tags
+        - risk
+        - winRate
+        - return30d
+        - totalTrades
+        - proOnly
+        - running
+        - capital
+        - drawdown
+    AutopilotLogLine:
+      type: object
+      properties:
+        id:
+          type: string
+        time:
+          type: string
+          description: HH:MM:SS wall-clock time of the log line.
+        text:
+          type: string
+      required: [id, time, text]
+    AutopilotState:
+      type: object
+      properties:
+        masterActive:
+          type: boolean
+        selectedAsset:
+          type: string
+          enum: [Forex, Crypto, Stocks]
+          description: Server-validated execution market preference.
+        todayPnl:
+          type: number
+          description: Today's simulated bot P&L in USD.
+        bots:
+          type: array
+          items:
+            $ref: "#/components/schemas/AutopilotBot"
+        logs:
+          type: array
+          items:
+            $ref: "#/components/schemas/AutopilotLogLine"
+      required: [masterActive, selectedAsset, todayPnl, bots, logs]
+    AutopilotPnlDay:
+      type: object
+      properties:
+        day:
+          type: string
+          description: ISO date (YYYY-MM-DD) the P&L belongs to.
+        pnl:
+          type: number
+          description: Simulated bot P&L for that day in USD.
+      required: [day, pnl]
+    AutopilotPnlHistory:
+      type: object
+      properties:
+        days:
+          type: array
+          description: Finished days, most recent first.
+          items:
+            $ref: "#/components/schemas/AutopilotPnlDay"
+      required: [days]
+    AutopilotMasterUpdate:
+      type: object
+      properties:
+        active:
+          type: boolean
+      required: [active]
+    AutopilotAssetUpdate:
+      type: object
+      properties:
+        asset:
+          type: string
+          enum: [Forex, Crypto, Stocks]
+      required: [asset]
+    AutopilotBotUpdate:
+      type: object
+      properties:
+        running:
+          type: boolean
+        capital:
+          type: number
+        drawdown:
+          type: number
+      description: At least one field should be provided.
+    AutopilotError:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
+    StrategyBriefRequest:
+      type: object
+      properties:
+        botName:
+          type: string
+          minLength: 1
+          maxLength: 80
+        capitalPercent:
+          type: number
+          minimum: 10
+          maximum: 100
+      required: [botName, capitalPercent]
+    StrategyBriefResponse:
+      type: object
+      properties:
+        brief:
+          type: string
+      required: [brief]
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status

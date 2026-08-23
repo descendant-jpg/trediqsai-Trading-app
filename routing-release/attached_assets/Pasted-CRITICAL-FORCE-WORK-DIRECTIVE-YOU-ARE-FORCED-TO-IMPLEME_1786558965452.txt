@@ -1,0 +1,26 @@
+CRITICAL FORCE WORK DIRECTIVE: YOU ARE FORCED TO IMPLEMENT A SECURE, COST-OPTIMIZED, IN-APP NEWS AGGREGATOR.
+
+Review replit.md for our project rules. We are upgrading the Notifications center (`app/(tabs)/notifications.tsx` or similar) to pull live, AI-summarized financial news without exposing API keys or hitting client-side rate limits.
+
+### 1. Database & Caching Setup
+- Create a new migration file (e.g., `016_market_news.sql`).
+- Create a table `public.market_news` with columns: `id`, `external_id`, `headline`, `ai_summary`, `category` (crypto, forex, stocks), `sentiment` (Bullish, Bearish, Neutral), `url`, `published_at`, and `created_at`.
+- Enable RLS on `market_news` allowing public `SELECT` access so all authenticated users can read the news.
+
+### 2. Backend Fetcher & AI Summarization
+- In the `api-server`, create a scheduled endpoint or worker that fetches the latest general market news from the free Finnhub API (or a mock equivalent for now if the key isn't provided yet).
+- Pass the fetched headlines through our existing Anthropic Claude 3.5 (Haiku) integration to generate a 2-sentence `ai_summary` and determine the `sentiment`.
+- Upsert these records into the `market_news` Supabase table.
+
+### 3. Build the In-App News Reader Modal
+- Update the Notifications screen's "News" tab to fetch and display a list from `public.market_news`.
+- When a user taps a news card, DO NOT open an external web browser.
+- Create and trigger a sleek, dark-themed in-app modal or bottom sheet (`components/NewsDetailModal.tsx`).
+- The modal must display:
+  1. The Headline.
+  2. A colored badge for Sentiment (Green = Bullish, Red = Bearish, Gray = Neutral).
+  3. The `ai_summary` prominently displayed in a highlighted box.
+  4. A "Read Full Article" link.
+  5. A primary button "Trade Impacted Asset" that routes the user to the trading terminal.
+
+EXECUTION REQUIREMENT: The mobile app MUST NOT make direct calls to the external news API. All news must be read from the Supabase `market_news` table. The UI must keep the user inside the app when reading the AI-summarized news.

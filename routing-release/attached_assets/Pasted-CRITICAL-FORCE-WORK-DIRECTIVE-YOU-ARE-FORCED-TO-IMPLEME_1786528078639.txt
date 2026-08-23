@@ -1,0 +1,22 @@
+CRITICAL FORCE WORK DIRECTIVE: YOU ARE FORCED TO IMPLEMENT FULL, COMPLETE, PRODUCTION-READY FUNCTIONALITY. DO NOT LEAVE DUMMY CODE, TODO COMMENTS, OR EMPTY HANDLERS. WRITE EVERY LINE OF STATE MANAGEMENT, API FETCHING, AND NATIVE COMPONENT LOGIC.
+
+Review replit.md for our project rules. We are executing a massive production overhaul of the Home screen and building a new Live Chart integration.
+
+### 1. Dependencies Setup
+- Ensure `react-native-webview` and `react-native-view-shot` are installed in the project.
+
+### 2. Home Screen Overhaul (`app/(tabs)/home.tsx`)
+- **Header Refactor:** Remove the "Good morning, Trader" text. Move the "Online" status pill into a `flex-row` directly beside the "TradiQs AI" top title.
+- **Live Ticker Marquee:** Create a horizontal `ScrollView` below the header. Write a `useEffect` that fetches live 24hr ticker data from the public Binance API (`https://api.binance.com/api/v3/ticker/24hr?symbols=["BTCUSDT","ETHUSDT","SOLUSDT","BNBUSDT","XRPUSDT"]`). Map this data into sleek, auto-updating price pills showing the symbol, current price, and colored 24h percentage change.
+- **AI Vision Hub:** Below the ticker, create a section titled "ANALYZE CHART WITH AI". Build a horizontal `flex-row` with 3 highly styled touchable cards: "Live Chart", "Camera", and "Gallery".
+- **Routing:** Wire the "Live Chart" button to execute `router.push('/live-chart')`. Wire Camera and Gallery to request permissions and open native device pickers using `expo-image-picker`.
+
+### 3. The Live Chart Screen (`app/live-chart.tsx`)
+- **Create New File:** Build this in the root `app/` directory. Use a dark `#0A0B0E` theme.
+- **Search Header:** Add a top `TextInput` styled as a search bar with placeholder "Search stocks...".
+- **The Live Engine:** Implement `react-native-webview`. Inject a TradingView Advanced Chart widget via HTML string. Make it span the available screen height. Ensure the widget is set to dark mode and defaults to the "AAPL" or "BINANCE:BTCUSD" symbol.
+- **Snapshot Feature:** Wrap the WebView in a `ViewShot` component (`react-native-view-shot`). 
+- Add a massive `#00FF00` (Neon Green) "Take Snapshot" button at the bottom. 
+- **Action Logic:** Write the `onPress` to trigger the `ViewShot` capture. On success, show a React Native `Alert` or a temporary state overlay that says "AI Scanning Chart..." to simulate processing.
+
+EXECUTION REQUIREMENT: Force all API fetches, `WebView` injections, and `ViewShot` refs to be 100% written and functional. Validate that the UI matches a premium institutional terminal.

@@ -1,5 +1,11 @@
 export type CustomFetchOptions = RequestInit & {
   responseType?: "json" | "text" | "blob" | "auto";
+  /**
+   * Keep a persistent 401 as an inline ApiError and skip app-level token
+   * refresh/sign-out side effects. Used by routes that must never unmount
+   * themselves during privileged reads (for example, the mobile CMS).
+   */
+  suppressAuthFailure?: boolean;
 };
 
 export type ErrorType<T = unknown> = ApiError<T>;
@@ -425,7 +431,12 @@ export async function customFetch<T = unknown>(
   options: CustomFetchOptions = {},
 ): Promise<T> {
   input = applyBaseUrl(input);
-  const { responseType = "auto", headers: headersInit, ...init } = options;
+  const {
+    responseType = "auto",
+    headers: headersInit,
+    suppressAuthFailure = false,
+    ...init
+  } = options;
 
   const method = resolveMethod(input, init.method);
 
@@ -461,20 +472,23 @@ export async function customFetch<T = unknown>(
   // Keep a re-usable copy of Request inputs: their body is consumed by the
   // first fetch, so a 401 retry needs a clone taken beforehand.
   const retryInput =
-    _authSessionRefresher && isRequest(input) ? input.clone() : input;
+    _authSessionRefresher && !suppressAuthFailure && isRequest(input)
+      ? input.clone()
+      : input;
 
   let response = await fetch(input, { ...init, method, headers });
 
   // Session may have expired between auto-refreshes (e.g. app resumed after
-  // a long background). Force one token refresh and retry; on persistent
-  // 401 hand off to the auth failure handler (typically signs the user out).
-  if (response.status === 401 && _authSessionRefresher) {
+  // a long background). Force one token refresh and retry unless the caller
+  // explicitly keeps auth failures inline; on persistent 401 hand off to the
+  // auth failure handler (typically signs the user out).
+  if (response.status === 401 && _authSessionRefresher && !suppressAuthFailure) {
     const freshToken = await refreshAuthSession();
     if (freshToken) {
       headers.set("authorization", `Bearer ${freshToken}`);
       response = await fetch(retryInput, { ...init, method, headers });
     }
-    if (response.status === 401) {
+    if (response.status === 401 && !suppressAuthFailure) {
       notifyAuthFailure();
     }
   }

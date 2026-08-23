@@ -1,0 +1,29 @@
+CRITICAL WORK DIRECTIVE: FINALIZE PRODUCTION ASSETS, LEGAL PAGES, BLOG, AND BACKEND FORMS.
+
+Review our project rules. We are preparing the Next.js website (`website/` directory) for App Store production launch. Execute the following updates across the application.
+
+### 1. Hero Section & Features Update (`website/app/page.tsx`)
+- **Hero:** Remove the Waitlist inputs from the top Hero section. Replace them with two premium buttons: "Download on the App Store" and "Get it on Google Play". Style them with dark backgrounds, white text, subtle gray borders, and include standard SVG icons for Apple and Google.
+- **Features Grid:** Update the copy within the existing feature cards to explicitly mention multi-asset capabilities. Ensure the words "Forex", "Crypto", and "Stocks" are prominently featured in the descriptions for AI Chart Analysis and Volatility Radar.
+- **Footer:** Expand the Brokers list in the footer to include: MetaTrader 4, MetaTrader 5, cTrader, Exness, Binance, Bybit, Interactive Brokers, Webull, FTMO, and Topstep.
+
+### 2. Legal Pages Overhaul (`website/app/privacy/page.tsx` & `website/app/terms/page.tsx`)
+- Completely overwrite the current "scanty" legal pages with full, production-grade, standard SaaS/Fintech boilerplate. 
+- **Privacy Policy:** Must include sections on Data Collection, Device Information, Third-Party API usage (Brokers/Exchanges), Data Retention, and User Rights (GDPR/CCPA compliant phrasing).
+- **Terms of Service:** Must include sections on Simulated Trading Disclaimer, Subscription & Billing Terms, Acceptable Use, Limitation of Liability, and Account Termination.
+- Style both pages with a clean, highly readable typography layout (`max-w-4xl mx-auto prose prose-invert`).
+
+### 3. Backend Form Wiring (`website/app/api/`)
+- Create Next.js App Router API routes to handle form submissions.
+- **Waitlist API (`website/app/api/waitlist/route.ts`):** Accept POST requests with `name` and `email`. Connect to the project's Supabase instance using `@supabase/supabase-js` (expecting `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`). Insert into a `waitlist` table. Return a 200 success response.
+- **Contact API (`website/app/api/contact/route.ts`):** Accept POST requests with `name`, `email`, and `message`. Insert into a `contact_messages` table in Supabase.
+- **Frontend State:** Update the Waitlist component (at the bottom of the landing page) and the Contact page (`website/app/contact/page.tsx`) to `fetch` these API routes. Remove the "temporarily unavailable" text and implement a clean UI success state (e.g., "Message received. Our team will be in touch.").
+
+### 4. Market Intelligence Blog Architecture (`website/app/blog/page.tsx`)
+- Build a new dark-mode, Reddit-style institutional feed page.
+- **Filter Matrix:** Add a top row of clickable pill filters: All, Forex, Crypto, Stocks. Add a secondary row for sorting: 🔥 Hot, ⚡ New, 🏆 Top.
+- **Post Cards:** Design sleek cards (`bg-[#111111] border-gray-800`). Left column: Vertical upvote/downvote arrows and vote count. Main column: Title, excerpt, and interactive footer (Comments, Share).
+- **AI Badges:** Include neon badges on posts such as `🟢 BULLISH BIAS`, `⚡ AI CONFIDENCE 94%`, or `⚠️ HIGH IMPACT`. Include realistic timestamps (`2h ago`).
+- **Widget Hub:** At the bottom of the blog, create an "Embeddable Tools" card showing a mock dark-mode Economic Calendar with a gold "Copy Embed Code" button.
+
+EXECUTION REQUIREMENT: Thoroughly implement these updates. Ensure the API routes have try/catch blocks that return graceful errors if Supabase environment variables are missing during this build phase. Run `npm run build` inside the `website` directory to validate all types and API routes before committing.

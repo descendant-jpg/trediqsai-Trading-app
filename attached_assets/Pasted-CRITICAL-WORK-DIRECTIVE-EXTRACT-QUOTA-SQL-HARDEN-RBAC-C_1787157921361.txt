@@ -1,0 +1,31 @@
+CRITICAL WORK DIRECTIVE: EXTRACT QUOTA SQL, HARDEN RBAC/CONTACT LIMITER, AND SECURE AUTH STORAGE.
+
+To conserve context window and AI credits, do not read previous chat history. Read `replit.md` and the latest commit state directly.
+
+The budget limit has been raised. Proceed with the remaining security remediation and provide the unapplied database artifacts.
+
+### 1. Output Supabase Quota & Rate-Limit SQL
+- Output the raw SQL migration block for the daily AI quota RPC (`consume_ai_quota` / quota ledger) and any rate-limiting tables that were created or referenced during the Phase 1 route changes.
+- Do NOT execute the SQL; format it cleanly in a markdown block so it can be executed manually in Supabase.
+
+### 2. Contact Route Hardening & Error Sanitization (P1)
+- Locate `website/app/api/contact/route.ts`.
+- Wire it into the durable rate-limiting middleware/RPC (5 requests per IP per hour).
+- Add maximum string length caps for `name` (100 chars), `email` (255 chars), and `message` (2000 chars).
+- Return a generic error message to client callers on failure while logging details server-side only.
+
+### 3. Unify RBAC Gates across Web CMS & Signals (P1)
+- Audit `website/app/api/admin/signals/broadcast/route.ts` and the CMS signal broadcast handlers.
+- Ensure broadcast permissions strictly require `god_admin` or verified admin authorization, matching the mobile command center standard.
+
+### 4. Migrate Mobile Auth Session Storage to SecureStore (P2)
+- Locate `utils/supabase.ts` (or the Supabase auth client storage config in the mobile app).
+- Replace plain SQLite/localStorage session persistence with an adapter backed by `expo-secure-store` for auth tokens.
+
+### 5. Stage, Commit, and Secure Push
+- Run the test suite and typechecks.
+- Stage all modified files in the web and app repositories.
+- Commit with the message: `fix(security): harden contact limiter, unify admin RBAC, and migrate auth to SecureStore`
+- Push securely to the repository main branch using the existing credential helper without printing tokens.
+
+EXECUTION REQUIREMENT: Output the raw SQL block for the quota/rate-limit migrations, summarize the SecureStore implementation, and confirm the Git push was successful.

@@ -14,7 +14,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { Feather } from '@expo/vector-icons';
 import colors from '@/constants/colors';
-import { useSubscription } from '@/lib/revenuecat';
+import {
+  useSubscription,
+  REVENUECAT_ENTITLEMENT_IDENTIFIER,
+  REVENUECAT_ELITE_ENTITLEMENT_IDENTIFIER,
+} from '@/lib/revenuecat';
 import { useLocalSearchParams } from 'expo-router';
 
 const c = colors.light;
@@ -192,23 +196,43 @@ export function PaywallModal({
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     }
-    if (selectedPackage) {
-      try {
-        await purchase(selectedPackage);
+    if (!selectedPackage) {
+      notify('Select Plan', 'Please choose Monthly or Annual billing.');
+      return;
+    }
+    try {
+      // Native RevenueCat purchase — resolves with the fresh CustomerInfo.
+      const customerInfo: any = await purchase(selectedPackage);
+      const active = customerInfo?.entitlements?.active ?? {};
+      if (
+        active[REVENUECAT_ENTITLEMENT_IDENTIFIER] !== undefined ||
+        active[REVENUECAT_ELITE_ENTITLEMENT_IDENTIFIER] !== undefined
+      ) {
         if (typeof refreshProfileEntitlement === 'function') {
           await refreshProfileEntitlement().catch(() => {});
         }
         finishSuccess();
-      } catch (err: any) {
-        // User cancelled or store error — stay on the paywall.
-        console.log('Purchase cancelled or failed:', err?.message);
+        return;
       }
-      return;
+      // The store accepted the payment but the entitlement has not landed
+      // yet — say so instead of silently closing or silently staying open.
+      notify(
+        'Purchase Processing',
+        'Your payment was received and is being activated. If access does not appear shortly, use Restore Purchases.',
+      );
+    } catch (err: any) {
+      if (err?.userCancelled) {
+        // User backed out of the store sheet — stay on the paywall quietly.
+        return;
+      }
+      // Fallback for development / unlinked native builds (Expo Go cannot
+      // bill). Log loudly so a store failure is never silent.
+      console.warn('Native purchase failed/unavailable:', err);
+      // DEV FALLBACK — uncomment ONLY for local testing without store billing:
+      // finishSuccess();
+      // return;
+      notify('Purchase Error', err?.message || 'Unable to complete transaction.');
     }
-    notify(
-      'Plans Unavailable',
-      "We couldn't load subscription plans. Check your connection and try again.",
-    );
   };
 
   const handleRestore = async () => {

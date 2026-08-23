@@ -15,6 +15,8 @@ let baseUrl: string;
 let botRows: Map<string, any>;
 let stateRows: Map<string, any>;
 let historyRows: Map<string, any>;
+/** Serializes fake-db transactions like the per-user advisory lock does. */
+let txLock: Promise<void> = Promise.resolve();
 
 async function startFreshApp(): Promise<void> {
   // The autopilot router keeps in-memory state at module scope; re-import a
@@ -29,6 +31,7 @@ async function startFreshApp(): Promise<void> {
   botRows = new Map<string, any>();
   stateRows = new Map<string, any>();
   historyRows = new Map<string, any>();
+  txLock = Promise.resolve();
   const rowsForRestart = historyRows;
   vi.doMock("@workspace/db", () => {
     // Rows are keyed per user, mirroring the real tables' conflict targets:
@@ -80,8 +83,64 @@ async function startFreshApp(): Promise<void> {
             }
             return Promise.resolve();
           },
+          onConflictDoNothing: () => {
+            const key =
+              table === autopilotBotsTable
+                ? `${values.userId}:${values.botId ?? values.id}`
+                : table === autopilotPnlHistoryTable
+                  ? `${values.userId}:${values.dayIso}`
+                  : values.userId;
+            const map = rowsFor(table);
+            if (!map.has(key)) map.set(key, { ...values });
+            return Promise.resolve();
+          },
         }),
       }),
+      update: (table: any) => ({
+        set: (values: any) => ({
+          where: (cond: any) => {
+            // Collect nested condition SQL objects (and(eq(...), eq(...)))
+            // in order: the first eq value is the userId, the second the
+            // botId.
+            const conds: any[] = [];
+            const walk = (node: any) => {
+              for (const chunk of node?.queryChunks ?? []) {
+                if (
+                  chunk &&
+                  typeof chunk === "object" &&
+                  Array.isArray(chunk.queryChunks)
+                ) {
+                  conds.push(chunk);
+                  walk(chunk);
+                }
+              }
+            };
+            walk(cond);
+            if (table === autopilotBotsTable && conds.length >= 2) {
+              const key = `${eqValue(conds[0])}:${eqValue(conds[1])}`;
+              const row = botRows.get(key);
+              if (row) botRows.set(key, { ...row, ...values });
+            }
+            return Promise.resolve();
+          },
+        }),
+      }),
+      execute: () => Promise.resolve(),
+      transaction: async (cb: any) => {
+        // Serialize transactions like the production per-user advisory lock,
+        // so cross-instance races are reproduced faithfully in-process.
+        const prev = txLock;
+        let release!: () => void;
+        txLock = new Promise<void>((r) => {
+          release = r;
+        });
+        await prev;
+        try {
+          return await cb(db);
+        } finally {
+          release();
+        }
+      },
     };
     return { db, autopilotBotsTable, autopilotStateTable, autopilotPnlHistoryTable };
   });
@@ -617,14 +676,115 @@ describe("Pro-only bot enforcement", () => {
     }
   });
 
-  it("blocks free users from controlling non-Pro bots", async () => {
+  it("lets a free user run one non-Pro bot but blocks a second concurrent bot", async () => {
     tiers.set("free-user", "free");
-    const { status } = await put(
+    // Seeded defaults boot with two free bots running; the first read trims
+    // the account to the free-tier limit of one.
+    const initial = await callAutopilot("GET", "/autopilot", "token-free-user");
+    expect(initial.status).toBe(200);
+    const runningFree = initial.body.bots.filter(
+      (b: any) => !b.proOnly && b.running,
+    );
+    expect(runningFree).toHaveLength(1);
+
+    // Stopping the remaining bot and starting a different one is free.
+    const stopped = await put(
+      "/autopilot/bots/scalp-oracle",
+      { running: false },
+      "token-free-user",
+    );
+    expect(stopped.status).toBe(200);
+    const started = await put(
       "/autopilot/bots/grid-matrix",
       { running: true },
       "token-free-user",
     );
-    expect(status).toBe(403);
+    expect(started.status).toBe(200);
+    expect((await botFor("token-free-user", "grid-matrix")).running).toBe(true);
+
+    // A second concurrent bot is rejected without changing state.
+    const second = await put(
+      "/autopilot/bots/breakout-engine",
+      { running: true },
+      "token-free-user",
+    );
+    expect(second.status).toBe(403);
+    expect(second.body.code).toBe("pro_subscription_required");
+    expect((await botFor("token-free-user", "breakout-engine")).running).toBe(
+      false,
+    );
+
+    // Reconfiguring the bot they already run stays free.
+    const reconfig = await put(
+      "/autopilot/bots/grid-matrix",
+      { capital: 5000, drawdown: 5 },
+      "token-free-user",
+    );
+    expect(reconfig.status).toBe(200);
+    expect((await botFor("token-free-user", "grid-matrix")).capital).toBe(5000);
+  });
+
+  it("rejects concurrent free-bot starts racing across separate API instances", async () => {
+    tiers.set("racer-user", "free");
+    // Open the free slot: read once (trims seeded defaults to one running),
+    // then stop that bot so zero are running and every row is persisted.
+    const first = await callAutopilot("GET", "/autopilot", "token-racer-user");
+    expect(first.status).toBe(200);
+    const stopped = await put(
+      "/autopilot/bots/scalp-oracle",
+      { running: false },
+      "token-racer-user",
+    );
+    expect(stopped.status).toBe(200);
+
+    // A second router instance simulates a second API process: fresh
+    // in-memory state, same persisted rows.
+    vi.resetModules();
+    const { createAutopilotRouter } = await import("./autopilot");
+    const otherApp = express();
+    otherApp.use(express.json());
+    otherApp.use(
+      "/api",
+      createAutopilotRouter(
+        verifier,
+        async (userId) => tiers.get(userId) ?? null,
+      ),
+    );
+    const otherServer = await new Promise<Server>((resolve) => {
+      const instance = otherApp.listen(0, "127.0.0.1", () => resolve(instance));
+    });
+
+    try {
+      const { address, port } = otherServer.address() as AddressInfo;
+      const otherBase = `http://${address}:${port}/api`;
+      const startOn = (base: string, botId: string) =>
+        fetch(`${base}/autopilot/bots/${botId}`, {
+          method: "PUT",
+          headers: {
+            "content-type": "application/json",
+            authorization: "Bearer token-racer-user",
+          },
+          body: JSON.stringify({ running: true }),
+        }).then(async (res) => res.status);
+
+      // Each instance sees zero running bots in its own memory; only the
+      // database-atomic claim may win.
+      const statuses = (
+        await Promise.all([
+          startOn(proBase, "grid-matrix"),
+          startOn(otherBase, "breakout-engine"),
+        ])
+      ).sort();
+      expect(statuses).toEqual([200, 403]);
+      const runningRows = [...botRows.values()].filter(
+        (row) => row.userId === "racer-user" && row.running === true,
+      );
+      expect(runningRows).toHaveLength(1);
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        otherServer.close((err) => (err ? reject(err) : resolve())),
+      );
+    }
   });
 
   it("denies access when the tier lookup fails (fails closed)", async () => {
@@ -657,41 +817,54 @@ describe("Pro-only bot enforcement", () => {
     expect(status).toBe(404);
   });
 
-  it("rejects free, Starter, and unresolved users from every AutoPilot route", async () => {
-    const routes = [
-      ["GET", "/autopilot"],
-      ["GET", "/autopilot/history"],
+  it("lets free and Starter users read state while paid controls stay gated", async () => {
+    for (const tier of ["free", "starter"] as const) {
+      const userId = `${tier}-mixed-routes`;
+      tiers.set(userId, tier);
+      const token = `token-${userId}`;
+
+      // Reads, free-bot control within the limit, and log clearing work.
+      for (const [method, path, body] of [
+        ["GET", "/autopilot", undefined],
+        ["GET", "/autopilot/history", undefined],
+        ["PUT", "/autopilot/bots/scalp-oracle", { running: false }],
+        ["DELETE", "/autopilot/logs", undefined],
+      ] as const) {
+        const result = await callAutopilot(method, path, token, body);
+        expect(result.status, `${tier} ${method} ${path}`).toBe(200);
+      }
+
+      // Engine-level controls and Pro-only bots stay paid-only.
+      for (const [method, path, body] of [
+        ["PUT", "/autopilot/master", { active: false }],
+        ["PUT", "/autopilot/asset", { asset: "Forex" }],
+        ["PUT", "/autopilot/bots/quantum-inst", { running: true }],
+      ] as const) {
+        const result = await callAutopilot(method, path, token, body);
+        expect(result.status, `${tier} ${method} ${path}`).toBe(403);
+        expect(result.body.code).toBe("pro_subscription_required");
+      }
+    }
+  });
+
+  it("rejects unresolved-tier users from every AutoPilot route", async () => {
+    const userId = "unresolved-all-routes";
+    for (const [method, path, body] of [
+      ["GET", "/autopilot", undefined],
+      ["GET", "/autopilot/history", undefined],
       ["PUT", "/autopilot/master", { active: false }],
       ["PUT", "/autopilot/asset", { asset: "Forex" }],
       ["PUT", "/autopilot/bots/grid-matrix", { running: true }],
-      ["DELETE", "/autopilot/logs"],
-    ] as const;
-
-    for (const [suffix, tier] of [
-      ["free", "free"],
-      ["starter", "starter"],
-      ["unresolved", null],
+      ["DELETE", "/autopilot/logs", undefined],
     ] as const) {
-      const userId = `${suffix}-all-routes`;
-      if (tier !== null) tiers.set(userId, tier);
-      for (const [method, path, body] of routes) {
-        const result = await callAutopilot(
-          method,
-          path,
-          `token-${userId}`,
-          body,
-        );
-        expect(
-          result.status,
-          `${tier ?? "unresolved"} ${method} ${path}`,
-        ).toBe(403);
-        expect(result.body.code).toBe("pro_subscription_required");
-      }
-      expect(stateRows.has(userId)).toBe(false);
-      expect(
-        [...botRows.values()].some((row) => row.userId === userId),
-      ).toBe(false);
+      const result = await callAutopilot(method, path, `token-${userId}`, body);
+      expect(result.status, `unresolved ${method} ${path}`).toBe(403);
+      expect(result.body.code).toBe("pro_subscription_required");
     }
+    expect(stateRows.has(userId)).toBe(false);
+    expect(
+      [...botRows.values()].some((row) => row.userId === userId),
+    ).toBe(false);
   });
 
   it("rejects anonymous callers from every AutoPilot route", async () => {
@@ -741,13 +914,19 @@ describe("Pro-only bot enforcement", () => {
     try {
       const { address, port } = restartedServer.address() as AddressInfo;
       const restartedBase = `http://${address}:${port}/api`;
+      // Free users may read state again — but the first touch in the new
+      // process must still revoke both persisted privileged settings.
       let res = await fetch(`${restartedBase}/autopilot`, {
         headers: { authorization: "Bearer token-restart-user" },
       });
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(200);
+      const freeBody = (await res.json()) as any;
+      expect(freeBody.selectedAsset).toBe("Forex");
+      expect(
+        freeBody.bots.find((bot: any) => bot.id === "quantum-inst").running,
+      ).toBe(false);
 
-      // Inspect through the paid path after the denied request. The new
-      // process must have revoked both persisted privileged settings.
+      // Re-checking through the paid path confirms the revocation persisted.
       tiers.set("restart-user", "pro");
       res = await fetch(`${restartedBase}/autopilot`, {
         headers: { authorization: "Bearer token-restart-user" },
@@ -786,17 +965,28 @@ describe("Pro-only bot enforcement", () => {
       const res = await fetch(`${proBase}/autopilot`, {
         headers: { authorization: "Bearer token-lapsing-user" },
       });
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as any;
+      expect(
+        body.bots.find((bot: any) => bot.id === "quantum-inst").running,
+      ).toBe(false);
     });
 
-    it("does not expose activity logs after a downgrade", async () => {
+    it("stops the Pro bot's activity after a downgrade", async () => {
       await startProBotAsPaidUser();
       tiers.set("lapsing-user", "free");
 
       const res = await fetch(`${proBase}/autopilot`, {
         headers: { authorization: "Bearer token-lapsing-user" },
       });
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as any;
+      expect(
+        body.bots.find((bot: any) => bot.id === "quantum-inst").running,
+      ).toBe(false);
+      expect(
+        body.logs.some((l: any) => /Elite subscription required/.test(l.text)),
+      ).toBe(true);
     });
 
     it("does not let the master toggle resurrect the Pro bot", async () => {
@@ -851,16 +1041,19 @@ describe("Pro-only bot enforcement", () => {
       ).toBe(false);
     });
 
-    it("rejects lapsed users after revoking their Pro bot", async () => {
+    it("lets lapsed users stop their revoked Pro bot", async () => {
       await startProBotAsPaidUser();
       tiers.set("lapsing-user", "free");
 
+      // Stopping is always allowed — a user must be able to switch off
+      // something they can no longer afford — and revocation has already
+      // stopped the bot by the time the request is handled.
       const { status } = await put(
         "/autopilot/bots/quantum-inst",
         { running: false },
         "token-lapsing-user",
       );
-      expect(status).toBe(403);
+      expect(status).toBe(200);
       expect(
         (await botFor("token-lapsing-user", "quantum-inst")).running,
       ).toBe(false);
@@ -884,14 +1077,17 @@ describe("Pro-only bot enforcement", () => {
 
     // Every endpoint that advances the simulation must revoke first,
     // otherwise a lapsed user keeps accruing Pro P&L by polling that one.
-    it("blocks history reads after a downgrade", async () => {
+    it("revokes before serving history after a downgrade", async () => {
       await startProBotAsPaidUser();
       tiers.set("lapsing-user", "free");
 
       const res = await fetch(`${proBase}/autopilot/history`, {
         headers: { authorization: "Bearer token-lapsing-user" },
       });
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(200);
+      expect(
+        (await botFor("token-lapsing-user", "quantum-inst")).running,
+      ).toBe(false);
     });
 
     it("stops the Pro bot when only logs are cleared", async () => {
@@ -902,7 +1098,7 @@ describe("Pro-only bot enforcement", () => {
         method: "DELETE",
         headers: { authorization: "Bearer token-lapsing-user" },
       });
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(200);
       expect(
         (await botFor("token-lapsing-user", "quantum-inst")).running,
       ).toBe(false);

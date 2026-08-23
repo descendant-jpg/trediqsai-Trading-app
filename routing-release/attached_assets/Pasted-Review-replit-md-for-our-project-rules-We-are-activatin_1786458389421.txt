@@ -1,0 +1,34 @@
+Review replit.md for our project rules. We are activating the dead links on the Profile screen by building three ultra-premium, institutional-grade settings screens.
+
+Create the screens using Expo Router and wire them up to the Profile menu.
+
+### 1. Navigation Updates (`app/(tabs)/profile.tsx`)
+- Ensure the `Chart Settings`, `App Guide`, and `Help Center` list items use Expo Router's `<Link href="...">` or `router.push()` to navigate to:
+  - `/profile/chart-settings`
+  - `/profile/app-guide`
+  - `/profile/help-center`
+
+### 2. Build Chart Settings (`app/profile/chart-settings.tsx`)
+- **Theme:** Dark `#0A0B0E` background with a `<Stack.Screen options={{ title: 'Chart Settings' }} />`.
+- **Feature UI:** Build a scrollable list of settings using dark cards (`#16181D`) and React Native `Switch` components (tinted `#00F0FF` when active).
+- **Include these toggles:** 
+  - Chart Type (Candles vs. Heikin Ashi)
+  - Color Theme (Institutional Cyan/Red vs. Classic Green/Red)
+  - Default Indicators (Show Volume, Show RSI)
+  - Social Sharing Watermark
+
+### 3. Build App Guide / Academy (`app/profile/app-guide.tsx`)
+- **Theme:** Dark `#0A0B0E`. Title: 'TradiQs Academy'.
+- **Feature UI:** 
+  - **Header:** A progress card showing "Bootcamp Completion: 0%" with a gray/cyan progress bar.
+  - **Video Placeholders:** 2-3 sleek image placeholders representing video lessons ("How to Trade AI Confluence", "Risk Management 101").
+  - **Glossary Section:** A styled list of 3 dropdown/accordion items explaining concepts: "Order Block", "Liquidity Sweep", "Fair Value Gap (FVG)".
+
+### 4. Build Help Center (`app/profile/help-center.tsx`)
+- **Theme:** Dark `#0A0B0E`. Title: 'VIP Support'.
+- **Feature UI:**
+  - **System Status:** A card at the top displaying server health. 3 rows with small green indicator dots: "AI Signal Engine: Operational", "Trade Execution: Optimal", "Database: Connected".
+  - **VIP Concierge:** A massive `#00F0FF` button: "Open Support Ticket". Add subtext: "Elite tier members receive guaranteed 1-hour response times."
+  - **FAQ Accordions:** 3 expandable FAQs ("My simulated PnL is wrong", "How do I upgrade to Elite?", "What timezone are signals in?").
+
+Do not explain your steps. Create the 3 new route files, write the complete React Native UI code using Tailwind, and ensure the main profile screen links to them flawlessly.

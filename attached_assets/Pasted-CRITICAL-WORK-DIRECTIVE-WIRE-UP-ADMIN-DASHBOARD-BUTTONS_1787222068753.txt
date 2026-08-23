@@ -1,0 +1,33 @@
+CRITICAL WORK DIRECTIVE: WIRE UP ADMIN DASHBOARD BUTTONS AND SCAFFOLD SCREENS.
+
+To conserve context window and AI credits, DO NOT read previous chat history. Read `replit.md` to understand the current state.
+
+The Quick Actions and Recent Posts buttons in `app/(admin)/index.tsx` are currently non-functional (no `onPress` handlers or destination routes). We need to wire them up with premium haptics and scaffold their destination screens so the app does not crash when navigating.
+
+### 1. Scaffold the Destination Screens
+Create the following new files inside `app/(admin)/`. Each file should export a basic React component wrapped in a `SafeAreaView` with a dark background (`bg-gray-950`). Include a custom header with a working Back button (`router.back()`), matching the style of the main admin dashboard.
+- `write-post.tsx` (Title: "Write Market Insight")
+- `waitlist.tsx` (Title: "Waitlist Management")
+- `help-desk.tsx` (Title: "Support Tickets")
+- `broadcast.tsx` (Title: "Broadcast Signal")
+- `edit-post/[id].tsx` (Title: "Edit Post")
+
+### 2. Wire Up the Buttons in `index.tsx`
+- Open `app/(admin)/index.tsx`.
+- Import `useRouter` from `expo-router` and `* as Haptics` from `expo-haptics`.
+- Add `onPress` handlers to the 4 Quick Action buttons:
+  - Write New Post -> `router.push('/(admin)/write-post')`
+  - View Waitlist -> `router.push('/(admin)/waitlist')`
+  - Check Help Desk -> `router.push('/(admin)/help-desk')`
+  - Broadcast Signal -> `router.push('/(admin)/broadcast')`
+- Add an `onPress` handler to the Recent Posts "Edit" buttons:
+  - Edit -> `router.push('/(admin)/edit-post/placeholder-id')` (Pass the actual post ID if it is mapped from data).
+- Ensure EVERY button press triggers `Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)` immediately before the route push.
+
+### 3. Stage, Commit, and Secure Push
+- Run a typecheck to ensure all new routes and imports are valid.
+- Stage `index.tsx` and the newly created screen files.
+- Commit with the message: `feat(admin): wire up dashboard actions, add haptics, and scaffold destination screens`
+- Push securely to the active application repository using the credential helper without logging tokens.
+
+EXECUTION REQUIREMENT: Confirm the 5 new files were created, confirm haptics were added to the `onPress` handlers, and confirm the Git push was successful.

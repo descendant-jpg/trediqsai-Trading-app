@@ -1,0 +1,31 @@
+CRITICAL WORK DIRECTIVE: RESUME AND APPLY SIGNAL DESK MULTI-MARKET REFACTOR.
+
+Review replit.md for our project rules. You have already located the Signal Desk implementation, subscription provider, and BrokerSync storage conventions. Proceed directly to implementing the changes without re-inspecting the workspace:
+
+### 1. Multi-Market Signal Data Model
+- Update the signal data model/types in the Signal Desk to explicitly support all 3 asset classes: `crypto`, `forex`, and `stock`.
+- Ensure mock/live signals include standard multi-market fields:
+  - Asset name & pair/ticker (e.g., `BTC/USDT`, `EUR/USD`, `AAPL`)
+  - Direction (`BUY`/`LONG` vs `SELL`/`SHORT`)
+  - `entryZone`, `takeProfits` (array of targets), and `stopLoss`
+  - Market-specific metadata (e.g., Pips for Forex, Leverage for Crypto).
+
+### 2. Tiered Gating & Display on Signal Cards
+- Connect the signal card UI directly to the existing subscription tier (`FREE` / `PRO` / `ELITE`):
+  - **FREE:** Obscure/blur the numerical values for `entryZone`, `takeProfits`, and `stopLoss`. Display a lock badge and trigger the existing Pro paywall modal on tap.
+  - **PRO:** Display full numerical parameters in plain text with a quick "Copy Parameters" action.
+  - **ELITE:** Display full parameters AND render the primary "Execute Trade via BrokerSync" action button.
+
+### 3. Safe Execution Check & Storage Integration
+- When an ELITE user taps "Execute Trade":
+  - Read from local storage (`expo-secure-store` on native, `AsyncStorage` on web) to verify if an active broker connection exists for that signal's asset class.
+  - If NO broker is linked: Display a prompt directing them to the BrokerSync / Account Tracker screen.
+  - If a broker is linked: Simulate the execution handshake with a brief loading state and confirm with a success status badge/toast.
+
+### 4. Push Notification Utility
+- Add a web-safe `registerForPushNotificationsAsync` helper function wrapped in platform checks (`Platform.OS !== 'web'`) so it does not throw on web previews.
+
+### 5. Validation
+- Run TypeScript typecheck across the mobile workspace to confirm all signal types, card components, and storage checks compile with zero errors.
+
+EXECUTION REQUIREMENT: Apply the edits directly to the identified Signal Desk files and run the build validation.

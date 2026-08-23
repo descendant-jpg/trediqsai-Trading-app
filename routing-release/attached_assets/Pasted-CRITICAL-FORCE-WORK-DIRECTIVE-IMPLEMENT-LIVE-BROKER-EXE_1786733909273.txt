@@ -1,0 +1,26 @@
+CRITICAL FORCE WORK DIRECTIVE: IMPLEMENT LIVE BROKER EXECUTION BRIDGE (EXPRESS + EXPO).
+
+Review replit.md for our project rules. We are replacing the mocked execution flow with live integration. The frontend must pass the SecureStore credentials to the backend, and the backend must execute the trades via CCXT, MetaAPI, and Alpaca.
+
+### 1. Install Backend Dependencies
+- In the backend package workspace, execute: `npm install ccxt metaapi.cloud-sdk @alpacahq/alpaca-trade-api finnhub`.
+
+### 2. Scaffold Live Execution Services (Express)
+- Create a `services/broker` directory in the backend.
+- **cryptoService.ts:** Import `ccxt`. Write `executeCryptoTrade(exchangeId, apiKey, secret, symbol, side, amount)`. It must instantiate `new ccxt[exchangeId]({ apiKey, secret })` and execute `createMarketOrder(symbol, side, amount)`.
+- **forexService.ts:** Import `MetaApi` from `metaapi.cloud-sdk`. Write `executeForexTrade(metaApiToken, accountId, symbol, side, volume)`. It must instantiate `new MetaApi(metaApiToken)` and submit a market order to the specified account.
+- **stockService.ts:** Import `Alpaca` from `@alpacahq/alpaca-trade-api`. Write `executeStockTrade(keyId, secret, symbol, side, qty)`. It must initialize the Alpaca Configuration with the keys and execute the order.
+
+### 3. Create the Execution Endpoint (Express)
+- Create a POST route at `/api/execute-trade`.
+- The route must accept a JSON body containing: `{ assetClass, brokerCredentials, tradeDetails }`.
+- Create a switch statement on `assetClass` ('crypto', 'forex', 'stock') to route the payload to the correct service created in Step 2.
+- Return the live order confirmation data, or a strict HTTP 400/500 error if the external broker API rejects the credentials.
+
+### 4. Wire the Frontend "Execute Trade" Button (Expo)
+- Open the `SignalsScreen` where the ELITE "Execute Trade" button is located.
+- On press, retrieve the specific broker credentials for that signal's asset class from `expo-secure-store`.
+- Send a `POST` request to the new `/api/execute-trade` backend endpoint, passing the signal parameters and the retrieved credentials in the payload.
+- Implement a loading state and surface the exact success/error message returned by the Express server via a UI toast or alert.
+
+EXECUTION REQUIREMENT: Do not mock the backend services. Write the actual initialization code for the SDKs. Ensure the frontend successfully reads from SecureStore and passes the payload to the backend. Typecheck both workspaces.

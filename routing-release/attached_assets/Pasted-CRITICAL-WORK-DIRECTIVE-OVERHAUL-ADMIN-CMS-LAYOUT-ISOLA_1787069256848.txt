@@ -1,0 +1,34 @@
+CRITICAL WORK DIRECTIVE: OVERHAUL ADMIN CMS LAYOUT, ISOLATE FROM PUBLIC NAVBAR/TICKER, AND FIX ALL FAILED ADMIN API ENDPOINTS.
+
+Step 0: Review the project rules in `replit.md` to ensure strict adherence to our Next.js and Supabase server architecture. Do not proceed without aligning with these rules.
+
+### 1. Isolate Admin Layout from Public Header & Ticker
+- Inspect `app/layout.tsx` (or the top-level layout component).
+- The public `<Navbar />` (containing Features, Performance, Pricing, Blog, "Get the App") and the scrolling `<MarketTicker />` are currently leaking into all `/admin/*` pages.
+- Isolate routes:
+  - Create a route group `(marketing)` for public pages with the public Navbar and Ticker.
+  - Create a dedicated layout for `app/admin/layout.tsx` with NO public Navbar and NO Ticker.
+- Design a clean, institutional Admin Header bar:
+  - Far Left: `TradiQs AI` logo + sleek cyan badge `[ CMS COMMAND CENTER ]`.
+  - Middle: Dynamic breadcrumbs (e.g., `Admin / Market Insights`).
+  - Far Right: "View Live Site ↗" button (opens `/` in a new tab) and Admin profile indicator (`nextgensynthex@gmail.com`).
+
+### 2. Fix "Publish Insight" Failure (`/admin/blog`)
+- Inspect `app/api/admin/blog/route.ts` and the "New Market Insight" modal.
+- Ensure the POST payload satisfies all required database schema fields:
+  - Auto-generate a clean slug if the slug input is blank (`title.toLowerCase().replace(/[^a-z0-9]+/g, '-')`).
+  - Provide fallback defaults for `read_time` (e.g., "4 min read"), `status` ("published" | "draft"), `category`, `tag`, and `author_name` ("TradiQs AI Quant Desk").
+  - Use the Supabase `service_role` admin client to bypass RLS for authenticated admin writes.
+  - Ensure the modal gives clear error feedback and closes on success, refetching the insights table immediately.
+
+### 3. Fix "Failed to fetch" Across All Admin Modules
+Audit and fix the API endpoints and Supabase queries for the following admin sub-pages:
+- **Waitlist (`/admin/waitlist`):** Fix `/api/admin/waitlist/route.ts` to query the waitlist table cleanly, handling empty tables without throwing 500 errors. Ensure the "Export CSV" button generates a valid CSV file.
+- **Help Desk (`/admin/inbox`):** Fix `/api/admin/inbox/route.ts` to fetch contact/support submissions. If no tickets exist, return `[]` (empty state UI: "No pending support tickets") rather than "Failed to fetch messages."
+- **Comments Moderation (`/admin/comments`):** Fix `/api/admin/comments/route.ts` to fetch comments on insights. Return an empty array with a sleek empty-state card if none exist.
+- **Categories & Tags (`/admin/categories`):** Ensure categories are functional, selectable, and support creating/deleting taxonomy tags.
+
+### 4. Admin Authentication & Session Verification
+- Ensure all `/api/admin/*` routes properly validate the HTTP-only admin session cookie before executing Supabase queries.
+
+EXECUTION REQUIREMENT: Fix the layout isolation completely, ensure all admin sub-pages fetch and render cleanly without errors, and verify the post creation flow works end-to-end. Provide the list of all modified files.

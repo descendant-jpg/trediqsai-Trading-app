@@ -1,0 +1,29 @@
+Review replit.md for our project rules, then restore the "Change Password" and "Delete Account" functionalities on the Profile screen by adding them to the Security section and creating their respective modals.
+
+### 1. Update `ProfileScreen.tsx` (Security Section)
+Locate the `SECURITY` group in `ProfileScreen.tsx` and add two new row items below the existing ones:
+- **Item 1:** `Change Password` (Left icon: Lock/Key. Right icon: Chevron `>`). Tapping this opens `ChangePasswordModal.tsx`.
+- **Item 2:** `Delete Account` (Left icon: Trash/Warning. Text color: Crimson Red #FF5252. Right icon: Chevron `>`). Tapping this opens `DeleteAccountModal.tsx`.
+
+### 2. Create `ChangePasswordModal.tsx`
+Build a bottom-sheet style modal or a centered modal with our premium dark aesthetic (#16181D background, #22252A borders).
+- **Header:** "Change Password" with a brief subtext: "Secure your institutional account."
+- **Input Fields (SecureTextEntry enabled):**
+  1. `Current Password` (Placeholder: "Enter current password")
+  2. `New Password` (Placeholder: "Enter new password")
+  3. `Verify New Password` (Placeholder: "Re-enter new password")
+- **Validation & State:** Ensure the UI tracks if the new passwords match. 
+- **Action Button:** Full-width Electric Cyan (#00F0FF) button labeled "Update Password".
+
+### 3. Create `DeleteAccountModal.tsx`
+Build a destructive-action modal designed to prevent accidental deletions.
+- **Header:** Crimson Red warning icon (⚠️) and Title: "Delete Account".
+- **Warning Text:** "This action is permanent and cannot be undone. All your simulated equity, trade history, and partner network data will be wiped."
+- **Confirmation Input:** 
+  - A text input field with the placeholder "Type DELETE to confirm".
+  - Add state to track the exact text entered by the user.
+- **Action Button:** 
+  - Full-width button labeled "Permanently Delete Account".
+  - **Logic:** This button MUST be disabled (opacity 0.5) UNTIL the user types exactly the word "DELETE" (case-sensitive) into the input field. Once typed, the button turns solid Crimson Red (#FF5252) and becomes clickable.
+
+Ensure both modals include a simple 'X' or "Cancel" button to dismiss them, and that all inputs use the dark terminal styling (dark gray backgrounds, white text, cyan/red focus borders).

@@ -1,0 +1,37 @@
+CRITICAL FORCE WORK DIRECTIVE: COMPLETE OVERHAUL OF TRADIQS ACADEMY & EDUCATIONAL HUB.
+
+Review replit.md for our project rules. The current Academy screen (`app/academy.tsx` or related screens) is too basic and lacks comprehensive depth. We need an institutional-grade educational experience with in-depth multi-track curricula, an exhaustive searchable dictionary, interactive lesson viewers, and practical calculation tools.
+
+### 1. Build In-Depth Course Modules & Multi-Track Curriculum
+Replace placeholder cards with a structured curriculum consisting of 5 comprehensive tracks:
+1. Market Fundamentals & Mechanics (Pips, Spreads, Order Types, Trading Sessions)
+2. Smart Money Concepts (SMC) & Institutional Flow (Order Blocks, FVGs, Liquidity Sweeps, CHoCH, BOS, Premium/Discount Zones)
+3. Advanced Price Action & Market Cycles (Wyckoff Schematics, Inducement, Multi-timeframe Confluence)
+4. Risk Management & Psychology (The 1% Risk Rule, R:R Optimization, Managing Drawdown & Cognitive Biases)
+5. Macro Fundamentals (Central Bank Policies, CPI, Non-Farm Payrolls, Geopolitical Drivers)
+
+### 2. Implement Interactive Lesson Viewer Modal
+- Tapping any lesson module must open a rich, full-screen reader modal (`LessonViewerModal`) that includes:
+  - **Overview & Institutional Theory**
+  - **Step-by-Step Execution Rules** (Entry trigger, SL placement, TP target zones)
+  - **Trade Checklist & Invalidation Conditions**
+  - **Pro Tip / Key Takeaway Card**
+  - **"Mark as Completed" Button**: Saves completed lesson IDs to persistence storage/profile, dynamically updating the Bootcamp Progress bar (e.g., 4/15 completed = 27%).
+
+### 3. Exhaustive, Categorized Trading Dictionary
+Expand the Trading Dictionary into a rich glossary of 20+ terms categorized into: All, SMC, Structure, Indicators, Risk.
+- Include terms such as: Order Block (OB), Fair Value Gap (FVG), Change of Character (CHoCH), Break of Structure (BOS), Liquidity Pool, Buy-Side / Sell-Side Liquidity, Mitigation Block, Inducement, Premium vs Discount, Average True Range (ATR), Exponential Moving Average (EMA), Relative Strength Index (RSI), Risk-Reward Ratio (RRR), Drawdown, Margin Call.
+- Include a fast real-time search bar that filters definitions instantly.
+- Each accordion item must show: Definition, Institutional Context, and "How to Identify on Charts".
+
+### 4. Trader's Toolkit Cards
+At the bottom of the Academy screen, render actionable utility cards:
+- **Lot Size Calculator**: Modal for calculating exact lot sizes based on Account Balance, Risk %, and Stop Loss in pips.
+- **Risk/Reward Simulator**: Calculates expected returns based on Win Rate % and R:R ratios.
+
+### 5. Visual Hierarchy & UI Polish
+- Enhance the header with sleek badge styling, cyan neon accents, and clean typography.
+- Fix any clipping headers or truncated text.
+- Ensure smooth scrolling, proper safe area insets on mobile, and responsive layout.
+
+EXECUTION REQUIREMENT: Implement the complete in-depth curriculum data, interactive lesson reader with progress tracking, categorized 20+ term dictionary with instant search, and interactive tools. Verify compilation with typecheck.

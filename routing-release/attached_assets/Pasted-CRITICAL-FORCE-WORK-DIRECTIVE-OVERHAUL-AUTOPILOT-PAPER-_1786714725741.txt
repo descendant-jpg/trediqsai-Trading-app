@@ -1,0 +1,34 @@
+CRITICAL FORCE WORK DIRECTIVE: OVERHAUL AUTOPILOT PAPER-TRADING BOTS (API RESILIENCE, SIMULATION ENGINE & UI).
+
+Review replit.md for our project rules. The AutoPilot Bots screen (`app/autopilot.tsx` or related screens) is currently failing with "Unable to load bots. Tap to retry." We must fix the data connection, build an institutional bot dashboard, and implement a fully functional paper-trading simulation engine.
+
+### 1. Fix API & Empty State Handling (`GET /api/bots`)
+- Audit the Express route `GET /api/bots`.
+- Ensure it uses the authenticated user's ID to query `public.trading_bots` in Supabase.
+- If the user has 0 bots, return `200 OK` with `[]` instead of throwing an error or 500 status.
+- Ensure the frontend fetch uses the native-configured API base URL with auth headers.
+- When `bots.length === 0`, display a premium empty state: "No active bots deployed. Put institutional algorithms to work with virtual capital." + "Deploy First Bot" button.
+
+### 2. Header & Safe-Area Polish
+- Fix the top header in `autopilot.tsx`. Ensure the back button (`arrow-back`) cleanly aligns with safe-area insets without clipping under the status bar or notch.
+
+### 3. Comprehensive Deploy Bot Modal (`DeployBotModal`)
+- When the "+ DEPLOY" button is tapped, open a modal with:
+  - **Asset Selector:** BTC/USD, ETH/USD, XAU/USD, EUR/USD, SOL/USD.
+  - **Strategy Selector:** Grid Trading, Smart DCA, SMC Breakout.
+  - **Virtual Capital Input:** Preset chips ($1,000, $5,000, $10,000) + custom text input.
+  - **Risk Targets:** Take Profit % (default 5%) and Stop Loss % (default 3%).
+- On submit: POST to `/api/bots`, insert the record into Supabase, close the modal, and refresh the dashboard instantly.
+
+### 4. Interactive Bot Cards & Controls
+- Render bot cards with:
+  - Asset Pair & Strategy badge.
+  - Allocated Capital, Total PnL (green for positive, red for negative), and Win Rate %.
+  - **Play/Pause Switch:** Toggles active/paused state immediately via `PATCH /api/bots/:id/status`.
+  - **Delete/Terminate Action:** Confirmation prompt to remove the bot from Supabase.
+  - **"View Trades" Button:** Opens a modal showing simulated execution logs (Order Type, Price, PnL, Timestamp).
+
+### 5. Automated Simulation PnL Updates
+- Implement realistic simulated PnL drift: active running bots periodically update unrealized profits/losses based on strategy rules so the user sees live performance updates.
+
+EXECUTION REQUIREMENT: Fix the API fetch error, render the rich empty state, build the complete Deploy Wizard with strategy options, wire interactive bot controls (play/pause/delete), and verify clean compilation.
