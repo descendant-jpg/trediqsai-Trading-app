@@ -1,14 +1,16 @@
 import { Link, Stack } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 
 export default function NotFoundScreen() {
   const colors = useColors();
+  const insets = useSafeAreaInsets();
 
   return (
     <>
       <Stack.Screen options={{ title: 'Oops!' }} />
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
         <Text style={[styles.title, { color: colors.foreground }]}>
           This screen doesn&apos;t exist.
         </Text>

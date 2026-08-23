@@ -1,14 +1,16 @@
 import React from 'react';
 import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { ErrorBoundaryProps, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function AppError({ error, retry }: ErrorBoundaryProps) {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const message = error instanceof Error ? error.message : String(error);
   const stack = error instanceof Error ? error.stack : undefined;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       <Text style={styles.eyebrow}>TRADIQS AI / RUNTIME ERROR</Text>
       <Text style={styles.title}>Something went wrong</Text>
       <Text style={styles.message}>{message}</Text>

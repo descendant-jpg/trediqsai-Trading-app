@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Alert, Platform, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Line, Polyline } from 'react-native-svg';
 import colors from '@/constants/colors';
 
@@ -22,6 +23,7 @@ const EDGES = {
 
 export default function QuotesScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [category, setCategory] = useState<Category>('Market Edge');
   const [index, setIndex] = useState(0);
   const quote = EDGES[category][index % EDGES[category].length];
@@ -36,7 +38,7 @@ export default function QuotesScreen() {
     ? window.alert('Image saving is not available in preview yet. Use Share to save this Oracle Card.')
     : Alert.alert('Save Image', 'Image saving is not available yet. Use Share to save this Oracle Card.');
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}><View><Text style={styles.kicker}>TRADIQS AI</Text><Text style={styles.title}>Daily Oracle</Text></View><TouchableOpacity onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Close"><Feather name="x" size={23} color={c.foreground} /></TouchableOpacity></View>
       <View style={styles.tabs}>{(['Market Edge', 'Psychology'] as Category[]).map((item) => <TouchableOpacity key={item} onPress={() => { setCategory(item); setIndex(0); }} style={[styles.tab, category === item && styles.tabActive]} accessibilityRole="tab" accessibilityState={{ selected: category === item }}><Text style={[styles.tabText, category === item && styles.tabTextActive]}>{item}</Text></TouchableOpacity>)}</View>
       <View style={styles.oracleCard} collapsable={false}>

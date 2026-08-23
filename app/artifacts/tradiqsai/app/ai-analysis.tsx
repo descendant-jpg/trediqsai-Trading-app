@@ -12,6 +12,7 @@ import {
 import { Feather } from '@expo/vector-icons';
 import { EncodingType, getInfoAsync, readAsStringAsync } from 'expo-file-system/legacy';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { customFetch, ApiError } from '@workspace/api-client-react';
 import { useAuth } from '@/context/AuthContext';
 import { useSubscription } from '@/lib/revenuecat';
@@ -49,6 +50,7 @@ async function readChartBase64(imageUri: string): Promise<string> {
 
 export default function AIAnalysisScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { imageUri, mode = 'analysis', mediaType = 'image/jpeg' } = useLocalSearchParams<{ imageUri?: string; mode?: 'analysis' | 'signal'; mediaType?: string }>();
   const { session, loading: authLoading, signOut } = useAuth();
   const { isSubscribed, isAdmin } = useSubscription();
@@ -158,7 +160,7 @@ export default function AIAnalysisScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       <Stack.Screen options={{ title: 'AI Chart Analysis', headerShown: false }} />
       {loading ? (
         <View style={styles.loading}>

@@ -1,12 +1,12 @@
 {
   "expo": {
     "name": "TradiQs AI",
-    "slug": "tradiqsai",
+    "slug": "tradiqs-ai",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "tradiqsai",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/images/splash-logo.png",
@@ -14,8 +14,9 @@
       "backgroundColor": "#000000"
     },
     "ios": {
-      "supportsTablet": false,
+      "supportsTablet": true,
       "bundleIdentifier": "com.tradiqsai.app",
+      "buildNumber": "1",
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "NSFaceIDUsageDescription": "TradiQs AI requires FaceID to secure your trading account and simulated capital."
@@ -23,6 +24,7 @@
     },
     "android": {
       "package": "com.tradiqsai.app",
+      "versionCode": 1,
       "googleServicesFile": "./google-services.json",
       "permissions": ["USE_BIOMETRIC", "USE_FINGERPRINT"],
       "adaptiveIcon": {
@@ -43,13 +45,13 @@
       "expo-font",
       "expo-web-browser",
       "expo-sqlite",
-       [
-         "expo-local-authentication",
-         {
-           "faceIDPermission": "TradiQs AI requires FaceID to secure your trading account and simulated capital."
-         }
-       ],
-       "expo-secure-store",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "TradiQs AI requires FaceID to secure your trading account and simulated capital."
+        }
+      ],
+      "expo-secure-store",
       "expo-apple-authentication",
       [
         "expo-notifications",
@@ -73,7 +75,7 @@
     },
     "extra": {
       "eas": {
-        "projectId": "33c46401-6492-4fad-8ff9-2f6159455950"
+        "projectId": "602d4abf-022b-4fd4-a732-09ccd78f323b"
       }
     }
   }
