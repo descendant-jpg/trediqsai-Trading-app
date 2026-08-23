@@ -65,9 +65,14 @@ export default function SessionDetailsScreen() {
 
   useEffect(() => {
     let active = true;
+    let latestRequest = 0;
+    const inFlight = new Set<AbortController>();
     const pairs = resolvePairs(sessionName);
 
     const load = async (isInitial: boolean) => {
+      const requestId = ++latestRequest;
+      const controller = new AbortController();
+      inFlight.add(controller);
       if (isInitial) {
         try { setLoading(true); } catch { /* screen unmounted */ }
       }
@@ -75,7 +80,7 @@ export default function SessionDetailsScreen() {
       try {
         const symbols = pairs.join(',');
         const url = `https://api.twelvedata.com/quote?symbol=${symbols}&apikey=${process.env.EXPO_PUBLIC_STOCK_API_KEY || ''}`;
-        const response = await fetch(url);
+        const response = await fetch(url, { signal: controller.signal });
         const rawText = await response.text();
 
         if (!url.includes('apikey=') || url.endsWith('apikey=')) {
@@ -118,15 +123,17 @@ export default function SessionDetailsScreen() {
         if (resolved.length === 0) {
           throw new Error('Twelve Data returned no usable quotes.');
         }
-        if (active) {
+        if (active && requestId === latestRequest) {
           setQuotes(resolved);
         }
       } catch (err) {
-        if (active) {
+        if (err instanceof Error && err.name === 'AbortError') return;
+        if (active && requestId === latestRequest) {
           setError(err instanceof Error ? err.message : 'Failed to load live pairs.');
         }
       } finally {
-        if (active) {
+        inFlight.delete(controller);
+        if (active && requestId === latestRequest) {
           setLoading(false);
         }
       }
@@ -137,6 +144,10 @@ export default function SessionDetailsScreen() {
     return () => {
       active = false;
       clearInterval(timer);
+      for (const controller of inFlight) {
+        controller.abort();
+      }
+      inFlight.clear();
     };
   }, [sessionName, reloadKey]);
 

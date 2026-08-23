@@ -194,6 +194,7 @@ function RootLayoutNav() {
       <Stack.Screen name="trade-journal" options={{ headerShown: false, presentation: 'modal' }} />
       <Stack.Screen name="partner-program" options={{ headerShown: false }} />
       <Stack.Screen name="refer-and-earn" options={{ headerShown: false }} />
+      <Stack.Screen name="session-details" options={{ headerShown: false }} />
     </Stack>
   );
 }
