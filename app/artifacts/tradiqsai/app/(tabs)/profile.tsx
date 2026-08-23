@@ -164,10 +164,10 @@ function ProfileSkeleton() {
 }
 
 const EXPERIENCE_OPTIONS = [
-  { level: "Beginner", subtitle: "0 – 1 Years • Learning basics & risk management" },
-  { level: "Intermediate", subtitle: "1 – 3 Years • Consistent execution & technical setups" },
-  { level: "Advanced", subtitle: "3 – 5 Years • Multi-timeframe confluence & prop trading" },
-  { level: "Professional", subtitle: "5+ Years • Full-time / Institutional volume" },
+  { level: "Beginner", subtitle: "0–1 Yrs • Learning basics & risk management" },
+  { level: "Intermediate", subtitle: "1–3 Yrs • Consistent execution & technical setups" },
+  { level: "Advanced", subtitle: "3–5 Yrs • Multi-timeframe confluence & prop trading" },
+  { level: "Professional", subtitle: "5+ Yrs • Full-time / Institutional volume" },
 ] as const;
 
 /** Bottom-sheet style modal shell shared by all profile modals. */
