@@ -240,7 +240,7 @@ const FEATURED_MARKETS = [
   ['EUR/USD', 'SELL', '1.0850'],
   ['NVDA', 'BUY', '128.40'],
 ] as const;
-const STOCK_SYMBOLS = ['AAPL', 'MSFT', 'NVDA', 'AMZN', 'GOOGL', 'META', 'TSLA', 'SPY', 'QQQ'] as const;
+const STOCK_SYMBOLS = ['AAPL', 'MSFT', 'NVDA', 'AMZN', 'GOOGL', 'META', 'TSLA', 'QQQ'] as const;
 type Ticker = { symbol: string; price: number; changePercent: number };
 type TwelveDataQuote = {
   symbol?: string;
@@ -324,7 +324,7 @@ export default function HomeScreen() {
 
     const loadTickers = async () => {
       try {
-        const url = `https://api.twelvedata.com/quote?symbol=AAPL,MSFT,NVDA,AMZN,GOOGL,META,TSLA,SPY,QQQ&apikey=${process.env.EXPO_PUBLIC_STOCK_API_KEY || ''}`;
+        const url = `https://api.twelvedata.com/quote?symbol=AAPL,MSFT,NVDA,AMZN,GOOGL,META,TSLA,QQQ&apikey=${process.env.EXPO_PUBLIC_STOCK_API_KEY || ''}`;
         const response = await fetch(url);
         const rawText = await response.text();
 
