@@ -222,7 +222,6 @@ export default function ProfileScreen() {
   const {
     isSubscribed,
     isAdmin,
-    isAdminLoading,
     activeAccessTier,
     hasActiveEntitlement,
     refreshProfileEntitlement,
@@ -275,6 +274,7 @@ export default function ProfileScreen() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
   const isGuest = session?.user?.is_anonymous === true;
+  const isElite = !isGuest && hasActiveEntitlement && activeAccessTier === "elite";
   const payoutAccessAllowed = canAccessPayoutEvaluation(session);
   const userMetadata = session?.user?.user_metadata ?? {};
   const metadataName =
@@ -545,6 +545,22 @@ export default function ProfileScreen() {
 
   const openLink = (url: string, fallbackLabel: string) => {
     Linking.openURL(url).catch(() => showAlert(fallbackLabel, url));
+  };
+
+  const handleEliteChannelPress = () => {
+    if (isElite) {
+      openLink(TELEGRAM_CHANNEL_URL, "Elite Channel");
+      return;
+    }
+
+    Alert.alert(
+      "Elite Access Only",
+      "You must have an active Elite subscription to join the private channel. Upgrade now to unlock.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Upgrade", onPress: () => router.push("/shop") },
+      ],
+    );
   };
 
   const openPartner = (topic: string) => {
@@ -1041,21 +1057,16 @@ export default function ProfileScreen() {
             onPress={() => setActiveModal("terms")}
           />
         </SettingsGroup>
-        {!isGuest &&
-          !isAdminLoading &&
-          hasActiveEntitlement &&
-          activeAccessTier === "elite" && (
-          <TouchableOpacity
-            style={styles.community}
-            onPress={() => openLink(TELEGRAM_CHANNEL_URL, "Elite Channel")}
-            testID="profile-elite-channel"
-          >
-            <Feather name="send" size={17} color={c.primaryForeground} />
-            <Text style={styles.communityText}>
-              Join the TradiQs Elite Channel
-            </Text>
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          style={styles.community}
+          onPress={handleEliteChannelPress}
+          testID="profile-elite-channel"
+        >
+          <Text style={styles.communityText}>
+            Join the TradiQs Elite Channel
+          </Text>
+          <Feather name={isElite ? "send" : "lock"} size={17} color={c.primaryForeground} />
+        </TouchableOpacity>
         <TouchableOpacity
           style={styles.signOutButton}
           onPress={handleSignOut}
@@ -1722,10 +1733,11 @@ const styles = StyleSheet.create({
   community: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "space-between",
     gap: 9,
     backgroundColor: c.primary,
     borderRadius: 10,
+    paddingHorizontal: 16,
     paddingVertical: 15,
     marginTop: 2,
   },
