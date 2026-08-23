@@ -15,6 +15,7 @@ import { makeRedirectUri } from 'expo-auth-session';
 import * as QueryParams from 'expo-auth-session/build/QueryParams';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
+import { useRouter } from 'expo-router';
 import { extractReferralCode } from '@/lib/referralLink';
 import { supabase } from '@/utils/supabase';
 import { setPendingSignupUsername } from '@/context/AuthContext';
@@ -68,6 +69,7 @@ export default function AuthScreen({ initialMode = 'signin' }: { initialMode?: '
   const [password, setPassword] = useState('');
   const [referralCode, setReferralCode] = useState('');
   const [loading, setLoading] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     setIsLoginMode(initialMode !== 'signup');
@@ -121,14 +123,27 @@ export default function AuthScreen({ initialMode = 'signin' }: { initialMode?: '
       return;
     }
     setLoading(true);
+    let resolvedEmail: string | null = null;
     try {
-      const resolved = await resolveEmail(emailOrUsername);
+      resolvedEmail = await resolveEmail(emailOrUsername);
       const { error } = await supabase.auth.signInWithPassword({
-        email: resolved,
+        email: resolvedEmail,
         password,
       });
       if (error) throw error;
     } catch (err: any) {
+      // Unverified account — route to the OTP screen so the user completes
+      // verification instead of hitting a dead-end error.
+      const unconfirmed =
+        err?.code === 'email_not_confirmed' ||
+        /email not confirmed/i.test(err?.message ?? '');
+      if (unconfirmed && resolvedEmail) {
+        router.push({
+          pathname: '/(auth)/verify-otp' as never,
+          params: { email: resolvedEmail },
+        });
+        return;
+      }
       showAlert('Sign in failed', err?.message ?? 'Unknown error');
     } finally {
       setLoading(false);
@@ -179,9 +194,13 @@ export default function AuthScreen({ initialMode = 'signin' }: { initialMode?: '
       // into profiles server-side — no client insert needed.
       if (!session) {
         // Email verification required — no session yet, so nothing consumed
-        // the staged username. Clear it so it can't leak to another sign-in.
+        // the staged username. Clear it so it can't leak to another sign-in,
+        // then route to the OTP screen to complete verification.
         setPendingSignupUsername(null);
-        showAlert('Check your inbox', 'Please verify your email to continue.');
+        router.push({
+          pathname: '/(auth)/verify-otp' as never,
+          params: { email: email.trim(), fresh: '1' },
+        });
       }
     } catch (err: any) {
       setPendingSignupUsername(null);
