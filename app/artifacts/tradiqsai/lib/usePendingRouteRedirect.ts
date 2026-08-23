@@ -1,34 +1,15 @@
 /**
- * Hook that preserves a signed-out user's deep-link destination and replays
- * it after sign-in. See `lib/pendingRoute.ts` for the route mapping rules.
+ * Global auth-route policy.
  *
- * If the stored route no longer resolves to a real screen (e.g. a stale
- * shared link), the user is sent to the home tab with a brief notice instead
- * of the bare not-found screen.
+ * Route groups have no user-facing meaning. During session restoration Expo
+ * Router must never choose one implicitly, because that can mount Profile or
+ * Admin before the app has established its authenticated landing route.
  */
 import { useEffect, useRef } from 'react';
-import { Alert, Platform } from 'react-native';
-import { useGlobalSearchParams, usePathname, useRouter } from 'expo-router';
-import {
-  buildPendingRoute,
-  consumePendingRoute,
-  isProfilePath,
-  isResolvableRoute,
-  setPendingRoute,
-} from '@/lib/pendingRoute';
+import { usePathname, useRouter } from 'expo-router';
 
-const STALE_LINK_TITLE = 'Link unavailable';
-const STALE_LINK_MESSAGE =
-  "The page you followed no longer exists, so we've taken you home.";
-
-function notifyStaleLink(): void {
-  if (Platform.OS === 'web') {
-    // RN's Alert.alert is a silent no-op on web.
-    window.alert(`${STALE_LINK_TITLE}\n\n${STALE_LINK_MESSAGE}`);
-  } else {
-    Alert.alert(STALE_LINK_TITLE, STALE_LINK_MESSAGE);
-  }
-}
+export const AUTH_HOME_ROUTE = '/(tabs)/index';
+export const AUTH_LOGIN_ROUTE = '/(auth)/login';
 
 export function usePendingRouteRedirect(
   session: unknown,
@@ -36,47 +17,24 @@ export function usePendingRouteRedirect(
 ): void {
   const router = useRouter();
   const pathname = usePathname();
-  const pathnameRef = useRef(pathname);
-  pathnameRef.current = pathname;
-  const handledAuthLandingRef = useRef(false);
-  const params = useGlobalSearchParams();
+  const lastAuthState = useRef<'authenticated' | 'anonymous' | null>(null);
 
-  // While signed out, remember the deep-link route the user was trying to
-  // reach so we can land them there after sign-in.
+  // Route once when the initial session finishes restoring and once for each
+  // actual sign-in/sign-out transition. A token refresh retains the same auth
+  // state and therefore never pulls a user away from an intentional screen.
   useEffect(() => {
-    if (loading || session) return;
-    handledAuthLandingRef.current = false;
-    const pending = buildPendingRoute(pathname, params);
-    if (pending) setPendingRoute(pending);
-  }, [loading, session, pathname, params]);
+    if (loading) return;
 
-  // Once signed in, replay the stored destination (if any) exactly once. A
-  // stored or restored Profile URL is normalized to Home; users can still tap
-  // the Profile tab afterward without this effect running again.
-  useEffect(() => {
-    if (loading || !session || handledAuthLandingRef.current) return;
-    handledAuthLandingRef.current = true;
-    const requestedRoute = consumePendingRoute();
-    if (requestedRoute) {
-      const pending = isProfilePath(requestedRoute) ? '/' : requestedRoute;
-      if (isResolvableRoute(pending)) {
-        // Defer until the router stack has mounted.
-        setTimeout(() => router.replace(pending as never), 0);
-      } else {
-        // Stale link: land on the home tab and explain briefly.
-        setTimeout(() => {
-          router.replace('/');
-          notifyStaleLink();
-        }, 0);
-      }
-      return;
-    }
+    const authState = session ? 'authenticated' : 'anonymous';
+    if (lastAuthState.current === authState) return;
+    lastAuthState.current = authState;
 
-    // An active session can be restored while the browser still points at the
-    // Profile URL from the previous visit. That is stale navigation state, not
-    // a deep link the user just chose, so app launch lands on Home.
-    if (isProfilePath(pathnameRef.current)) {
-      setTimeout(() => router.replace('/'), 0);
-    }
-  }, [loading, session, router]);
+    const destination =
+      authState === 'authenticated' ? AUTH_HOME_ROUTE : AUTH_LOGIN_ROUTE;
+    if (pathname === destination) return;
+
+    // The root stack must mount before this replacement, so defer by one turn.
+    const timer = setTimeout(() => router.replace(destination as never), 0);
+    return () => clearTimeout(timer);
+  }, [loading, pathname, router, session]);
 }

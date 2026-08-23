@@ -8,7 +8,6 @@ import { StripeProvider } from '@/lib/platform-pay';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { TradingProvider } from '@/context/TradingContext';
-import AuthScreen from '@/screens/AuthScreen';
 import {
   Inter_400Regular,
   Inter_500Medium,
@@ -104,7 +103,7 @@ function useAutoPilotDependencyWarning() {
 }
 
 function RootLayoutNav() {
-  const { session, loading, authScreenMode } = useAuth();
+  const { session, loading } = useAuth();
   const router = useRouter();
 
   // Server-side state is per-user: drop cached API data whenever the
@@ -129,8 +128,7 @@ function RootLayoutNav() {
   }, []);
 
   useEffect(() => {
-    if (Platform.OS === 'web') return;
-    let mounted = true;
+    if (loading || !session || Platform.OS === 'web') return;
     const handleResponse = (response: Notifications.NotificationResponse) => {
       const data = response.notification.request.content.data;
       const route = getNotificationRoute(data);
@@ -148,24 +146,17 @@ function RootLayoutNav() {
       }
     };
 
-    // A response listener only receives taps while JavaScript is already
-    // running. Check the launch response as well for a notification tapped
-    // from the background/terminated state.
-    void Notifications.getLastNotificationResponseAsync()
-      .then((response) => {
-        if (mounted && response) handleResponse(response);
-      })
-      .catch(() => {});
-
+    // Launch always lands at Home after session restoration. Only notification
+    // taps received after the running app has completed that landing may open
+    // a destination, so a stale terminated-app response cannot override Home.
     const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
       handleResponse(response);
     });
 
     return () => {
-      mounted = false;
       subscription.remove();
     };
-  }, [router]);
+  }, [loading, router, session]);
   const sessionCacheScope = `${userId ?? 'signed-out'}:${session?.user?.is_anonymous === true ? 'guest' : 'account'}`;
   const previousSessionCacheScope = React.useRef(sessionCacheScope);
   useLayoutEffect(() => {
@@ -175,21 +166,19 @@ function RootLayoutNav() {
     }
   }, [sessionCacheScope]);
 
-  // Preserve a signed-out user's deep-link destination and land there
-  // after a successful sign-in (including legacy Oracle chat links).
+  // Route every auth-state transition through a single, deterministic landing
+  // policy. Session restoration and sign-in always begin at Home; a signed-out
+  // route always begins at the login gateway.
   usePendingRouteRedirect(session, loading);
 
   // Hold on the splash-colored blank frame while the stored session restores,
   // so signed-in users don't flash the sign-in screen on launch.
   if (loading) return null;
 
-  if (!session) return <AuthScreen initialMode={authScreenMode} />;
-
-  // Usernames are now assigned server-side (from the email prefix) — no
-  // manual username prompt; signed-in users go straight to the app.
-
   return (
-    <Stack screenOptions={{ headerBackTitle: 'Back' }}>
+    <Stack initialRouteName="index" screenOptions={{ headerBackTitle: 'Back' }}>
+      <Stack.Screen name="index" options={{ headerShown: false }} />
+      <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="(admin)" options={{ headerShown: false }} />
       <Stack.Screen name="oracle" options={{ headerShown: false }} />

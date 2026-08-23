@@ -278,7 +278,6 @@ function useSubscriptionContext() {
 
   useEffect(() => {
     let cancelled = false;
-    commitProfileEntitlement(userId, null, false);
     setProfileUpgrade(null);
     void refreshProfileEntitlement().catch(() => {
       if (!cancelled) {
@@ -458,6 +457,7 @@ function useSubscriptionContext() {
     activeEntitlement,
     isSubscribed,
     isAdmin: currentProfileEntitlement.isAdmin,
+    isAdminLoading: Boolean(userId) && profileEntitlement.userId !== userId,
     accessTier,
     profileUpgrade: activeProfileUpgrade,
     refreshProfileEntitlement,

@@ -2,16 +2,16 @@ import React from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { Redirect, Stack } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
+import { useSubscription } from '@/lib/revenuecat';
 
 /**
- * Non-blocking client gate for the CMS route. Entry is decided solely from
- * the in-memory auth state — no network call (and therefore no timeout) may
- * hold or bounce navigation. Role verification happens asynchronously inside
- * the dashboard view, and every privileged read remains enforced server-side
- * (401/403), so a slow network can never eject an administrator.
+ * Client navigation gate for the CMS route. The API still authorizes every
+ * privileged request, while this gate prevents ordinary traders from mounting
+ * a dashboard that can only end in a confusing 403 screen.
  */
 export default function AdminRouteLayout() {
   const { session, loading } = useAuth();
+  const { isAdmin, isAdminLoading } = useSubscription();
 
   if (loading) {
     return (
@@ -21,7 +21,17 @@ export default function AdminRouteLayout() {
     );
   }
 
-  if (!session) return <Redirect href="/(tabs)" />;
+  if (!session) return <Redirect href={'/(auth)/login' as never} />;
+
+  if (isAdminLoading) {
+    return (
+      <View style={styles.loading}>
+        <ActivityIndicator color="#00F0FF" />
+      </View>
+    );
+  }
+
+  if (!isAdmin) return <Redirect href={'/(tabs)/index' as never} />;
 
   return (
     <Stack

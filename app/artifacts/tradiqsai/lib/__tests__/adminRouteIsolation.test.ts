@@ -12,7 +12,9 @@ describe('mobile admin route isolation', () => {
 
     expect(adminLayout).toContain("import { Redirect, Stack } from 'expo-router'");
     expect(adminLayout).toContain('const { session, loading } = useAuth()');
-    expect(adminLayout).toContain('if (!session) return <Redirect href="/(tabs)" />;');
+    expect(adminLayout).toContain("const { isAdmin, isAdminLoading } = useSubscription()");
+    expect(adminLayout).toContain("if (!session) return <Redirect href={'/(auth)/login' as never} />;");
+    expect(adminLayout).toContain("if (!isAdmin) return <Redirect href={'/(tabs)/index' as never} />;");
     expect(adminLayout).not.toContain('isGodAdmin');
     expect(adminLayout).not.toContain('<Tabs');
   });
