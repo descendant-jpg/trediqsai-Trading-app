@@ -15,6 +15,9 @@ import { makeRedirectUri } from 'expo-auth-session';
 import * as QueryParams from 'expo-auth-session/build/QueryParams';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
+import { Feather, FontAwesome } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import { Svg, Path } from 'react-native-svg';
 import { useRouter } from 'expo-router';
 import { extractReferralCode } from '@/lib/referralLink';
 import { supabase } from '@/utils/supabase';
@@ -35,6 +38,25 @@ function showAlert(title: string, message: string) {
     window.alert(`${title}\n\n${message}`);
   } else {
     Alert.alert(title, message);
+  }
+}
+
+/** Official multicolor Google 'G' mark. */
+function GoogleIcon({ size = 18 }: { size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 48 48">
+      <Path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303C33.654 32.657 29.223 36 24 36c-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z" />
+      <Path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z" />
+      <Path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238C29.211 35.091 26.715 36 24 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z" />
+      <Path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303c-.792 2.237-2.231 4.166-4.087 5.571l6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z" />
+    </Svg>
+  );
+}
+
+/** Light haptic tap on button presses — native only, no-op on web. */
+function hapticTap() {
+  if (Platform.OS !== 'web') {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
   }
 }
 
@@ -69,7 +91,9 @@ export default function AuthScreen({ initialMode = 'signin' }: { initialMode?: '
   const [password, setPassword] = useState('');
   const [referralCode, setReferralCode] = useState('');
   const [loading, setLoading] = useState(false);
+  const [socialLoading, setSocialLoading] = useState<'apple' | 'google' | 'guest' | null>(null);
   const router = useRouter();
+  const socialBusy = socialLoading !== null;
 
   useEffect(() => {
     setIsLoginMode(initialMode !== 'signup');
@@ -229,8 +253,9 @@ export default function AuthScreen({ initialMode = 'signin' }: { initialMode?: '
   };
 
   const handleOAuthLogin = async (provider: 'apple' | 'google') => {
-    if (loading) return;
-    setLoading(true);
+    if (loading || socialLoading) return;
+    hapticTap();
+    setSocialLoading(provider);
     try {
       if (Platform.OS === 'web') {
         const { error } = await supabase.auth.signInWithOAuth({
@@ -258,20 +283,21 @@ export default function AuthScreen({ initialMode = 'signin' }: { initialMode?: '
         err?.message ?? 'Unknown error',
       );
     } finally {
-      setLoading(false);
+      setSocialLoading(null);
     }
   };
 
   const handleGuestLogin = async () => {
-    if (loading) return;
-    setLoading(true);
+    if (loading || socialLoading) return;
+    hapticTap();
+    setSocialLoading('guest');
     try {
       const { error } = await supabase.auth.signInAnonymously();
       if (error) throw error;
     } catch (err: any) {
       showAlert('Guest access failed', err?.message ?? 'Unknown error');
     } finally {
-      setLoading(false);
+      setSocialLoading(null);
     }
   };
 
@@ -407,40 +433,70 @@ export default function AuthScreen({ initialMode = 'signin' }: { initialMode?: '
             <View style={styles.separatorLine} />
           </View>
 
-          {/* Social auth */}
-          <TouchableOpacity
-            style={[styles.appleButton, loading && styles.disabled]}
-            onPress={() => void handleOAuthLogin('apple')}
-            disabled={loading}
-            activeOpacity={0.85}
-            testID="auth-apple"
-          >
-            {loading ? <ActivityIndicator color="#FFFFFF" /> : (
-              <Text style={styles.appleButtonText}>Continue with Apple</Text>
-            )}
-          </TouchableOpacity>
+          {/* Social auth — iOS gets the 50/50 Apple + Google split row;
+              Android (and web) get a single full-width Google button. */}
+          {Platform.OS === 'ios' ? (
+            <View style={styles.socialRow}>
+              <TouchableOpacity
+                style={[styles.appleButton, styles.socialButtonHalf, socialBusy && styles.disabled]}
+                onPress={() => void handleOAuthLogin('apple')}
+                disabled={socialBusy}
+                activeOpacity={0.85}
+                testID="auth-apple"
+              >
+                {socialLoading === 'apple' ? <ActivityIndicator color="#FFFFFF" /> : (
+                  <>
+                    <FontAwesome name="apple" size={18} color="#FFFFFF" />
+                    <Text style={[styles.appleButtonText, styles.socialHalfText]} numberOfLines={1}>Continue with Apple</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.googleButton, styles.socialButtonHalf, socialBusy && styles.disabled]}
+                onPress={() => void handleOAuthLogin('google')}
+                disabled={socialBusy}
+                activeOpacity={0.85}
+                testID="auth-google"
+              >
+                {socialLoading === 'google' ? <ActivityIndicator color="#FFFFFF" /> : (
+                  <>
+                    <GoogleIcon />
+                    <Text style={[styles.googleButtonText, styles.socialHalfText]} numberOfLines={1}>Continue with Google</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={[styles.googleButton, socialBusy && styles.disabled]}
+              onPress={() => void handleOAuthLogin('google')}
+              disabled={socialBusy}
+              activeOpacity={0.85}
+              testID="auth-google"
+            >
+              {socialLoading === 'google' ? <ActivityIndicator color="#FFFFFF" /> : (
+                <>
+                  <GoogleIcon />
+                  <Text style={styles.googleButtonText}>Continue with Google</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
 
-          <TouchableOpacity
-            style={[styles.googleButton, loading && styles.disabled]}
-            onPress={() => void handleOAuthLogin('google')}
-            disabled={loading}
-            activeOpacity={0.85}
-            testID="auth-google"
-          >
-            {loading ? <ActivityIndicator color="#FFFFFF" /> : (
-              <>
-                <Text style={styles.googleIcon}>G</Text>
-                <Text style={styles.googleButtonText}>Continue with Google</Text>
-              </>
-            )}
-          </TouchableOpacity>
+          {/* Guest access — premium outlined secondary button */}
           <TouchableOpacity
             onPress={() => void handleGuestLogin()}
-            disabled={loading}
-            style={styles.guestButton}
+            disabled={loading || socialBusy}
+            style={[styles.guestButton, (loading || socialBusy) && styles.disabled]}
+            activeOpacity={0.85}
             testID="auth-guest"
           >
-            <Text style={styles.guestButtonText}>Continue as Guest</Text>
+            {socialLoading === 'guest' ? <ActivityIndicator color="#C7CAD1" /> : (
+              <>
+                <Feather name="user" size={16} color="#C7CAD1" />
+                <Text style={styles.guestButtonText}>Continue as Guest</Text>
+              </>
+            )}
           </TouchableOpacity>
           <View style={styles.trustBadges} accessibilityLabel="Bank-grade security, AI-powered edge, and global markets">
             <Text style={styles.trustBadge}>🛡️ Bank-Grade Security</Text>
@@ -580,10 +636,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
   },
-  googleIcon: {
-    color: '#FFFFFF',
-    fontSize: 17,
-    fontFamily: 'Inter_700Bold',
+  socialRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  socialButtonHalf: {
+    flex: 1,
+  },
+  socialHalfText: {
+    fontSize: 14,
   },
   googleButtonText: {
     color: '#FFFFFF',
@@ -591,12 +652,19 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_600SemiBold',
   },
   guestButton: {
-    alignSelf: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    height: 50,
+    borderRadius: colors.radius,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1,
+    borderColor: '#22252A',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 4,
   },
   guestButtonText: {
-    color: '#8A8D93',
+    color: '#C7CAD1',
     fontFamily: 'Inter_600SemiBold',
     fontSize: 14,
   },
