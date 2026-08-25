@@ -12,21 +12,24 @@
  * `take_profits` jsonb envelope because live DDL needs the SQL editor.
  */
 import Anthropic from "@anthropic-ai/sdk";
+import YahooFinance from "yahoo-finance2";
 import { logger } from "./logger.js";
 import { cycleDeadline, withDeadline } from "./httpTimeout.js";
 import {
   SIGNAL_UNIVERSE,
+  TP_RISK_REWARD,
   advanceSignal,
-  buildSignalParts,
+  buildTechnicalSetup,
+  fetchUniverseCandles,
   fetchUniverseQuotes,
-  hashSeed,
-  mulberry32,
   normalizeEnvelope,
   realizedPips,
   type AssetCategory,
   type Instrument,
   type SignalEnvelope,
   type SignalStatus,
+  type YahooChart,
+  type YahooChartQuote,
 } from "./signalEngine.js";
 import { notifySignalEvent } from "./pushNotifications.js";
 
@@ -128,11 +131,47 @@ deadline?: AbortSignal,
   }
 }
 
+/**
+ * Live fallback candle provider (yahoo-finance2). Instantiated lazily and
+ * injected into every cycle so tests never touch the network and a Yahoo
+ * outage never crashes the publisher — the instrument is simply skipped.
+ */
+let yahooClient: InstanceType<typeof YahooFinance> | null = null;
+/**
+ * yahoo-finance2 owns its HTTP client and cannot consume our cycle
+ * AbortSignal, so a hung request outlives the Promise.race that stops us
+ * waiting on it. Capping in-flight fallback calls bounds those orphans: a
+ * stalled Yahoo can never pile up sockets across cycles — once saturated,
+ * the fallback is skipped and instruments resolve on their primary feeds.
+ */
+const MAX_YAHOO_IN_FLIGHT = 4;
+let yahooInFlight = 0;
+function defaultYahooChart(): YahooChart | null {
+  try {
+    yahooClient ??= new YahooFinance({ suppressNotices: ["yahooSurvey"] });
+    const client = yahooClient;
+    return async (symbol, options) => {
+      if (yahooInFlight >= MAX_YAHOO_IN_FLIGHT) throw new Error("Yahoo fallback saturated");
+      yahooInFlight += 1;
+      try {
+        return (await client.chart(symbol, options)) as { quotes?: YahooChartQuote[] };
+      } finally {
+        yahooInFlight -= 1;
+      }
+    };
+  } catch (err) {
+    logger.warn({ err }, "Yahoo Finance fallback unavailable");
+    return null;
+  }
+}
+
 export interface PublisherDeps {
   fetchImpl?: typeof fetch;
   now?: () => Date;
   notify?: typeof notifySignalEvent;
   rationale?: typeof generateSignalRationale;
+  /** Live candle fallback (tests inject a synthetic chart). */
+  yahooChart?: YahooChart | null;
   /** Absolute cycle deadline (tests inject an aborted signal). */
   signal?: AbortSignal;
 }
@@ -237,6 +276,7 @@ export async function runSignalCycle({
   now = () => new Date(),
   notify = notifySignalEvent,
   rationale = generateSignalRationale,
+  yahooChart = defaultYahooChart(),
   signal: signalOverride,
 }: PublisherDeps = {}): Promise<void> {
   if (!isSignalPublisherConfigured()) return;
@@ -256,7 +296,7 @@ export async function runSignalCycle({
     // push fan-out is bound to it, so a cycle can never outlive its lease
     // and overlap with the next tick's winner.
     const signal = signalOverride ?? cycleDeadline(CYCLE_DEADLINE_MS);
-    await runCycle({ fetchImpl, now, notify, rationale, signal });
+    await runCycle({ fetchImpl, now, notify, rationale, yahooChart, signal });
   } finally {
     cycleInFlight = false;
   }
@@ -267,10 +307,19 @@ async function runCycle({
   now,
   notify,
   rationale,
+  yahooChart,
   signal,
 }: Required<PublisherDeps>): Promise<void> {
   const quotes = await fetchUniverseQuotes(fetchImpl, undefined, signal);
   if (!quotes.size) return;
+  // Live candle history powers the technical trigger engine. Instruments
+  // whose feeds are down are simply absent from this map and get skipped.
+  const candles = await fetchUniverseCandles(
+    fetchImpl,
+    process.env["FINNHUB_API_KEY"] ?? "",
+    signal,
+    yahooChart,
+  );
   const stamp = now();
   const iso = stamp.toISOString();
 
@@ -348,7 +397,6 @@ async function runCycle({
   }
 
   let created = 0;
-  const bucket = Math.floor(stamp.getTime() / (6 * 60 * 60_000));
   for (const instrument of SIGNAL_UNIVERSE) {
     if (created >= MAX_NEW_PER_CYCLE) break;
     // Never outlive the lease window: the absolute deadline aborts all IO and
@@ -362,8 +410,12 @@ async function runCycle({
     const openCount = openByCategory.get(instrument.category) ?? 0;
     if (openCount >= OPEN_TARGET_PER_CATEGORY) continue;
 
-    const rand = mulberry32(hashSeed(`${instrument.symbol}:${bucket}:${created}`));
-    const parts = buildSignalParts(instrument, price, rand);
+    // Mathematical gate: no live candle history or no multi-timeframe
+    // confluence → no signal. Nothing is ever synthesized.
+    const feed = candles.get(instrument.symbol);
+    if (!feed) continue;
+    const parts = buildTechnicalSetup(instrument, price, feed);
+    if (!parts) continue;
     const analysis = await rationale({
       symbol: instrument.symbol,
       category: instrument.category,
@@ -413,8 +465,6 @@ async function runCycle({
     }
   }
 }
-
-const TP_RISK_REWARD = 3.2;
 
 let timer: ReturnType<typeof setInterval> | null = null;
 

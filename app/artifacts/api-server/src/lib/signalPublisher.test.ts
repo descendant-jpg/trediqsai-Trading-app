@@ -39,6 +39,50 @@ const OPEN_ROW = {
   timestamp: "2026-08-25T08:00:00Z",
 };
 
+/** 68 bars: flat, dip, then a sharp rally — a fresh bullish EMA cross. */
+function trendingCloses(): number[] {
+  const closes: number[] = [];
+  for (let i = 0; i < 55; i++) closes.push(100);
+  for (let i = 0; i < 5; i++) closes.push(100 - (i + 1) * 0.3);
+  for (let i = 0; i < 8; i++) closes.push(98.5 + (i + 1) * 1.5);
+  return closes;
+}
+
+/** Coinbase candle rows: [time, low, high, open, close, volume], newest first. */
+function coinbaseCandleRows(intervalSec: number) {
+  const closes = trendingCloses();
+  const end = Math.floor(Date.now() / 1000);
+  return closes
+    .map((c, i) => [end - (closes.length - 1 - i) * intervalSec, c - 0.5, c + 0.5, c, c, 1])
+    .reverse();
+}
+
+function finnhubCandleBody(intervalSec: number) {
+  const closes = trendingCloses();
+  const end = Math.floor(Date.now() / 1000);
+  return {
+    s: "ok",
+    c: closes,
+    h: closes.map((c) => c + 0.5),
+    l: closes.map((c) => c - 0.5),
+    t: closes.map((_, i) => end - (closes.length - 1 - i) * intervalSec),
+  };
+}
+
+const fakeChart = async (_symbol: string, options: { interval: "15m" | "1h" }) => {
+  const closes = trendingCloses();
+  const end = Date.now();
+  const intervalMs = options.interval === "15m" ? 900_000 : 3_600_000;
+  return {
+    quotes: closes.map((close, i) => ({
+      date: new Date(end - (closes.length - 1 - i) * intervalMs),
+      high: close + 0.5,
+      low: close - 0.5,
+      close,
+    })),
+  };
+};
+
 type FakeOptions = {
   leaseCount?: number;
   openRows?: unknown[];
@@ -53,8 +97,16 @@ function fakeFetch(opts: FakeOptions = {}) {
       calls.lease += 1;
       return new Response(JSON.stringify(opts.leaseCount ?? 1), { status: 200 });
     }
+    if (url.includes("api.exchange.coinbase.com")) {
+      const intervalSec = url.includes("granularity=3600") ? 3600 : 900;
+      return new Response(JSON.stringify(coinbaseCandleRows(intervalSec)), { status: 200 });
+    }
     if (url.includes("api.coinbase.com")) {
       return new Response(JSON.stringify({ data: { amount: "115" } }), { status: 200 });
+    }
+    if (url.includes("/stock/candle")) {
+      const intervalSec = url.includes("resolution=60") ? 3600 : 900;
+      return new Response(JSON.stringify(finnhubCandleBody(intervalSec)), { status: 200 });
     }
     if (url.includes("finnhub.io")) {
       return new Response(JSON.stringify({ c: 150 }), { status: 200 });
@@ -110,6 +162,7 @@ describe("publisher lease invariants", () => {
       now,
       notify: silentNotify,
       rationale,
+      yahooChart: fakeChart,
       signal: AbortSignal.abort(),
     });
     expect(calls.insert).toBe(0);
@@ -124,6 +177,7 @@ describe("publisher lease invariants", () => {
       now,
       notify: silentNotify,
       rationale,
+      yahooChart: fakeChart,
       signal: AbortSignal.abort(),
     });
     // The transition loop exits before any CAS write or notification.
@@ -154,7 +208,7 @@ describe("acquirePublisherLease", () => {
 describe("runSignalCycle mutual exclusion", () => {
   it("skips the entire cycle when another instance holds the lease", async () => {
     const { fetchImpl, calls } = fakeFetch({ leaseCount: 2 });
-    await runSignalCycle({ fetchImpl, now, notify: silentNotify, rationale });
+    await runSignalCycle({ fetchImpl, now, notify: silentNotify, rationale, yahooChart: fakeChart });
     expect(calls.selectSignals).toBe(0);
     expect(calls.insert).toBe(0);
   });
@@ -162,8 +216,8 @@ describe("runSignalCycle mutual exclusion", () => {
   it("acquires the in-process guard synchronously — overlapping calls run once", async () => {
     const { fetchImpl, calls } = fakeFetch({ openRows: [] });
     await Promise.all([
-      runSignalCycle({ fetchImpl, now, notify: silentNotify, rationale }),
-      runSignalCycle({ fetchImpl, now, notify: silentNotify, rationale }),
+      runSignalCycle({ fetchImpl, now, notify: silentNotify, rationale, yahooChart: fakeChart }),
+      runSignalCycle({ fetchImpl, now, notify: silentNotify, rationale, yahooChart: fakeChart }),
     ]);
     // The second call hit the guard before its first await: one lease
     // consume, one cycle's worth of selects.
@@ -174,7 +228,7 @@ describe("runSignalCycle mutual exclusion", () => {
   it("pins the CAS predicate to the exact envelope that was read", async () => {
     silentNotify.mockClear();
     const { fetchImpl, calls } = fakeFetch({ openRows: [OPEN_ROW], patchMatched: true });
-    await runSignalCycle({ fetchImpl, now, notify: silentNotify, rationale });
+    await runSignalCycle({ fetchImpl, now, notify: silentNotify, rationale, yahooChart: fakeChart });
     expect(calls.patch).toBe(1);
     const url = decodeURIComponent(calls.patchUrls[0]!);
     expect(url).toContain("status=in.(Active,Pending)");
@@ -185,7 +239,7 @@ describe("runSignalCycle mutual exclusion", () => {
   it("suppresses lifecycle notifications when the conditional patch loses the race", async () => {
     silentNotify.mockClear();
     const { fetchImpl, calls } = fakeFetch({ openRows: [OPEN_ROW], patchMatched: false });
-    await runSignalCycle({ fetchImpl, now, notify: silentNotify, rationale });
+    await runSignalCycle({ fetchImpl, now, notify: silentNotify, rationale, yahooChart: fakeChart });
     expect(calls.patch).toBe(1);
     // Row was already transitioned by a competing cycle: no duplicate TP/close
     // pushes (creation pushes for the thin desk are unrelated and allowed).
@@ -198,7 +252,7 @@ describe("runSignalCycle mutual exclusion", () => {
   it("sends TP-hit notifications only when the conditional patch lands", async () => {
     silentNotify.mockClear();
     const { fetchImpl, calls } = fakeFetch({ openRows: [OPEN_ROW], patchMatched: true });
-    await runSignalCycle({ fetchImpl, now, notify: silentNotify, rationale });
+    await runSignalCycle({ fetchImpl, now, notify: silentNotify, rationale, yahooChart: fakeChart });
     expect(calls.patch).toBe(1);
     expect(silentNotify).toHaveBeenCalledWith(
       "🎯 TP Hit",
@@ -213,7 +267,7 @@ describe("runSignalCycle mutual exclusion", () => {
     silentNotify.mockClear();
     rationale.mockClear();
     const { fetchImpl, calls } = fakeFetch({ openRows: [] });
-    await runSignalCycle({ fetchImpl, now, notify: silentNotify, rationale });
+    await runSignalCycle({ fetchImpl, now, notify: silentNotify, rationale, yahooChart: fakeChart });
     expect(calls.insert).toBeGreaterThan(0);
     expect(rationale).toHaveBeenCalled();
     expect(silentNotify).toHaveBeenCalledWith(
