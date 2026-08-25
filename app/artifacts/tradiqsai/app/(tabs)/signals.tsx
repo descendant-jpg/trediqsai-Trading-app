@@ -121,67 +121,70 @@ export default function SignalsScreen() {
 
   return (
     <View style={s.page}>
-      <View style={s.header}>
-        <View>
-          <Text style={s.kicker}>LIVE MARKET INTELLIGENCE</Text>
-          <Text style={s.title}>Signal Desk</Text>
-        </View>
-        <TouchableOpacity onPress={() => void load()} accessibilityLabel="Refresh live signals">
-          <Feather name="refresh-cw" size={20} color={cyan} />
-        </TouchableOpacity>
-      </View>
-
-      {showQuotaBanner && (
-        <View style={s.quotaBanner} testID="quota-banner">
-          <View style={{ flex: 1 }}>
-            <Text style={s.quotaTitle}>
-              {quota.remaining} of {quota.limit} free signals remaining today
-            </Text>
-            <Text style={s.quotaSub}>Upgrade for unlimited signals</Text>
+      {/* Opaque, non-scrolling surface: cards can never paint into this desk header. */}
+      <View style={s.fixedHeader}>
+        <View style={s.header}>
+          <View>
+            <Text style={s.kicker}>LIVE MARKET INTELLIGENCE</Text>
+            <Text style={s.title}>Signal Desk</Text>
           </View>
-          <TouchableOpacity
-            style={s.quotaCta}
-            testID="quota-upgrade"
-            onPress={() => router.push('/paywall')}
-            accessibilityLabel="Upgrade for unlimited signals"
-          >
-            <Feather name="zap" size={13} color="#101217" />
-            <Text style={s.quotaCtaText}>UPGRADE</Text>
+          <TouchableOpacity onPress={() => void load()} accessibilityLabel="Refresh live signals">
+            <Feather name="refresh-cw" size={20} color={cyan} />
           </TouchableOpacity>
         </View>
-      )}
 
-      {/* Category filter — multi-asset desk */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filters}>
-        {CATEGORY_FILTERS.map((category) => (
-          <Pressable
-            key={category}
-            testID={`category-${category.toLowerCase()}`}
-            onPress={() => setCategoryFilter(category)}
-            style={[s.filter, s.categoryChip, categoryFilter === category && s.categoryChipActive]}
-          >
-            <Text style={[s.filterText, categoryFilter === category && s.filterTextActive]}>
-              {category}
-            </Text>
-          </Pressable>
-        ))}
-      </ScrollView>
+        {showQuotaBanner && (
+          <View style={s.quotaBanner} testID="quota-banner">
+            <View style={{ flex: 1 }}>
+              <Text style={s.quotaTitle}>
+                {quota.remaining} of {quota.limit} free signals remaining today
+              </Text>
+              <Text style={s.quotaSub}>Upgrade for unlimited signals</Text>
+            </View>
+            <TouchableOpacity
+              style={s.quotaCta}
+              testID="quota-upgrade"
+              onPress={() => router.push('/paywall')}
+              accessibilityLabel="Upgrade for unlimited signals"
+            >
+              <Feather name="zap" size={13} color="#101217" />
+              <Text style={s.quotaCtaText}>UPGRADE</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
-      {/* Status filter */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.statusFilters}>
-        {STATUS_FILTERS.map((status) => (
-          <Pressable
-            key={status}
-            testID={`status-${status.toLowerCase()}`}
-            onPress={() => setStatusFilter(status)}
-            style={[s.filter, statusFilter === status && s.filterActive]}
-          >
-            <Text style={[s.filterText, statusFilter === status && s.filterTextActive]}>
-              {status}
-            </Text>
-          </Pressable>
-        ))}
-      </ScrollView>
+        {/* Category filter — multi-asset desk */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filters}>
+          {CATEGORY_FILTERS.map((category) => (
+            <Pressable
+              key={category}
+              testID={`category-${category.toLowerCase()}`}
+              onPress={() => setCategoryFilter(category)}
+              style={[s.filter, s.categoryChip, categoryFilter === category && s.categoryChipActive]}
+            >
+              <Text style={[s.filterText, categoryFilter === category && s.filterTextActive]}>
+                {category}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+
+        {/* Status filter */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.statusFilters}>
+          {STATUS_FILTERS.map((status) => (
+            <Pressable
+              key={status}
+              testID={`status-${status.toLowerCase()}`}
+              onPress={() => setStatusFilter(status)}
+              style={[s.filter, statusFilter === status && s.filterActive]}
+            >
+              <Text style={[s.filterText, statusFilter === status && s.filterTextActive]}>
+                {status}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      </View>
 
       {isLoading ? (
         <View style={s.center}>
@@ -189,7 +192,7 @@ export default function SignalsScreen() {
           <Text style={s.muted}>Syncing live signals…</Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={s.list}>
+        <ScrollView style={s.listScroll} contentContainerStyle={s.list}>
           {failed ? (
             <TouchableOpacity onPress={() => void load()} style={s.empty}>
               <Feather name="wifi-off" size={25} color={gold} />
@@ -372,6 +375,13 @@ function SignalCard({
 
 const s = StyleSheet.create({
   page: { flex: 1, backgroundColor: '#0A0B0E', paddingTop: 56 },
+  fixedHeader: {
+    flexShrink: 0,
+    zIndex: 2,
+    elevation: 2,
+    backgroundColor: '#0A0B0E',
+    paddingBottom: 4,
+  },
   header: { paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   kicker: { color: cyan, fontSize: 10, fontWeight: '900', letterSpacing: 1.5 },
   title: { color: '#FFF', fontSize: 29, fontWeight: '900', marginTop: 4 },
@@ -397,7 +407,8 @@ const s = StyleSheet.create({
   filterActive: { backgroundColor: cyan },
   filterText: { color: '#9BA3AE', fontSize: 11, fontWeight: '800' },
   filterTextActive: { color: '#071014' },
-  list: { padding: 20, paddingTop: 4, gap: 12, paddingBottom: 110 },
+  listScroll: { flex: 1, minHeight: 0 },
+  list: { padding: 20, paddingTop: 14, gap: 12, paddingBottom: 110 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   muted: { color: '#8A929E', fontSize: 12, textAlign: 'center' },
   empty: { marginTop: 60, alignItems: 'center', gap: 12, padding: 25 },
