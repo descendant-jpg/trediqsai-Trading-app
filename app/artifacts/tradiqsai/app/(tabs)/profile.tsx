@@ -286,6 +286,10 @@ export default function ProfileScreen() {
   const isElite = !isGuest && hasActiveEntitlement && activeAccessTier === "elite";
   const payoutAccessAllowed = canAccessPayoutEvaluation(session);
   const userMetadata = session?.user?.user_metadata ?? {};
+  const metadataUsername =
+    typeof userMetadata.username === "string"
+      ? userMetadata.username.trim()
+      : "";
   const metadataName =
     typeof userMetadata.full_name === "string"
       ? userMetadata.full_name.trim()
@@ -295,7 +299,7 @@ export default function ProfileScreen() {
   const userEmail = isGuest ? "" : (session?.user?.email ?? "");
   const displayName = isGuest
     ? "Guest Trader"
-    : (metadataName || username || userEmail || "Trader");
+    : (metadataUsername || metadataName || username || "Trader");
   const userId = session?.user?.id ?? null;
   const activeProfileUserId = useRef(userId);
   const profileRequestGeneration = useRef(0);
@@ -696,7 +700,7 @@ export default function ProfileScreen() {
           </View>
           <View style={styles.userInfo}>
             <View style={styles.nameRow}>
-              <Text style={styles.username}>{displayName}</Text>
+              <Text style={styles.username}>Hi! <Text>{displayName}</Text></Text>
               {!isGuest && <Text style={styles.verified}>✓ Verified</Text>}
             </View>
             {!!userEmail && <Text style={styles.email}>{userEmail}</Text>}

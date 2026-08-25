@@ -1,0 +1,28 @@
+We need to execute a comprehensive UI and state-mapping update across the Profile screen, Auth flow, and Home screen. Please implement the following changes, verify them, and push the final code directly to the GitHub main branch.
+
+Please execute the following step-by-step:
+
+1. **Update Auth Signup Payload:**
+   - In the email/password registration flow (likely `AuthScreen.tsx` or similar), ensure the `supabase.auth.signUp` function passes the user-provided username into the database via the `options: { data: { username: inputUsername } }` metadata payload.
+
+2. **Profile Screen Identity Mapping:**
+   - Update the Profile Screen header (where the email is currently duplicated).
+   - Extract the user's display name from Supabase session metadata. Use a fallback cascade: `const displayName = user?.user_metadata?.username || user?.user_metadata?.full_name || 'Trader';`
+   - Update the top bold text to read: `"Hi! " + displayName`.
+   - Leave the subtitle as the user's email address.
+   - Update the circular Avatar component to display the first letter of `displayName` rather than the email.
+
+3. **Home Screen Dynamic Subscription Banner:**
+   - Bind the "Go Pro / Upgrade" banner on the Home screen to the user's active subscription tier/status.
+   - If the user is `FREE`: Show the "Go Pro" banner.
+   - If the user is `PRO`: Change the banner text to "Upgrade to Elite" and apply Elite-tier styling/colors. Ensure the `onPress` action routes to the `/paywall` screen.
+   - If the user is `ELITE` or `ADMIN`: Return `null` so the banner is completely hidden.
+
+4. **Home Screen Layout & Safe Area Fix:**
+   - Remove any excessive hardcoded `marginBottom` or spacer views below the "Risk Disclaimer" card on the Home screen.
+   - Import `useSafeAreaInsets` from `react-native-safe-area-context` and apply `insets.bottom` dynamically to the bottom padding of the main ScrollView/container so the layout rests perfectly above the bottom tab navigator without awkward dead space.
+
+5. **Quality Control & GitHub Push:**
+   - Run a strict TypeScript typecheck (`tsc --noEmit`).
+   - Run the mobile test suite to ensure no regressions in the Auth or UI components.
+   - Stage all changes, commit them with the message "feat: dynamic profile names, responsive home banner, and safe area layout fixes", and push to the remote `main` branch.

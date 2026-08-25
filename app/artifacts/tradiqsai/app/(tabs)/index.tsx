@@ -14,6 +14,7 @@ import { useProfile } from '@/hooks/useProfile';
 import { TradingChart } from '@/components/wagmi-chart';
 import { LivePriceTicker } from '@/components/live-ticker';
 import { ProWindDownBanner } from '@/components/paywall';
+import { useSubscription } from '@/lib/revenuecat';
 import { useLiveMarket } from '@/hooks/useLiveMarket';
 import * as TradeService from '@/services/TradeService';
 import { useTrading, type TradeResult } from '@/context/TradingContext';
@@ -303,8 +304,23 @@ export default function HomeScreen() {
   const [pickerMessage, setPickerMessage] = useState<string | null>(null);
   const translateX = useRef(new Animated.Value(0)).current;
   const { profile } = useProfile();
+  const { isAdmin, activeAccessTier, hasActiveEntitlement } = useSubscription();
+  // Subscription-driven banner: FREE -> Go Pro, PRO -> Upgrade to Elite,
+  // ELITE/ADMIN -> no banner at all.
+  const homeTier = !hasActiveEntitlement
+    ? 'free'
+    : activeAccessTier === 'elite'
+      ? 'elite'
+      : activeAccessTier === 'pro'
+        ? 'pro'
+        : 'free';
+  const showGoProBanner = !isAdmin && homeTier === 'free';
+  const showEliteUpgradeBanner = !isAdmin && homeTier === 'pro';
   const topInset = Platform.OS === 'web' ? 38 : (insets?.top ?? 0) + 10;
   const bottomInset = insets?.bottom ?? 0;
+  // Keep scroll content resting just above the tab bar: the tab bar's base
+  // height plus the device bottom inset, with a small breathing gap.
+  const tabBarBaseHeight = Platform.OS === 'web' ? 84 : 64;
   const liveTickers = useMemo(() => tickers.filter(isTicker), [tickers]);
 
   useFocusEffect(
@@ -440,7 +456,7 @@ export default function HomeScreen() {
   return (
     <View style={styles.homeContainer}>
       <ScrollView
-        contentContainerStyle={[styles.homeContent, { paddingTop: topInset, paddingBottom: 115 + bottomInset }]}
+        contentContainerStyle={[styles.homeContent, { paddingTop: topInset, paddingBottom: tabBarBaseHeight + bottomInset + 8 }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.homeHeader}>
@@ -587,18 +603,35 @@ export default function HomeScreen() {
           <Feather name="chevron-right" size={19} color={c.primary} />
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.proBanner}
-          onPress={() => setPaywallOpen(true)}
-          activeOpacity={0.85}
-          accessibilityRole="button"
-          accessibilityLabel="Go Pro. Trade with more edge."
-          accessibilityHint="Opens premium subscription options"
-        >
-          <View style={styles.proIcon}><Feather name="zap" size={22} color={c.secondary} /></View>
-          <View style={styles.proTextWrap}><Text style={styles.proTitle}>Go Pro. Trade with more edge.</Text><Text style={styles.proSub}>Premium signals, AI insights & more</Text></View>
-          <Feather name="chevron-right" size={20} color={c.secondary} />
-        </TouchableOpacity>
+        {showGoProBanner && (
+          <TouchableOpacity
+            style={styles.proBanner}
+            onPress={() => setPaywallOpen(true)}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Go Pro. Trade with more edge."
+            accessibilityHint="Opens premium subscription options"
+          >
+            <View style={styles.proIcon}><Feather name="zap" size={22} color={c.secondary} /></View>
+            <View style={styles.proTextWrap}><Text style={styles.proTitle}>Go Pro. Trade with more edge.</Text><Text style={styles.proSub}>Premium signals, AI insights & more</Text></View>
+            <Feather name="chevron-right" size={20} color={c.secondary} />
+          </TouchableOpacity>
+        )}
+
+        {showEliteUpgradeBanner && (
+          <TouchableOpacity
+            style={styles.eliteBanner}
+            onPress={() => router.push('/paywall' as never)}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Upgrade to Elite"
+            accessibilityHint="Opens Elite subscription options"
+          >
+            <View style={styles.eliteIcon}><Feather name="award" size={22} color="#F5C542" /></View>
+            <View style={styles.proTextWrap}><Text style={styles.proTitle}>Upgrade to Elite</Text><Text style={styles.proSub}>Elite signals, Oracle access & priority AI insights</Text></View>
+            <Feather name="chevron-right" size={20} color="#F5C542" />
+          </TouchableOpacity>
+        )}
 
         <RiskDisclaimer />
       </ScrollView>
@@ -728,6 +761,8 @@ const styles = StyleSheet.create({
   insightsIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(0,240,255,.1)', alignItems: 'center', justifyContent: 'center' },
   insightsCopy: { flex: 1 }, insightsTitle: { color: c.foreground, fontSize: 14, fontFamily: 'Inter_700Bold' }, insightsSub: { color: c.mutedForeground, fontSize: 10, marginTop: 3 },
   proBanner: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: 'rgba(176,38,255,0.10)', borderWidth: 1, borderColor: 'rgba(176,38,255,0.5)', borderRadius: colors.radius, padding: 14 },
+  eliteBanner: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: 'rgba(245,197,66,0.10)', borderWidth: 1, borderColor: 'rgba(245,197,66,0.5)', borderRadius: colors.radius, padding: 14 },
+  eliteIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(245,197,66,0.18)', alignItems: 'center', justifyContent: 'center' },
   proIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(176,38,255,0.18)', alignItems: 'center', justifyContent: 'center' },
   proTextWrap: { flex: 1 }, proTitle: { color: c.foreground, fontSize: 14, fontFamily: 'Inter_700Bold' }, proSub: { color: c.mutedForeground, fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 3 },
   riskCard: { backgroundColor: c.card, borderWidth: 1, borderColor: '#332200', borderRadius: 12, padding: 14, gap: 8 },
