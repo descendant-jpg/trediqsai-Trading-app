@@ -2,6 +2,7 @@ import app from "./app.js";
 import { logger } from "./lib/logger.js";
 import { startMarketPricePublisher } from "./lib/marketPricePublisher.js";
 import { startMarketNewsPublisher } from "./lib/marketNewsPublisher.js";
+import { startSignalPublisher } from "./lib/signalPublisher.js";
 import { getStripeSync, getStripeCredentials } from "./stripeClient.js";
 
 const rawPort = process.env["PORT"];
@@ -70,6 +71,7 @@ await initStripe();
 // trades can be priced by the server rather than by the client.
 startMarketPricePublisher();
 startMarketNewsPublisher();
+startSignalPublisher();
 
 app.listen(port, (err?: Error) => {
   if (err) {

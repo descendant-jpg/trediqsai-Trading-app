@@ -10,7 +10,11 @@
 - [Supabase schema drift](supabase-schema-drift.md) — migrations in the repo are often NOT applied; probe PostgREST before trusting a table/RPC exists, and DDL needs the SQL editor.
 - [Anthropic model availability](anthropic-model-availability.md) — Claude 3/3.5 ids 404 on this account; list /v1/models before hardcoding, mocked tests won't catch it.
 - [RevenueCat web key requirements](revenuecat-web-key-requirements.md) — native sandbox keys are rejected by RevenueCat web; only configure web with a Web Billing key.
-- [GitHub publishing fallback](github-publishing-fallback.md) — if a normal Git push rejects its legacy credential, use the managed GitHub connection to advance the branch without exposing tokens.
-- [AutoPilot free-tier policy](autopilot-free-tier-policy.md) — free = 1 non-Pro bot, master/asset paid, unresolved tiers fail closed; entitlement limits must be claimed atomically in Postgres (advisory lock), in-memory checks are fast-paths only.
+- [GitHub publishing fallback](github-publishing-fallback.md) — if a normal Git push rejects its legacy credential, use the managed GitHub connection; build manifests from explicit paths, not HEAD~1 diffs.
+- [Blog data read path](blog-data-path.md) — blog_posts RLS denies anon reads; mobile reads via api-server /api/blog (service role), never www.tradiqsai.com API routes.
+- [Support ticket data path](support-ticket-data-path.md) — admin Help Desk reads contact_messages (support_tickets migration never applied); mobile tickets go via POST /api/support; identity/tier resolved server-side.
+- [Reanimated jsdom stub](reanimated-jsdom-stub.md) — reanimated 4 imports native worklets at module scope; the test stub's useSharedValue must return a stable ref or effect-keyed tests falsely fail.
+- [AutoPilot free-tier policy](autopilot-free-tier-policy.md) — client fully Pro-locks AutoPilot + Oracle (2026-08-25), stricter than the server's 1-free-bot slot; server limits must be claimed atomically in Postgres (advisory lock).
 - [Private channel entitlement gating](private-channel-entitlement-gating.md) — Telegram access must use a current, unexpired entitlement; cached state must never authorize external private links.
 - [Twelve Data credit limits](twelve-data-credit-limits.md) — the configured free plan allows fewer quote credits per minute than the full marquee symbol batch consumes.
+- [Signals backend invariants](signals-backend-invariants.md) — publisher lease window < tick < absolute cycle deadline + jsonb-envelope CAS; unlock is consume-first (mark-first leaks premium data).

@@ -146,9 +146,11 @@ function RootLayoutNav() {
 
       const signalId = data?.signal_id;
       if (typeof signalId === 'string' || typeof signalId === 'number') {
+        // Deep link straight into the institutional signal view; the server
+        // re-checks entitlement before returning premium targets.
         router.push({
-          pathname: '/(tabs)/signals',
-          params: { highlight_id: String(signalId) },
+          pathname: '/signals/[id]',
+          params: { id: String(signalId) },
         });
       }
     };
