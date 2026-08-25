@@ -18,11 +18,11 @@ import colors from '@/constants/colors';
 
 const c = colors.light;
 const CYAN = '#00F0FF';
-const CODE_LENGTH = 6;
+const CODE_LENGTH = 8;
 const RESEND_COOLDOWN_SECONDS = 60;
 
 /**
- * Six-digit email verification for Supabase Custom SMTP OTP flows.
+ * Eight-digit email verification for Supabase Custom SMTP OTP flows.
  * Reached from sign-up (fresh code just sent, `fresh=1`) or from sign-in
  * when the backend reports the email as unconfirmed.
  */
@@ -83,7 +83,7 @@ export default function VerifyOtpScreen() {
         setError(
           /expired/i.test(verifyError.message)
             ? 'That code has expired. Request a new one below.'
-            : 'Invalid code. Check the 6 digits and try again.',
+            : 'Invalid code. Check the 8 digits and try again.',
         );
         setCode('');
         return;
@@ -99,7 +99,7 @@ export default function VerifyOtpScreen() {
     }
   };
 
-  // Auto-submit the moment the 6th digit lands.
+  // Auto-submit the moment the 8th digit lands.
   useEffect(() => {
     if (code.length === CODE_LENGTH) void handleVerify(code);
   }, [code]);
@@ -156,14 +156,14 @@ export default function VerifyOtpScreen() {
         </View>
         <Text style={s.title}>Verify Your Email</Text>
         <Text style={s.subtitle}>
-          Enter the 6-digit code sent to{'\n'}
+          Enter the 8-digit code sent to{'\n'}
           <Text style={s.email}>{email || 'your email address'}</Text>
         </Text>
 
         <Pressable
           style={s.otpRow}
           onPress={() => inputRef.current?.focus()}
-          accessibilityLabel="Six digit verification code"
+          accessibilityLabel="Eight digit verification code"
         >
           {Array.from({ length: CODE_LENGTH }).map((_, index) => {
             const filled = index < code.length;
@@ -233,11 +233,11 @@ const s = StyleSheet.create({
   title: { color: c.foreground, fontSize: 24, fontFamily: 'Inter_700Bold' },
   subtitle: { color: c.mutedForeground, fontSize: 14, fontFamily: 'Inter_500Medium', textAlign: 'center', marginTop: 10, lineHeight: 20 },
   email: { color: c.foreground, fontFamily: 'Inter_600SemiBold' },
-  otpRow: { flexDirection: 'row', gap: 9, marginTop: 30 },
-  otpBox: { width: 46, height: 54, borderRadius: 12, backgroundColor: '#121824', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center' },
+  otpRow: { flexDirection: 'row', gap: 6, marginTop: 30 },
+  otpBox: { width: 34, height: 46, borderRadius: 10, backgroundColor: '#121824', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center' },
   otpBoxFilled: { borderColor: 'rgba(0,229,255,0.55)' },
   otpBoxActive: { borderColor: CYAN, shadowColor: CYAN, shadowOpacity: 0.35, shadowRadius: 8, shadowOffset: { width: 0, height: 0 }, elevation: 4 },
-  otpDigit: { color: c.foreground, fontSize: 22, fontFamily: 'Inter_700Bold' },
+  otpDigit: { color: c.foreground, fontSize: 19, fontFamily: 'Inter_700Bold' },
   hiddenInput: { position: 'absolute', width: 1, height: 1, opacity: 0 },
   spinner: { marginTop: 18 },
   error: { color: '#FF6576', fontSize: 13, fontFamily: 'Inter_500Medium', marginTop: 18, textAlign: 'center' },
