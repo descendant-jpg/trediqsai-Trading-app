@@ -5,11 +5,12 @@ import {
   requireAal2IfMfaEnrolledSoft,
   requireAal2IfMfaEnrolledWrite,
 } from "../middlewares/aal2";
+import { hasProAccess, type TierLookup } from "../lib/entitlement";
 
 const SUPABASE_URL = process.env["SUPABASE_URL"] ?? process.env["EXPO_PUBLIC_SUPABASE_URL"] ?? "";
 const SERVICE_KEY = process.env["SUPABASE_SERVICE_ROLE_KEY"] ?? "";
 const createSchema = z.object({
-  pair: z.enum(["BTC/USD", "EUR/USD", "XAU/USD"]),
+  pair: z.enum(["BTC/USD", "EUR/USD", "XAU/USD", "NVDA"]),
   strategy: z.enum(["GRID", "DCA"]),
   capital: z.number().positive().max(1_000_000),
 });
@@ -33,23 +34,40 @@ type BotRouterOptions = {
   readAssurance?: RequestHandler;
   writeAssurance?: RequestHandler;
   fetchImpl?: typeof fetch;
+  tierLookup?: TierLookup;
 };
 
 /**
  * Bot marketplace availability policy:
  * reads use soft MFA assurance, while configuration writes retain cached
  * outcome enforcement with a degraded pass-through during AAL outages.
+ *
+ * Every endpoint additionally requires a live Pro-tier (or higher/admin)
+ * entitlement. The client shows a paywall, but the overlay is client-side
+ * only — the API is the actual gate, and it fails closed on lookup errors.
  */
 export function createBotsRouter({
   identityMiddleware = identity(),
   readAssurance = requireAal2IfMfaEnrolledSoft,
   writeAssurance = requireAal2IfMfaEnrolledWrite,
   fetchImpl = fetch,
+  tierLookup,
 }: BotRouterOptions = {}): IRouter {
   const router: IRouter = Router();
 
+  /** Resolves the caller and enforces the AutoPilot Pro entitlement. */
+  async function entitled(res: any): Promise<string | null> {
+    const userId = user(res);
+    if (!userId) return null;
+    if (!(await hasProAccess(userId, tierLookup))) {
+      res.status(403).json({ error: "AutoPilot bots require a Pro subscription." });
+      return null;
+    }
+    return userId;
+  }
+
   router.get("/bots", identityMiddleware, readAssurance, async (_req, res) => {
-    const userId = user(res); if (!userId || !ready(res)) return;
+    const userId = await entitled(res); if (!userId || !ready(res)) return;
     console.log("Fetching bots for user:", userId);
     try {
       const query = new URLSearchParams({ user_id: `eq.${userId}`, select: "id,pair,strategy,capital,status,pnl,created_at", order: "created_at.desc" });
@@ -64,7 +82,7 @@ export function createBotsRouter({
     }
   });
   router.post("/bots", identityMiddleware, writeAssurance, async (req, res) => {
-    const userId = user(res); if (!userId || !ready(res)) return;
+    const userId = await entitled(res); if (!userId || !ready(res)) return;
     const data = createSchema.safeParse(req.body); if (!data.success) return res.status(400).json({ error: "Choose a pair, strategy, and valid capital amount." });
     const response = await fetchImpl(`${SUPABASE_URL}/rest/v1/trading_bots`, { method: "POST", headers: { ...headers(), prefer: "return=representation" }, body: JSON.stringify({ user_id: userId, ...data.data, status: "active" }) });
     if (!response.ok) return res.status(503).json({ error: "Could not deploy the bot. Apply the latest Supabase migration." });
@@ -72,7 +90,7 @@ export function createBotsRouter({
     return res.status(201).json(rows[0]);
   });
   router.patch("/bots/:id/status", identityMiddleware, writeAssurance, async (req, res) => {
-    const userId = user(res); if (!userId || !ready(res)) return;
+    const userId = await entitled(res); if (!userId || !ready(res)) return;
     const data = statusSchema.safeParse(req.body); if (!data.success) return res.status(400).json({ error: "Invalid bot status." });
     const query = new URLSearchParams({ id: `eq.${req.params["id"]}`, user_id: `eq.${userId}` });
     const response = await fetchImpl(`${SUPABASE_URL}/rest/v1/trading_bots?${query}`, { method: "PATCH", headers: { ...headers(), prefer: "return=representation" }, body: JSON.stringify(data.data) });

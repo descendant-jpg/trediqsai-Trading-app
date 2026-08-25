@@ -35,6 +35,7 @@ describe("bot marketplace AAL outage policy", () => {
         readAssurance: softOutage,
         writeAssurance: writeOutage,
         fetchImpl: botStorageFetch,
+        tierLookup: async () => "pro",
       }),
     );
     return server;
@@ -67,5 +68,68 @@ describe("bot marketplace AAL outage policy", () => {
     expect(response.status).toBe(200);
     expect(response.headers["x-security-check"]).toBe("degraded");
     expect(response.body.status).toBe("paused");
+  });
+});
+
+describe("bot marketplace Pro entitlement gate", () => {
+  function appWithTier(tier: string | null) {
+    const server = express();
+    server.use(express.json());
+    server.use(
+      createBotsRouter({
+        identityMiddleware: identity,
+        readAssurance: softOutage,
+        writeAssurance: writeOutage,
+        fetchImpl: botStorageFetch,
+        tierLookup: async () => tier,
+      }),
+    );
+    return server;
+  }
+
+  it("rejects bot reads for free users", async () => {
+    const response = await request(appWithTier("free")).get("/bots");
+    expect(response.status).toBe(403);
+    expect(response.body.error).toMatch(/Pro subscription/);
+  });
+
+  it("rejects bot deployment for free users", async () => {
+    const response = await request(appWithTier("free"))
+      .post("/bots")
+      .send({ pair: "BTC/USD", strategy: "GRID", capital: 1000 });
+    expect(response.status).toBe(403);
+  });
+
+  it("rejects status changes for free users", async () => {
+    const response = await request(appWithTier("free"))
+      .patch("/bots/bot-1/status")
+      .send({ status: "paused" });
+    expect(response.status).toBe(403);
+  });
+
+  it("fails closed when the tier cannot be resolved", async () => {
+    const response = await request(appWithTier(null)).get("/bots");
+    expect(response.status).toBe(403);
+  });
+
+  it("admins and elite tiers pass the gate", async () => {
+    for (const tier of ["elite", "whale"]) {
+      const response = await request(appWithTier(tier)).get("/bots");
+      expect(response.status).toBe(200);
+    }
+  });
+
+  it("accepts the NVDA template pair for entitled users", async () => {
+    const response = await request(appWithTier("pro"))
+      .post("/bots")
+      .send({ pair: "NVDA", strategy: "GRID", capital: 7500 });
+    expect(response.status).toBe(201);
+  });
+
+  it("still rejects unknown pairs", async () => {
+    const response = await request(appWithTier("pro"))
+      .post("/bots")
+      .send({ pair: "DOGE/USD", strategy: "GRID", capital: 1000 });
+    expect(response.status).toBe(400);
   });
 });
