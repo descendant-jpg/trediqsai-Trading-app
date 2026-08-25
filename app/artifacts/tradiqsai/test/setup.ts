@@ -47,3 +47,41 @@ vi.mock('expo-web-browser', () => ({
 vi.mock('expo', () => ({
   reloadAppAsync: vi.fn(),
 }));
+
+// Reanimated 4 imports react-native-worklets native specs at module scope,
+// which jsdom cannot load. Stub the small API surface app components use;
+// animations resolve to their end state so screens render deterministically.
+vi.mock('react-native-reanimated', async () => {
+  const RN = await import('react-native');
+  const React = await import('react');
+  const identity = (v: unknown) => v;
+  const Animated = new Proxy(function Animated() {}, {
+    get: (_target, prop) => {
+      if (prop === 'createAnimatedComponent') return (c: unknown) => c;
+      return (RN as unknown as Record<string | symbol, unknown>)[prop] ?? RN.View;
+    },
+  });
+  return {
+    __esModule: true,
+    default: Animated,
+    // Stable per component lifetime, matching real Reanimated semantics —
+    // effects keyed on shared values must not restart on re-render.
+    useSharedValue: (initial: unknown) => React.useRef({ value: initial }).current,
+    useAnimatedStyle: (fn: () => unknown) => fn(),
+    useAnimatedProps: (fn: () => unknown) => fn(),
+    useDerivedValue: (fn: () => unknown) => ({ value: fn() }),
+    withTiming: identity,
+    withSpring: identity,
+    withDelay: (_delay: number, v: unknown) => v,
+    withSequence: (...vs: unknown[]) => vs[vs.length - 1],
+    withRepeat: identity,
+    cancelAnimation: () => {},
+    runOnJS: (fn: (...args: unknown[]) => unknown) => fn,
+    runOnUI: (fn: (...args: unknown[]) => unknown) => fn,
+    interpolate: (_v: number, input: number[], output: number[]) => output[output.length - 1],
+    Easing: new Proxy({}, { get: () => (x: unknown) => (typeof x === 'function' ? x : (v: unknown) => v) }),
+    Extrapolation: { CLAMP: 'clamp', EXTEND: 'extend', IDENTITY: 'identity' },
+    FadeIn: { duration: () => ({}) },
+    FadeOut: { duration: () => ({}) },
+  };
+});

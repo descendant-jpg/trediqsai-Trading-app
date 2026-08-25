@@ -7,14 +7,16 @@
     "icon": "./assets/images/icon.png",
     "scheme": "tradiqsai",
     "userInterfaceStyle": "dark",
+    "backgroundColor": "#0A0B0E",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/images/splash-logo.png",
       "resizeMode": "contain",
-      "backgroundColor": "#000000"
+      "backgroundColor": "#0A0B0E"
     },
     "ios": {
       "supportsTablet": true,
+      "backgroundColor": "#0A0B0E",
       "bundleIdentifier": "com.tradiqsai.app",
       "buildNumber": "1",
       "googleServicesFile": "./GoogleService-Info.plist",
@@ -25,6 +27,7 @@
     "android": {
       "package": "com.tradiqsai.app",
       "versionCode": 1,
+      "backgroundColor": "#0A0B0E",
       "googleServicesFile": "./google-services.json",
       "permissions": ["USE_BIOMETRIC", "USE_FINGERPRINT"],
       "adaptiveIcon": {

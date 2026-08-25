@@ -1,5 +1,5 @@
-import React, { useEffect, useLayoutEffect, useState } from 'react';
-import { Alert, Platform } from 'react-native';
+import React, { useCallback, useEffect, useLayoutEffect, useState } from 'react';
+import { Alert, Platform, StyleSheet, View } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
@@ -34,6 +34,7 @@ import { getNotificationRoute } from '@/services/NotificationService';
 import { BiometricLock } from '@/components/BiometricLock';
 import { MfaGate } from '@/components/MfaGate';
 import { DegradedSecurityNoticeProvider } from '@/components/DegradedSecurityNoticeProvider';
+import { AnimatedBootScreen } from '@/components/AnimatedBootScreen';
 
 // Expo web is served by Metro and native has no browser origin; neither is
 // the Express API service. Always use the explicit API origin when supplied.
@@ -66,6 +67,12 @@ setAuthFailureHandler(async () => {
   if (!isSupabaseConfigured) return;
   await supabase.auth.signOut();
 });
+
+// Hold the native splash until the animated boot screen has mounted so the
+// app never paints a white frame between the splash and the first screen.
+if (Platform.OS !== 'web') {
+  void SplashScreen.preventAutoHideAsync().catch(() => {});
+}
 
 const queryClient = new QueryClient();
 
@@ -201,32 +208,30 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
-  const [fontsReady, setFontsReady] = useState(false);
-
   // Inter is progressive enhancement. In particular, fontfaceobserver can
   // reject in web previews when an asset misses its six-second deadline. Catch
   // that rejection here, then keep rendering with React Native's system-font
   // fallback instead of making the root navigation depend on a custom font.
   useEffect(() => {
-    let mounted = true;
-    const loadFonts = async () => {
-      try {
-        await Font.loadAsync({
-          Inter_400Regular,
-          Inter_500Medium,
-          Inter_600SemiBold,
-          Inter_700Bold,
-        });
-      } catch (error) {
-        console.warn('Custom fonts were unavailable; using system fonts instead.', error);
-      } finally {
-        if (mounted) setFontsReady(true);
-      }
-    };
-
-    void loadFonts();
-    return () => { mounted = false; };
+    Font.loadAsync({
+      Inter_400Regular,
+      Inter_500Medium,
+      Inter_600SemiBold,
+      Inter_700Bold,
+    }).catch((error) => {
+      console.warn('Custom fonts were unavailable; using system fonts instead.', error);
+    });
   }, []);
+
+  // The animated boot curtain covers first paint, then crossfades into the
+  // navigation tree underneath it — no white flash, no re-render handoff.
+  const [bootComplete, setBootComplete] = useState(false);
+  // Stable identities: a provider re-render (e.g. Stripe key arriving) must
+  // never restart the boot animation timeline.
+  const handleBootReady = useCallback(() => {
+    if (Platform.OS !== 'web') void SplashScreen.hideAsync().catch(() => {});
+  }, []);
+  const handleBootFinish = useCallback(() => setBootComplete(true), []);
 
   // Fetch the Stripe publishable key from the server so it is never baked
   // into the bundle as a hardcoded string.
@@ -243,24 +248,13 @@ export default function RootLayout() {
       });
   }, []);
 
-  useEffect(() => {
-    if (Platform.OS === 'web') return;
-    void SplashScreen.preventAutoHideAsync();
-  }, []);
-
-  useEffect(() => {
-    if (fontsReady) {
-      if (Platform.OS !== 'web') void SplashScreen.hideAsync();
-    }
-  }, [fontsReady]);
-
-
   return (
-    <SafeAreaProvider>
+    <View style={rootStyles.root}>
+      <SafeAreaProvider>
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
           <StripeProvider publishableKey={stripePublishableKey}>
-            <GestureHandlerRootView style={{ flex: 1 }}>
+            <GestureHandlerRootView style={rootStyles.root}>
               <KeyboardProvider>
                 <AuthProvider>
                   {/* SubscriptionProvider is inside AuthProvider so its
@@ -278,6 +272,14 @@ export default function RootLayout() {
           </StripeProvider>
         </QueryClientProvider>
       </ErrorBoundary>
-    </SafeAreaProvider>
+      </SafeAreaProvider>
+      {!bootComplete && (
+        <AnimatedBootScreen onReady={handleBootReady} onFinish={handleBootFinish} />
+      )}
+    </View>
   );
 }
+
+const rootStyles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: '#0A0B0E' },
+});
