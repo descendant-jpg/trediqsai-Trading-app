@@ -5,7 +5,7 @@ description: Product decision on free AutoPilot access and the rule that entitle
 
 # AutoPilot free-tier policy and concurrency enforcement
 
-**Policy decision (product owner, 2026-08-21):** Free/Starter users may run exactly ONE non-Pro AutoPilot bot. Master switch and execution-market (asset) controls are paid-only (Pro/Elite). Pro-only bots stay Pro-only. Stopping any bot is always allowed. Unresolved tiers (no profile row, failed lookup) fail closed with 403 — never treat an unknown tier as free.
+**Policy decision (product owner, 2026-08-25, supersedes 2026-08-21):** AutoPilot and the Oracle AI are fully Pro-locked in the client — free/Starter users see the AI Tools AutoPilot widget (including the roster's "Scalp Oracle AI" bot) under a paywall curtain: forced off, zeroed logs/P&L, all switches/pills/configure disabled, "Ask AI Oracle" converts to the paywall. NOTE the tension: the API server may still permit one free bot slot from the older 2026-08-21 policy — the client lock is now stricter than the server. Unresolved tiers (no profile row, failed lookup) fail closed with 403 on the server — never treat an unknown tier as free. (Client keeps a deliberate `accessTier ?? 'elite'` fallback so controls don't freeze while the context initializes; the server remains the authority.)
 
 **Why:** The app UI long implied "free gets 1 bot" while the API rejected all free AutoPilot activity; the owner chose to relax the server to match the UI rather than tighten the client. On review, the in-memory enforcement turned out to be bypassable under horizontal scaling (two instances each see zero running bots and both start one).
 

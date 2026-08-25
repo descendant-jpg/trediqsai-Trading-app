@@ -1,0 +1,26 @@
+I have enabled 'Confirm Email' and Custom SMTP in our Supabase Authentication backend. To deliver a premium, seamless mobile experience, we are using 6-digit OTP codes instead of email links. Please update our Expo React Native frontend to handle this verification flow.
+
+Execute the following updates:
+
+1. Update Registration & Login Flows:
+   - When `supabase.auth.signUp()` succeeds but returns a user without an active session (due to email confirmation), route them to a new 'Verify Email OTP' screen.
+   - Update the standard login function: if `supabase.auth.signInWithPassword()` returns an "Email not confirmed" error, catch it gracefully and route the user to the OTP screen so they can complete their verification.
+
+2. Build the Verification UI (OTP Screen):
+   - Create an elegant UI instructing the user to "Enter the 6-digit code sent to your email." Display the registered email address.
+   - Use a clean 6-digit OTP input field. Ensure the keyboard is numeric (`keyboardType="number-pad"`) and auto-focuses on load.
+   - Implement Auto-Submit: Automatically trigger the verification logic the moment the 6th digit is entered.
+
+3. OTP Verification Logic:
+   - Wire the submission to call `supabase.auth.verifyOtp({ email: userEmail, token: enteredCode, type: 'signup' })`.
+   - Display clear UI errors for invalid or expired codes.
+   - On success, Supabase will establish the session; ensure our auth provider instantly routes them into the main authenticated app.
+
+4. Resend Code with Cooldown Timer:
+   - Add a 'Resend Code' button that triggers `supabase.auth.resend({ type: 'signup', email: userEmail })`.
+   - Implement a 60-second countdown timer UX. The button must be disabled until the timer reaches zero to prevent API spam.
+
+5. Auth Routing Guard:
+   - Ensure existing navigation guards block access to protected routes if the user lacks an active, verified session.
+
+Review the auth screens, build this robust OTP flow, implement these premium UX touches, and typecheck the workspace before committing.

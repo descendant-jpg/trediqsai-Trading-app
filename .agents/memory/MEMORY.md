@@ -18,3 +18,5 @@
 - [Private channel entitlement gating](private-channel-entitlement-gating.md) — Telegram access must use a current, unexpired entitlement; cached state must never authorize external private links.
 - [Twelve Data credit limits](twelve-data-credit-limits.md) — the configured free plan allows fewer quote credits per minute than the full marquee symbol batch consumes.
 - [Signals backend invariants](signals-backend-invariants.md) — publisher deadline < lease window < tick + jsonb-envelope CAS; unlock is consume-first (mark-first leaks premium data).
+- [technicalindicators EMA alignment](technicalindicators-ema-alignment.md) — different-period EMA outputs have different lengths/offsets; align by close-bar index or get NaN/phantom crosses; validate fixtures numerically.
+- [yahoo-finance2 cannot consume AbortSignal](yahoo-finance2-no-abort.md) — race bounds awaiting only; cap in-flight library calls fail-closed or hung requests orphan sockets every cycle.

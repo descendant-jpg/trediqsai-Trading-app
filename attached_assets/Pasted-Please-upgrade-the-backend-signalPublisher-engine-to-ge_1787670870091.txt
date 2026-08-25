@@ -1,0 +1,26 @@
+Please upgrade the backend `signalPublisher` engine to generate highly accurate, institutional-grade live signals for Crypto, Forex, and Stocks using a free, mathematically driven pipeline.
+
+Please execute the following step-by-step:
+
+1. **Install Dependencies:**
+   - Install `technicalindicators` to handle server-side technical analysis natively.
+   - Install `yahoo-finance2` as a fallback data provider for extensive stock ticker coverage.
+
+2. **Configure Free Live Data Feeds:**
+   - **Crypto:** Connect to the Binance (or Coinbase) Public WebSocket to stream live, free crypto ticks.
+   - **Forex & Stocks:** Utilize the existing `FINNHUB_API_KEY` to fetch live quotes via the Finnhub REST API (respecting the 60 calls/min free tier limit).
+   - Route this raw data into the `signalPublisher` loop.
+
+3. **Build the Advanced Technical Trigger Engine:**
+   - Create a deterministic setup generator using `technicalindicators`. 
+   - **Multi-Timeframe Filter:** Ensure a signal is only triggered if the short-term trend (e.g., 15m EMA crossover) aligns with the broader macro trend (e.g., price is above the 1H EMA).
+   - **ATR-Based Dynamic Targets:** Calculate the Average True Range (ATR) for the asset. Set the Stop Loss dynamically based on 1.5x ATR, and Take Profits (TP1, TP2, TP3) scaled progressively based on ATR multiples, rather than using fixed pip amounts.
+
+4. **The AI Oracle Integration (Cost-Saver):**
+   - Ensure the AI API (Anthropic/OpenAI) is *never* used to scan charts or find trades.
+   - ONLY when the technical engine successfully validates a setup, pass the Entry, SL, and TP data to the AI Oracle to generate a brief, 2-sentence market rationale/summary to populate the `ai_analysis` column.
+
+5. **Quality Control & Deploy:**
+   - Run a strict `tsc --noEmit` typecheck to verify the new package imports.
+   - Verify the publisher loop respects the 45s deadline/60s lease invariant to prevent race conditions.
+   - Commit the changes and push to the GitHub `main` branch.

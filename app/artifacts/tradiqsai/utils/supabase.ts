@@ -1,5 +1,6 @@
 import 'react-native-url-polyfill/auto';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import * as QueryParams from 'expo-auth-session/build/QueryParams';
 import { AppState } from 'react-native';
 import { supabaseAuthStorage } from './secureStorage';
 
@@ -22,6 +23,26 @@ let client: SupabaseClient | null = null;
  * browser-only localStorage fallback for Expo web, where a native keychain is
  * unavailable.
  */
+/**
+ * Extract Supabase OAuth tokens from a redirect URL (query string or hash
+ * fragment) and establish the session. Shared by the native auth-session
+ * flow and the web /auth/callback route — the client runs with
+ * detectSessionInUrl: false, so returns are always parsed explicitly.
+ */
+export async function createSessionFromUrl(url: string): Promise<void> {
+  const { params, errorCode } = QueryParams.getQueryParams(url);
+  if (errorCode) throw new Error(errorCode);
+  const { access_token, refresh_token } = params;
+  if (!access_token || !refresh_token) {
+    throw new Error('The sign-in redirect carried no session tokens.');
+  }
+  const { error } = await getSupabase().auth.setSession({
+    access_token,
+    refresh_token,
+  });
+  if (error) throw error;
+}
+
 function getSupabase(): SupabaseClient {
   if (!isSupabaseConfigured) {
     throw new Error(

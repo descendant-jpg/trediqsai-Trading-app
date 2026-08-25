@@ -1,0 +1,30 @@
+We have several critical routing, state, and authentication bugs that need to be resolved immediately. Please execute a comprehensive fix across the Auth flows, the Paywall, and the Profile navigation routes, and push all final code to GitHub.
+
+Please execute the following step-by-step:
+
+1. **Fix Google OAuth Redirects:**
+   - Update the Supabase `signInWithOAuth` flow. Generate a valid native deep-link return URI using `makeRedirectUri()` from `expo-auth-session` and pass it as the `redirectTo` parameter.
+   - Ensure the callback URL correctly returns to the mobile application / production environment (`api.tradiqsai.com`) instead of attempting to redirect to `localhost:3000` on physical devices.
+
+2. **Implement Mandatory 6-Digit OTP Email Verification:**
+   - Intercept the Email/Password `signUp` flow. If signup succeeds, DO NOT route the user directly to the main `(tabs)` layout or mark them verified prematurely.
+   - Navigate them to a dedicated `OtpVerificationScreen`.
+   - Build this screen with:
+     * A clean 6-digit OTP code input UI.
+     * A "Verify Code" button calling `supabase.auth.verifyOtp({ email, token, type: 'signup' })`.
+     * A "Resend Code" button with an active 60-second cooldown timer.
+   - Only navigate to the home dashboard once the OTP verification response is successfully confirmed.
+
+3. **Fix Paywall State & Payment Button:**
+   - Resolve the "Select Plan. Please choose Monthly or Annual billing" popup error on the Paywall screen.
+   - Fix the state binding so that tapping a billing card properly sets the selected tier in React state and passes the valid package payload to the Google Pay / RevenueCat purchase handler.
+   - Pre-select the "Annual" billing plan by default on initial render so users can immediately tap the payment button without encountering selection errors.
+
+4. **Fix Navigation Routing Bugs:**
+   - **Profile Screen:** Update the cyan "Upgrade to Pro" banner's `onPress` action to route directly to `/paywall` (fix the current bug misrouting to the Signal Desk).
+   - **Elite Telegram Modal:** Update the "Upgrade" action button inside the "Elite Access Only" modal to route directly to `/paywall` (fix the current bug misrouting to the Shop screen).
+
+5. **Quality Control, Invariant Verification & GitHub Push:**
+   - Run a strict TypeScript typecheck (`tsc --noEmit`) to verify zero broken routes, missing types, or bad imports.
+   - Run all test suites to confirm no regressions across Auth, Signals, or Paywall flows.
+   - Once all tests and typechecks are clean, commit all changed files and push the entire update to the GitHub `main` branch.

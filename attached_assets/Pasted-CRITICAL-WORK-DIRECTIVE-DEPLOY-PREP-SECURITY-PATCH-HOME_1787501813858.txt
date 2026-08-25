@@ -1,0 +1,31 @@
+CRITICAL WORK DIRECTIVE: DEPLOY PREP, SECURITY PATCH, HOME TICKER MIGRATION, AND TEST COVERAGE.
+
+To conserve context window and AI credits, DO NOT read previous chat history.
+
+We have a multi-part production mandate to execute in a single sprint: prepare the backend for Digital Ocean, fix a critical security vulnerability in the entitlement engine, migrate the Home marquee to Finnhub, and lock down session details with regression tests.
+
+### 1. Security Patch: Strip Insecure Entitlement Bypasses
+- Locate the access-control helper (e.g., `canAccess` function or entitlement hook).
+- Remove ANY logic that grants admin or premium access based on `user.email?.includes('admin')` or user-editable profile fields.
+- Admin and Tier access MUST rely strictly on immutable backend roles (e.g., `user.role === 'admin'` or secure JWT metadata). No screen can be unlocked by a user-chosen email.
+
+### 2. Digital Ocean Backend Deployment Prep
+- Create an `ecosystem.config.js` file in the root backend directory configured for PM2 to launch the API (`name: 'tradiqs-api', env_production: { NODE_ENV: 'production', PORT: 5000 }`).
+- Create `nginx-setup.md` in the root with the exact Nginx server block to reverse proxy `api.tradiqsai.com` (port 80) to `http://localhost:5000`.
+
+### 3. Migrate Home Marquee to Finnhub API
+- Open `app/artifacts/tradiqsai/app/(tabs)/index.tsx`.
+- Remove the Twelve Data fetch. The Home stock ticker must keep running when Twelve Data hits its daily limit.
+- Implement a `Promise.all` fetch for Finnhub using `EXPO_PUBLIC_FINNHUB_API_KEY` and symbols: `['AAPL', 'MSFT', 'NVDA', 'AMZN', 'GOOGL', 'META', 'TSLA', 'SPY']`.
+- Update the mapped JSX render block to use Finnhub's `c` (current price) and `dp` (percent change), strictly falling back to `0.00` to prevent crashes.
+
+### 4. Implement Session-Details Quote Regression Tests
+- Create a test file (e.g., `session-details.test.tsx` or equivalent in your `__tests__` directory).
+- Write tests that explicitly mock the Finnhub API response and verify that the quote mapping/parsing correctly extracts `c` and `dp`, formats to 2 decimal places, and handles missing/malformed payloads without throwing an unhandled exception. This ensures future provider changes cannot silently break prices.
+
+### 5. Verify & Push
+- Run full workspace typechecks.
+- Commit: `feat(core): migrate Home ticker to Finnhub, secure entitlement engine, prepare DO deployment, and add session quote tests`
+- Push securely to the active repository.
+
+EXECUTION REQUIREMENT: Output the updated `canAccess` security logic, confirm the Home ticker is pointing to Finnhub, and confirm the `ecosystem.config.js` was created.

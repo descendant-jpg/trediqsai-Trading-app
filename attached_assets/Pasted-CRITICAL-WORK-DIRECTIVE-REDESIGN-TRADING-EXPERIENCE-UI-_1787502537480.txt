@@ -1,0 +1,32 @@
+CRITICAL WORK DIRECTIVE: REDESIGN TRADING EXPERIENCE UI AND UNLOCK BROKERSYNC FOR ADMINS.
+
+To conserve context window and AI credits, DO NOT read previous chat history.
+
+We have two Profile screen updates to execute: a UX overhaul of the Trading Experience selector, and fixing a paywall bug that blocks Admins/Pro users from accessing BrokerSync.
+
+### 1. Relocate & Redesign "Trading Experience" Modal
+- Open `app/artifacts/tradiqsai/app/(tabs)/profile.tsx`.
+- Move the "Trading Experience" card to render BELOW the "Partner Program" card.
+- Upgrade the selection UI to a styled dark-theme Bottom Sheet / Modal:
+  - **Header:** Include a title and a definitive Close ("X") button (using Lucide or Expo icons) in the top-right. Tapping "X" or the backdrop must dismiss without saving.
+  - **Option Cards:** Replace plain text with 4 styled dark-glassmorphism cards matching the app's aesthetic:
+    - **Beginner:** "0–1 Yrs • Learning basics & risk management"
+    - **Intermediate:** "1–3 Yrs • Consistent execution & technical setups"
+    - **Advanced:** "3–5 Yrs • Multi-timeframe confluence & prop trading"
+    - **Professional:** "5+ Yrs • Full-time / Institutional volume"
+  - **Active State:** The currently active tier must highlight with a cyan border/glow and a checkmark.
+  - **State Handling:** Only update the profile state/DB when an explicit option is tapped, then auto-close.
+
+### 2. Fix BrokerSync Admin Bypass & Routing
+- Locate the `BrokerSync` card under "QUICK TOOLS".
+- Ensure the `canAccess` entitlement check (which we just secured for Admins) is being used to gate this button.
+- If `canAccess(user, 'pro')` is true (which includes Admins), it MUST route to `/brokersync` using `router.push()`. 
+- Only trigger the paywall modal if the user is strictly on the free tier.
+- If `app/brokersync.tsx` does not exist, scaffold a basic dark-neon placeholder screen with a Back button and a title "BrokerSync Engine" so the routing doesn't fail.
+
+### 3. Verify & Push
+- Run full workspace typechecks (`npx tsc --noEmit`).
+- Commit: `feat(profile): redesign trading experience modal and route BrokerSync properly for admin/pro users`
+- Push securely to the active repository.
+
+EXECUTION REQUIREMENT: Output the code for the new Trading Experience Modal header (showing the 'X' button logic) and confirm the BrokerSync `onPress` routing logic.

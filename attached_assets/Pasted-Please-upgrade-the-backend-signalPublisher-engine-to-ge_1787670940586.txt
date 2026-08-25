@@ -1,0 +1,29 @@
+Please upgrade the backend `signalPublisher` engine to generate highly accurate, institutional-grade LIVE signals for Crypto, Forex, and Stocks using a free, mathematically driven pipeline. 
+
+CRITICAL REQUIREMENT: Complete eradication of mock/dummy data. Do not generate, seed, or fall back to any hardcoded, static, or fake trade setups. Every single signal inserted into `tradiqs_signals` and delivered to the mobile app MUST be computed exclusively from real-time live market feeds.
+
+Please execute the following step-by-step:
+
+1. **Install Dependencies:**
+   - Install `technicalindicators` for server-side technical analysis calculations.
+   - Install `yahoo-finance2` as a fallback live market data provider.
+
+2. **Configure 100% Live Market Data Feeds:**
+   - **Crypto:** Connect directly to the Coinbase/Binance public real-time market data feed to stream live crypto ticks.
+   - **Forex & Stocks:** Utilize the configured `FINNHUB_API_KEY` to fetch live quotes via the Finnhub REST API (with `yahoo-finance2` as fallback if rate limits or coverage require it).
+   - If an asset's live market feed fails or is temporarily unavailable, skip that asset cleanly — NEVER insert a dummy/simulated quote.
+
+3. **Advanced Technical Trigger Engine:**
+   - Feed the live market prices directly into `technicalindicators`.
+   - **Multi-Timeframe Filter:** Require confluence across timeframes (e.g., short-term 15m EMA crossover aligning with the macro 1H trend) before triggering a BUY/SELL signal.
+   - **Dynamic ATR Targets:** Compute the real-time Average True Range (ATR). Dynamically set the Stop Loss (e.g., 1.5x ATR) and Take Profit checkpoints (TP1, TP2, TP3) scaled by ATR volatility rather than fixed static pips.
+
+4. **AI Oracle Integration (Cost-Saver):**
+   - Do NOT use the LLM to scan market feeds.
+   - ONLY when a live technical setup is fully validated by the math engine, make ONE lightweight call to the AI Oracle to produce a 2-sentence market rationale/summary to populate `ai_analysis`.
+
+5. **Quality Control, Invariants & Deploy:**
+   - Audit both the backend publisher and frontend feeds to ensure zero dummy arrays, mock constants, or fake fallback data exist anywhere in the pipeline.
+   - Run a strict TypeScript check (`tsc --noEmit`).
+   - Preserve the publisher timing invariants (45s execution deadline, 60s lease, 90s publisher loop cadence).
+   - Commit all changes and push to the GitHub `main` branch.

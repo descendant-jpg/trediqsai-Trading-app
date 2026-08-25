@@ -567,7 +567,11 @@ export default function ProfileScreen() {
       "You must have an active Elite subscription to join the private channel. Upgrade now to unlock.",
       [
         { text: "Cancel", style: "cancel" },
-        { text: "Upgrade", onPress: () => router.push("/shop") },
+        {
+          text: "Upgrade",
+          onPress: () =>
+            router.push({ pathname: "/paywall", params: { defaultTier: "ELITE" } }),
+        },
       ],
     );
   };
@@ -710,7 +714,7 @@ export default function ProfileScreen() {
         {!isSubscribed && (
           <TouchableOpacity
             style={styles.upgradeButton}
-            onPress={() => router.push("/signals")}
+            onPress={() => router.push("/paywall")}
             activeOpacity={0.85}
             testID="profile-upgrade"
           >

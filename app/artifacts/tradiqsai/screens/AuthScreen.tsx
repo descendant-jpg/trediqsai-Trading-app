@@ -20,7 +20,7 @@ import * as Haptics from 'expo-haptics';
 import { Svg, Path } from 'react-native-svg';
 import { useRouter } from 'expo-router';
 import { extractReferralCode } from '@/lib/referralLink';
-import { supabase } from '@/utils/supabase';
+import { createSessionFromUrl, supabase } from '@/utils/supabase';
 import { setPendingSignupUsername } from '@/context/AuthContext';
 import colors from '@/constants/colors';
 
@@ -65,18 +65,7 @@ const redirectTo = makeRedirectUri({
   path: 'auth/callback',
 });
 
-/** Extract Supabase tokens from an OAuth redirect URL and set the session. */
-async function createSessionFromUrl(url: string) {
-  const { params, errorCode } = QueryParams.getQueryParams(url);
-  if (errorCode) throw new Error(errorCode);
-  const { access_token, refresh_token } = params;
-  if (!access_token || !refresh_token) return;
-  const { error } = await supabase.auth.setSession({
-    access_token,
-    refresh_token,
-  });
-  if (error) throw error;
-}
+/** createSessionFromUrl lives in utils/supabase (shared with /auth/callback). */
 
 /**
  * Authentication screen for TradiQs AI.

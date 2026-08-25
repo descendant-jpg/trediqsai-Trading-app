@@ -1,0 +1,37 @@
+Please execute a complete overhaul of the Signals feature (Signal Desk list + Signal Details screen) across Forex, Crypto, and Stocks, modeling the premium institutional UI of top trading signal apps (like SignalPro).
+
+IMPORTANT: Do not modify or break the floating circular "AI" chat action button at the bottom right. Do not break existing navigation, auth, or paywall flows.
+
+Please execute the following step-by-step:
+
+1. **Signal Desk UI & Multi-Asset Categorization:**
+   - Retain the status tabs (`All`, `Active`, `Won`, `Lost`, `Pending`) and ensure category filtering works smoothly across `All`, `Forex` (e.g., EUR/USD, GBP/USD, XAU/USD, USOIL), `Crypto` (e.g., BTC/USD, ETH/USD, SOL/USD), and `Stocks` (e.g., NVDA, AAPL, TSLA).
+   - Add a top Quota / Upgrade Banner for free users: "X of 5 free signals remaining today — Upgrade for unlimited signals" with a glowing yellow/gold "Upgrade" CTA that routes to `/paywall`.
+   - Redesign the Signal Cards:
+     * Header: Ticker, Direction badge (BUY in green / SELL in red), Market badge (FOREX / CRYPTO / STOCKS), and Timeframe/Status tag (e.g., LIVE, WON, LOST).
+     * Body: Trigger Entry Price, Stop Loss (with Break-Even tag if adjusted), and Take Profit target checkpoints (TP1, TP2, TP3) with pips count (+50p for Forex/Gold), percentage gain (+4.5% for Crypto), or dollar gain (+$12.50 for Stocks).
+     * Footer: "Trade Now" broker action and "View Details >".
+     * Free Limit Gating: For free users beyond their daily quota, blur target values with an "Unlock with Premium" lock button that triggers the paywall modal, while leaving previously opened signals readable.
+
+2. **Institutional Signal Details Screen (`/signals/[id]`):**
+   - Create/overhaul the detailed Signal View when a card is tapped:
+     * **Top Stats Bar:** R:R ratio (e.g. 1:3.0), AI Confidence % (e.g. 78%), Risk Level (Low/Med/High), Potential Pips/Gain.
+     * **Visual "Price Map" Slider:** A custom horizontal progress bar showing: [Stop Loss (Red)] --- [Entry (Blue)] --- [TP1 (Green)] --- [TP2] --- [TP3], with dynamic checkpoint dots indicating reached targets and Break-Even trailing.
+     * **Take Profit Checkpoints:** Vertical step list showing TP1, TP2, TP3 prices, pips gained, and status checkmarks.
+     * **Collapsible AI Analysis:** An AI Oracle market summary breakdown explaining the technical rationale.
+     * **Trade Timeline:** Created timestamp, Trigger timestamp, and Close/Target hit timestamps.
+     * **Branded Share Card Action:** A "Share Signal" button generating a clean branded snapshot for social media sharing.
+
+3. **Live Signal Ingestion & Free/Low-Cost Data Engine:**
+   - Update the backend API/Supabase schema for signals to support multi-asset records (`category`: 'forex' | 'crypto' | 'stocks', `ticker`, `action`: 'BUY' | 'SELL', `entry`, `stop_loss`, `tp1`, `tp2`, `tp3`, `status`: 'ACTIVE' | 'WON' | 'LOST' | 'PENDING', `ai_analysis`, `pips_gain`, `created_at`).
+   - Create a deterministic signal generator service on the backend using public market feeds (Binance WebSocket for Crypto; AlphaVantage / Finnhub for Forex & Stocks) that creates realistic technical triggers.
+   - On new signal creation, make a single lightweight AI prompt to generate a 2-sentence rationale stored in `ai_analysis`.
+
+4. **Push Notifications & Deep Linking:**
+   - Ensure the server dispatches an Expo Push Notification whenever a new signal is created or a status changes (e.g. "🚨 New Signal: XAU/USD BUY @ 2460", "🎯 TP1 Hit: BTC/USD +120p").
+   - Configure deep linking so tapping the push notification opens the specific signal details at `/signals/[id]`.
+
+5. **Quality Control & TypeScript Verification:**
+   - Run a strict TypeScript typecheck (`tsc --noEmit`) to ensure zero broken imports, types, or missing route params.
+   - Verify that Admin and Elite accounts retain unrestricted access to all signals.
+   - Commit all changes and push to the GitHub `main` branch.

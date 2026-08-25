@@ -1,0 +1,31 @@
+CRITICAL WORK DIRECTIVE: RELOCATE AND REDESIGN TRADING EXPERIENCE MODAL ON PROFILE SCREEN.
+
+To conserve context window and AI credits, DO NOT read previous chat history.
+
+We need to relocate the "Trading Experience" section on the Profile screen and upgrade its bottom sheet modal to match the dark neon cyberpunk UI design system.
+
+### 1. Relocate "Trading Experience" Section
+- Open `app/artifacts/tradiqsai/app/(tabs)/profile.tsx`.
+- Move the "Trading Experience" card from the top header to BELOW the "Partner Program" card.
+- Ensure the trigger card matches the existing dark glassmorphism card style (rounded corners, dark slate background `#121824` / `#0B0E14`, cyan/purple accent accents).
+
+### 2. Redesign the Selection Modal / Bottom Sheet
+- Replace the current plain bottom sheet with a styled dark-theme Modal/BottomSheet:
+  1. **Header:** Title "Select Trading Experience" with an explicit **Close ("X") Button** (using Lucide `X` or Expo Vector Icons) in the top-right corner. Tapping the `X` or the backdrop dismisses the modal immediately without altering the saved selection.
+  2. **Option Cards:** Render 4 distinct selection cards instead of simple text rows:
+     - **Beginner:** Subtitle "0 – 1 Years • Learning basics & risk management"
+     - **Intermediate:** Subtitle "1 – 3 Years • Consistent execution & technical setups"
+     - **Advanced:** Subtitle "3 – 5 Years • Multi-timeframe confluence & prop trading"
+     - **Professional:** Subtitle "5+ Years • Full-time / Institutional volume"
+  3. **Active Selection Highlight:** The currently active tier must be highlighted with a cyan border (`#00e5ff` / `#00f2fe`), cyan glow or background tint, and a checkmark icon on the right.
+
+### 3. State & Sync Handling
+- Ensure updating the tier updates the active profile state (and Supabase profile table if wired) and immediately closes the modal.
+- Ensure closing via `X` or tapping outside leaves the previous selection unchanged.
+
+### 4. Verify & Push
+- Run full workspace typechecks (`npx tsc --noEmit`).
+- Commit: `feat(profile): relocate trading experience below partner program and upgrade selector modal with dismissible UI`
+- Push securely to the active repository.
+
+EXECUTION REQUIREMENT: Output the updated layout order and confirm the new modal UI structure with the 'X' button.

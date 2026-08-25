@@ -1,0 +1,21 @@
+On the Signal Desk screen, the scrollable list of signal cards is visually overlapping and clipping into the top header (the "Signal Desk" title and the category/status filter pills). Additionally, I need to guarantee that the app is displaying 100% live data for Forex, Crypto, and Stocks, and not relying on any dummy data.
+
+Please execute the following step-by-step:
+
+1. **Fix the Header Overlap (UI Layout):**
+   - Refactor the top section (Title + Filter Pills) into a fixed header `View`. 
+   - Apply a solid background color to this header `View` (matching the app's dark theme, e.g., `#0A0B0E` or similar) and apply a higher `zIndex` so scrolling content passes cleanly underneath without visual clipping.
+   - Adjust the layout of the `FlatList` or `ScrollView` holding the signal cards. Use flexbox or `contentContainerStyle` padding to ensure the top card rests perfectly below the filter pills without overlapping them on initial render.
+
+2. **Eradicate Dummy Data:**
+   - Audit the Signal Desk frontend component. Remove any hardcoded, static, or "dummy" mock data fallback arrays. The screen must fail cleanly (or show an empty state) if live data is not present.
+   - Ensure the frontend data fetching hook (e.g., `useSignals` or `fetch`) is correctly pointing to the live `/api/signals` endpoint or Supabase table.
+
+3. **Verify the Live Backend Publisher:**
+   - Verify that the backend `signalPublisher` engine is actively executing its loop, fetching real-time market data from the external APIs (Finnhub for Forex/Stocks, Coinbase for Crypto).
+   - Ensure these live setups are being successfully written to the database with their respective categories so they stream directly to the mobile UI.
+
+4. **Quality Control & Deploy:**
+   - Run a strict TypeScript typecheck (`tsc --noEmit`).
+   - Verify visually in the preview that the UI overlap is fixed and cards scroll cleanly behind an opaque header.
+   - Commit and push the updates to the GitHub `main` branch.

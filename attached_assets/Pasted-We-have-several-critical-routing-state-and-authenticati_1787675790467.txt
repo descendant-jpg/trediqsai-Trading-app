@@ -1,0 +1,24 @@
+We have several critical routing, state, and authentication bugs that need to be resolved. Please execute a comprehensive fix across the Auth flows, the Paywall, and the Profile navigation routes.
+
+Please execute the following step-by-step:
+
+1. **Fix Google OAuth Redirects:**
+   - Update the Supabase `signInWithOAuth` function. Generate a proper native return URL using `makeRedirectUri()` from `expo-auth-session` and pass it as the `redirectTo` parameter. This must resolve the issue where the browser attempts to redirect to `localhost:3000` on physical devices.
+
+2. **Implement Mandatory OTP Email Verification:**
+   - Modify the Email/Password `signUp` flow. If the signup is successful, DO NOT route the user to the main `(tabs)` layout.
+   - Route them to a new `OtpVerificationScreen`.
+   - Build this screen with a 6-digit code input UI, a "Verify" button that calls `supabase.auth.verifyOtp({ email, token, type: 'signup' })`, and a "Resend Code" button with a 60-second countdown timer. Only route to the app dashboard upon successful OTP verification.
+
+3. **Fix Paywall State & Payment Button:**
+   - On the Paywall screen, fix the "Select Plan. Please choose Monthly or Annual billing" error. Ensure the React state (e.g., `selectedPackage`) correctly updates when a tier is tapped and passes the valid package to the RevenueCat/payment handler.
+   - Set the "Annual" plan to be pre-selected by default when the screen loads so the user can immediately tap the "G Pay" button without errors.
+
+4. **Fix Navigation Routing Bugs:**
+   - **Profile Screen:** Update the cyan "Upgrade to Pro" banner's `onPress` event to route strictly to the `/paywall` screen (currently misrouting to the signals screen).
+   - **Elite Telegram Modal:** Update the "Upgrade" button in the "Elite Access Only" modal to route strictly to `/paywall` (currently misrouting to the Shop screen).
+
+5. **Quality Control & Deploy:**
+   - Run a strict TypeScript typecheck (`tsc --noEmit`).
+   - Ensure the new OTP screen is properly registered in Expo Router.
+   - Commit the changes and push to the GitHub `main` branch.

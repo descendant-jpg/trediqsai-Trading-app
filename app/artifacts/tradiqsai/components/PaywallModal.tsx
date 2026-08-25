@@ -175,7 +175,14 @@ export function PaywallModal({
   );
   const monthlyPrice = monthlyPackage?.product.priceString ?? (selectedTier === 'ELITE' ? '$49.99' : MONTHLY_PRICE_FALLBACK);
   const annualPrice = annualPackage?.product.priceString ?? (selectedTier === 'ELITE' ? '$509.99' : ANNUAL_PRICE_FALLBACK);
-  const selectedPackage = billingCycle === 'annual' ? annualPackage : monthlyPackage;
+  // Always carry a valid package payload when the store returned one: if the
+  // selected cycle's package is missing from the offering, fall back to the
+  // other cycle instead of dead-ending on the "Select Plan" error. The popup
+  // now only fires when the store returned no purchasable package at all.
+  const selectedPackage =
+    (billingCycle === 'annual' ? annualPackage : monthlyPackage) ??
+    annualPackage ??
+    monthlyPackage;
   const working = isPurchasing || isRestoring;
   const accent = selectedTier === 'ELITE' ? '#B026FF' : '#00F0FF';
   const selectedPrice = billingCycle === 'annual' ? annualPrice : monthlyPrice;

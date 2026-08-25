@@ -1,0 +1,36 @@
+CRITICAL WORK DIRECTIVE: ISOLATED DEPLOY PREP, SECURITY PATCH, HOME TICKER MIGRATION, AND TEST COVERAGE.
+
+To conserve context window and AI credits, DO NOT read previous chat history.
+
+We have a multi-part production mandate to execute: prepare the backend for an isolated Digital Ocean deployment (sharing a server with other apps), fix a critical security vulnerability, migrate the Home marquee to Finnhub, and add regression tests.
+
+### 1. Security Patch: Strip Insecure Entitlement Bypasses
+- Locate the access-control helper (e.g., `canAccess` function or entitlement hook).
+- Remove ANY logic that grants admin or premium access based on `user.email?.includes('admin')` or user-editable profile fields.
+- Admin and Tier access MUST rely strictly on immutable backend roles (e.g., `user.role === 'admin'`). No screen can be unlocked by a user-chosen email.
+
+### 2. Isolated Digital Ocean Backend Deployment Prep
+- Create an `ecosystem.config.js` file in the root backend directory configured for PM2.
+- Set the `name` to `'tradiqs-api-prod'`.
+- Set `env_production` block to use `NODE_ENV: 'production'` and explicitly set `PORT: 5050` to prevent port collisions with other apps on the server.
+- Create `nginx-setup.md` in the root detailing the exact steps to create a NEW isolated server block:
+  - Create file: `/etc/nginx/sites-available/api.tradiqsai.com`
+  - Nginx config must reverse proxy port 80 traffic for `api.tradiqsai.com` to `http://localhost:5050`.
+  - Include the symlink command to `/etc/nginx/sites-enabled/`.
+
+### 3. Migrate Home Marquee to Finnhub API
+- Open `app/artifacts/tradiqsai/app/(tabs)/index.tsx`.
+- Remove the Twelve Data fetch.
+- Implement a `Promise.all` fetch for Finnhub using `EXPO_PUBLIC_FINNHUB_API_KEY` and symbols: `['AAPL', 'MSFT', 'NVDA', 'AMZN', 'GOOGL', 'META', 'TSLA', 'SPY']`.
+- Update the mapped JSX render block to use Finnhub's `c` (current price) and `dp` (percent change), strictly falling back to `0.00` to prevent UI crashes.
+
+### 4. Implement Session-Details Quote Regression Tests
+- Create a test file (e.g., `session-details.test.tsx` in the `__tests__` directory).
+- Write tests that explicitly mock the Finnhub API response and verify that the quote mapping/parsing correctly extracts `c` and `dp`, formats to 2 decimal places, and safely handles missing/malformed payloads without throwing exceptions.
+
+### 5. Verify & Push
+- Run full workspace typechecks.
+- Commit: `feat(core): migrate Home ticker to Finnhub, secure entitlement engine, prepare isolated DO deployment, and add session quote tests`
+- Push securely to the active repository.
+
+EXECUTION REQUIREMENT: Output the updated `canAccess` security logic, confirm the Home ticker is pointing to Finnhub, and confirm the specific port and symlink instructions in the `nginx-setup.md` file.
