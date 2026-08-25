@@ -114,16 +114,27 @@ export default function AuthScreen({ initialMode = 'signin' }: { initialMode?: '
     setPassword('');
   };
 
-  /** Resolve the sign-in identifier to an email (username → RPC lookup). */
+  /**
+   * Resolve the sign-in identifier to an email. Inputs containing '@' are
+   * used as emails directly; anything else is looked up as a username via
+   * the get_email_for_username RPC (security-definer — an open SELECT on
+   * profiles would leak every email). A null or errored lookup surfaces as
+   * the generic credentials error so it can't be used to enumerate users.
+   */
   const resolveEmail = async (identifier: string): Promise<string> => {
     const value = identifier.trim();
     if (value.includes('@')) return value;
-    const { data, error } = await supabase.rpc('get_email_for_username', {
-      p_username: value,
-    });
-    if (error) throw error;
-    if (!data) throw new Error('No account found with that username.');
-    return data as string;
+    let resolved: string | null = null;
+    try {
+      const { data, error } = await supabase.rpc('get_email_for_username', {
+        p_username: value,
+      });
+      if (!error && typeof data === 'string' && data) resolved = data;
+    } catch {
+      resolved = null;
+    }
+    if (!resolved) throw new Error('Invalid login credentials.');
+    return resolved;
   };
 
   const handleSignIn = async () => {
