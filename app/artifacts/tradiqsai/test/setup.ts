@@ -48,6 +48,14 @@ vi.mock('expo', () => ({
   reloadAppAsync: vi.fn(),
 }));
 
+// react-native-toast-message ships untransformed JSX in its dist, which the
+// Vitest pipeline cannot parse. Stub it globally; suites that assert on
+// toasts override this with their own spying mock.
+vi.mock('react-native-toast-message', () => ({
+  __esModule: true,
+  default: Object.assign(() => null, { show: vi.fn(), hide: vi.fn() }),
+}));
+
 // Reanimated 4 imports react-native-worklets native specs at module scope,
 // which jsdom cannot load. Stub the small API surface app components use;
 // animations resolve to their end state so screens render deterministically.

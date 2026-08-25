@@ -36,6 +36,7 @@ import {
   type AutopilotState,
 } from '@workspace/api-client-react';
 import { PaywallModal } from '@/components/PaywallModal';
+import Toast from 'react-native-toast-message';
 import { ProPaywallOverlay } from '@/components/ProPaywallOverlay';
 import { AiToolModal, type AiToolKind } from '@/components/AiToolModal';
 import colors from '@/constants/colors';
@@ -492,6 +493,14 @@ export default function AiToolsScreen() {
       },
       onSuccess: (nextState, variables) => {
         if (variables?.data?.running !== undefined) {
+          // The server confirmed the deployment change — announce it.
+          const toggledBot = bots.find((candidate) => candidate.id === variables.botId);
+          Toast.show({
+            type: 'success',
+            text1: `${toggledBot?.name ?? 'Algorithm'} ${variables.data.running ? 'Activated' : 'Paused'}`,
+            position: 'top',
+            visibilityTime: 2200,
+          });
           setPendingBotIds((current) => {
             const next = new Set(current);
             next.delete(variables.botId);
@@ -646,9 +655,10 @@ export default function AiToolsScreen() {
   // initializing. The API remains the authority and rejects unauthorized
   // requests; explicit Free/Starter tiers are never elevated by this fallback.
   const tier = accessTier ?? 'elite';
-  // AutoPilot & the Oracle are Pro-gated. Free users see the widget as a
-  // teaser: forced off, zeroed out, and inert beneath the paywall curtain.
-  const isPro = isAdmin || tier === 'pro' || tier === 'elite';
+  // AutoPilot & the Oracle are Pro-gated via the cascading hierarchy:
+  // ADMIN ⊇ ELITE ⊇ PRO. Free users see the widget as a teaser: forced off,
+  // zeroed out, and inert beneath the paywall curtain.
+  const isPro = canAccessTool('pro', tier, isAdmin);
   const effectiveMasterActive = isPro && masterActive;
   const bots = autopilot?.bots ?? [];
   const isBotActive = useCallback(
@@ -1096,8 +1106,12 @@ export default function AiToolsScreen() {
                     </TouchableOpacity>
                     <View pointerEvents="box-none">
                       <Switch
-                        value={running}
-                        disabled={!effectiveMasterActive || pendingBotIds.has(bot.id)}
+                        // Mirror the bot's own armed state so an authorized
+                        // tap physically moves the switch — even while the
+                        // master engine is paused (the footer still reports
+                        // RUNNING only when the engine is live).
+                        value={isPro ? isBotActive(bot) : false}
+                        disabled={!isPro || pendingBotIds.has(bot.id)}
                         onValueChange={(v) => toggleBot(bot, v)}
                         trackColor={{ false: '#22252A', true: 'rgba(0,230,118,0.35)' }}
                         thumbColor={running ? GREEN : '#8A8D93'}
@@ -1194,6 +1208,8 @@ export default function AiToolsScreen() {
 
       {/* Paywall */}
       <PaywallModal visible={paywallOpen} onClose={() => setPaywallOpen(false)} />
+      {/* Toast host for algorithm activation/pause confirmations. */}
+      <Toast />
     </View>
   );
 }

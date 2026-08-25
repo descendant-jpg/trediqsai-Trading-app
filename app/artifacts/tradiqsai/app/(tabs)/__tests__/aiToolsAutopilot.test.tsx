@@ -60,6 +60,12 @@ vi.mock('expo-router', () => ({
   useLocalSearchParams: () => ({}),
 }));
 
+const toastShowMock = vi.hoisted(() => vi.fn());
+vi.mock('react-native-toast-message', () => ({
+  __esModule: true,
+  default: Object.assign(() => null, { show: toastShowMock, hide: vi.fn() }),
+}));
+
 vi.mock('@/components/PaywallModal', () => ({
   PaywallModal: ({ visible, onClose }: { visible: boolean; onClose: () => void }) =>
     visible ? (
@@ -428,6 +434,9 @@ describe('Per-bot toggles', () => {
       ),
     ).toBeTruthy();
     expect(haptics.impactAsync).toHaveBeenCalledWith('light');
+    expect(toastShowMock).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'success', text1: 'Grid Matrix AI Activated' }),
+    );
   });
 
   it('turning a bot off drops the count and logs the stop', () => {
@@ -441,6 +450,59 @@ describe('Per-bot toggles', () => {
     expect(
       screen.getByText(/\[BOT\] Scalp Oracle AI stopped — open positions managed to close/),
     ).toBeTruthy();
+    expect(toastShowMock).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'success', text1: 'Scalp Oracle AI Paused' }),
+    );
+  });
+
+  it('admin accounts keep interactive toggles regardless of store tier', () => {
+    subscription.isAdmin = true;
+    subscription.isSubscribed = false;
+    subscription.accessTier = 'starter';
+    renderScreen();
+
+    const root = screen.getByTestId('bot-toggle-grid-matrix');
+    const checkbox = within(root).getByRole('switch') as HTMLInputElement;
+    expect(checkbox.disabled).toBe(false);
+
+    toggle('bot-toggle-grid-matrix');
+    expect(screen.getByText('3 Running')).toBeTruthy();
+    expect(toastShowMock).toHaveBeenCalledWith(
+      expect.objectContaining({ text1: 'Grid Matrix AI Activated' }),
+    );
+  });
+
+  it('elite accounts inherit Pro access and can toggle algorithms', () => {
+    subscription.isSubscribed = true;
+    subscription.accessTier = 'elite';
+    renderScreen();
+
+    toggle('bot-toggle-scalp-oracle');
+    expect(screen.getByText('1 Running')).toBeTruthy();
+    expect(toastShowMock).toHaveBeenCalledWith(
+      expect.objectContaining({ text1: 'Scalp Oracle AI Paused' }),
+    );
+  });
+
+  it('arms a bot while the master engine is paused without changing the running count', () => {
+    renderScreen();
+
+    // Pause the engine, then arm a bot: the switch moves and the mutation
+    // succeeds, but nothing runs until the master engine is live again.
+    toggle('master-toggle');
+    expect(screen.getByText('System Paused')).toBeTruthy();
+    expect(screen.getByText('0 Running')).toBeTruthy();
+
+    toggle('bot-toggle-grid-matrix');
+    const checkbox = within(screen.getByTestId('bot-toggle-grid-matrix')).getByRole(
+      'switch',
+    ) as HTMLInputElement;
+    expect(checkbox.checked).toBe(true);
+    expect(screen.getByText('0 Running')).toBeTruthy();
+    expect(fakeServer.state.bots.find((b) => b.id === 'grid-matrix')?.running).toBe(true);
+    expect(toastShowMock).toHaveBeenCalledWith(
+      expect.objectContaining({ text1: 'Grid Matrix AI Activated' }),
+    );
   });
 
   it('serializes repeated presses while a bot update is still pending', async () => {

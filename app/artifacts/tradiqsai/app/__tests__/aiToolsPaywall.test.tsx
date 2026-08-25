@@ -25,6 +25,12 @@ const routerPushMock = vi.hoisted(() => vi.fn());
 const routerReplaceMock = vi.hoisted(() => vi.fn());
 const paywallRenderSpy = vi.hoisted(() => vi.fn());
 const updateBotMutateMock = vi.hoisted(() => vi.fn());
+const toastShowMock = vi.hoisted(() => vi.fn());
+
+vi.mock('react-native-toast-message', () => ({
+  __esModule: true,
+  default: Object.assign(() => null, { show: toastShowMock, hide: vi.fn() }),
+}));
 
 const AUTOPILOT_STATE = vi.hoisted(() => ({
   masterActive: true,
@@ -227,6 +233,38 @@ describe('AI Tools — free user paywall', () => {
     expect(routerPushMock).not.toHaveBeenCalledWith('/oracle');
     const lastPaywallProps = paywallRenderSpy.mock.calls.at(-1)?.[0];
     expect(lastPaywallProps?.visible).toBe(true);
+  });
+});
+
+describe('AI Tools — hierarchical access', () => {
+  it('admins bypass the paywall regardless of store tier', () => {
+    subscriptionState.isAdmin = true; // accessTier 'starter', isSubscribed false
+    render(<AiToolsScreen />);
+
+    expect(screen.queryByTestId('autopilot-paywall-overlay')).toBeNull();
+    const toggleRoot = screen.getByTestId('bot-toggle-bot-1');
+    const input = (toggleRoot.tagName === 'INPUT'
+      ? toggleRoot
+      : toggleRoot.querySelector('input')) as HTMLInputElement | null;
+    expect(input?.disabled).toBe(false);
+  });
+
+  it('elite users inherit full Pro access', () => {
+    subscriptionState.isSubscribed = true;
+    subscriptionState.accessTier = 'elite';
+    render(<AiToolsScreen />);
+
+    expect(screen.queryByTestId('autopilot-paywall-overlay')).toBeNull();
+    const master = screen.getByTestId('master-toggle');
+    const masterInput = (master.tagName === 'INPUT'
+      ? master
+      : master.querySelector('input')) as HTMLInputElement | null;
+    expect(masterInput?.disabled).toBe(false);
+    const botRoot = screen.getByTestId('bot-toggle-bot-1');
+    const botInput = (botRoot.tagName === 'INPUT'
+      ? botRoot
+      : botRoot.querySelector('input')) as HTMLInputElement | null;
+    expect(botInput?.disabled).toBe(false);
   });
 });
 
