@@ -36,6 +36,7 @@ import {
   type AutopilotState,
 } from '@workspace/api-client-react';
 import { PaywallModal } from '@/components/PaywallModal';
+import { ProPaywallOverlay } from '@/components/ProPaywallOverlay';
 import { AiToolModal, type AiToolKind } from '@/components/AiToolModal';
 import colors from '@/constants/colors';
 import { canAccessTool } from '@/lib/aiToolAccess';
@@ -645,6 +646,10 @@ export default function AiToolsScreen() {
   // initializing. The API remains the authority and rejects unauthorized
   // requests; explicit Free/Starter tiers are never elevated by this fallback.
   const tier = accessTier ?? 'elite';
+  // AutoPilot & the Oracle are Pro-gated. Free users see the widget as a
+  // teaser: forced off, zeroed out, and inert beneath the paywall curtain.
+  const isPro = isAdmin || tier === 'pro' || tier === 'elite';
+  const effectiveMasterActive = isPro && masterActive;
   const bots = autopilot?.bots ?? [];
   const isBotActive = useCallback(
     (bot: Bot) =>
@@ -653,22 +658,23 @@ export default function AiToolsScreen() {
       bot.running,
     [algorithmPreferences, localActiveStates],
   );
-  const logs = [...(autopilot?.logs ?? []), ...localActionLogs];
-  const todayPnl = autopilot?.todayPnl ?? 0;
+  // Free users never receive live logs or P&L — the teaser shows zeroed data.
+  const logs = isPro ? [...(autopilot?.logs ?? []), ...localActionLogs] : [];
+  const todayPnl = isPro ? (autopilot?.todayPnl ?? 0) : 0;
 
-  const activeCount = masterActive ? bots.filter(isBotActive).length : 0;
+  const activeCount = effectiveMasterActive ? bots.filter(isBotActive).length : 0;
   const capitalDeployed = useMemo(
     () =>
-      masterActive
+      effectiveMasterActive
         ? bots.filter(isBotActive).reduce((sum, bot) => sum + bot.capital, 0)
         : 0,
-    [isBotActive, masterActive, bots],
+    [isBotActive, effectiveMasterActive, bots],
   );
 
   // This is intentionally a simulated activity feed. It gives traders a
   // reviewable outcome while keeping real broker execution out of the client.
   useEffect(() => {
-    if (!masterActive) return;
+    if (!effectiveMasterActive) return;
     const runningBots = bots.filter(isBotActive);
     if (runningBots.length === 0) return;
     const appendSimulatedOutcome = () => {
@@ -687,7 +693,7 @@ export default function AiToolsScreen() {
     };
     const interval = setInterval(appendSimulatedOutcome, 30_000);
     return () => clearInterval(interval);
-  }, [bots, isBotActive, masterActive]);
+  }, [bots, isBotActive, effectiveMasterActive]);
 
   const handleToggleAutoPilot = (value: boolean) => {
     const canDeployAutoPilot = isAdmin || tier === 'pro' || tier === 'elite';
@@ -805,6 +811,11 @@ export default function AiToolsScreen() {
   };
 
   const saveConfig = (bot: Bot, config: AlgorithmConfig) => {
+    // Defense in depth: never persist or ship a free-tier bot configuration.
+    if (!isPro) {
+      setPaywallOpen(true);
+      return;
+    }
     setAlgorithmPreferences((current) => {
       const next = {
         ...current,
@@ -880,36 +891,46 @@ export default function AiToolsScreen() {
            <Text style={styles.screenTitle}>TradiQsAI Tools</Text>
           <TouchableOpacity
             style={styles.oracleButton}
-            onPress={() => router.push('/oracle')}
+            onPress={() => {
+              // The Oracle AI is Pro-gated: free taps convert, not navigate.
+              if (isPro) router.push('/oracle');
+              else setPaywallOpen(true);
+            }}
             activeOpacity={0.85}
+            accessibilityState={{ disabled: !isPro }}
+            accessibilityLabel={isPro ? 'Ask AI Oracle' : 'Ask AI Oracle, locked. Pro required'}
             testID="ask-oracle"
           >
             <Feather name="message-circle" size={14} color="#0A0B0E" />
             <Text style={styles.oracleButtonText}>Ask AI Oracle</Text>
+            {!isPro && <Feather name="lock" size={12} color="#0A0B0E" />}
           </TouchableOpacity>
         </View>
 
+        {/* AutoPilot widget: summary + console + history under one Pro curtain */}
+        <View style={styles.autopilotWidget}>
         {/* AutoPilot summary card */}
         <View style={styles.summaryCard}>
           <View style={styles.summaryTop}>
             <View style={styles.summaryTitleWrap}>
               <Text style={styles.summaryTitle}>TradiQs AutoPilot</Text>
               <View style={styles.systemRow}>
-                <PulseDot active={masterActive} />
-                <Text style={[styles.systemText, { color: masterActive ? CYAN : c.mutedForeground }]}>
-                  {masterActive ? 'System Active' : 'System Paused'}
+                <PulseDot active={effectiveMasterActive} />
+                <Text style={[styles.systemText, { color: effectiveMasterActive ? CYAN : c.mutedForeground }]}>
+                  {effectiveMasterActive ? 'System Active' : 'System Paused'}
                 </Text>
               </View>
             </View>
             <View style={styles.masterToggleWrap}>
-              <Text style={[styles.masterLabel, { color: masterActive ? CYAN : c.mutedForeground }]}>
-                {masterActive ? 'Active' : 'Paused'}
+              <Text style={[styles.masterLabel, { color: effectiveMasterActive ? CYAN : c.mutedForeground }]}>
+                {effectiveMasterActive ? 'Active' : 'Paused'}
               </Text>
               <Switch
-                value={masterActive}
+                value={effectiveMasterActive}
+                disabled={!isPro}
                 onValueChange={handleToggleAutoPilot}
                 trackColor={{ false: '#22252A', true: 'rgba(0,240,255,0.35)' }}
-                thumbColor={masterActive ? CYAN : '#8A8D93'}
+                thumbColor={effectiveMasterActive ? CYAN : '#8A8D93'}
                 testID="master-toggle"
               />
             </View>
@@ -917,10 +938,11 @@ export default function AiToolsScreen() {
           <View style={styles.assetSelector} accessibilityLabel="AutoPilot execution market">
             {(['Forex', 'Crypto', 'Stocks'] as const).map((asset) => {
               const isSelected = selectedAsset === asset;
-              const isLocked = asset === 'Stocks' && !isAdmin && tier !== 'elite';
+              const isLocked = !isPro || (asset === 'Stocks' && !isAdmin && tier !== 'elite');
               return (
                 <TouchableOpacity
                   key={asset}
+                  disabled={!isPro}
                   onPress={() => selectAutopilotAsset(asset)}
                   style={[
                     styles.assetPill,
@@ -929,7 +951,7 @@ export default function AiToolsScreen() {
                   ]}
                   accessibilityRole="button"
                   accessibilityState={{ selected: isSelected, disabled: isLocked }}
-                  accessibilityLabel={`${asset}${isLocked ? ', locked. Elite required' : ''}`}
+                  accessibilityLabel={`${asset}${isLocked ? ', locked. Upgrade required' : ''}`}
                   testID={`autopilot-asset-${asset.toLowerCase()}`}
                 >
                   <Text style={[styles.assetPillText, isSelected && styles.assetPillTextActive]}>
@@ -995,10 +1017,17 @@ export default function AiToolsScreen() {
 
         {/* Daily P&L history */}
         <PnlHistorySection
-          days={history?.days ?? []}
-          mfaRequired={historyMfaRequired}
+          days={isPro ? (history?.days ?? []) : []}
+          mfaRequired={isPro && historyMfaRequired}
           onReverify={openMfaReverification}
         />
+        {!isPro && (
+          <ProPaywallOverlay
+            message="Upgrade to unlock AI AutoPilot & Scalp Oracle"
+            testID="autopilot-paywall-overlay"
+          />
+        )}
+        </View>
 
         <Text style={styles.sectionTitle}>HERO TOOLS</Text>
         <View style={styles.heroGrid}>
@@ -1028,7 +1057,7 @@ export default function AiToolsScreen() {
         )}
         {bots.map((bot) => {
           const locked = bot.proOnly && !isSubscribed && !isAdmin;
-          const running = masterActive && isBotActive(bot);
+          const running = effectiveMasterActive && isBotActive(bot);
           const cfg = { ...defaultAlgorithmConfig(bot), ...algorithmPreferences[bot.id] };
           return (
             <View
@@ -1051,7 +1080,14 @@ export default function AiToolsScreen() {
                 {!locked && (
                   <View style={styles.botControls}>
                     <TouchableOpacity
-                      onPress={() => setConfigBot(bot)}
+                      onPress={() => {
+                        // AutoPilot configuration is Pro-only: free taps convert.
+                        if (!isPro) {
+                          setPaywallOpen(true);
+                          return;
+                        }
+                        setConfigBot(bot);
+                      }}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                       testID={`configure-${bot.id}`}
                       accessibilityLabel={`Configure ${bot.name}`}
@@ -1061,7 +1097,7 @@ export default function AiToolsScreen() {
                     <View pointerEvents="box-none">
                       <Switch
                         value={running}
-                        disabled={!masterActive || pendingBotIds.has(bot.id)}
+                        disabled={!effectiveMasterActive || pendingBotIds.has(bot.id)}
                         onValueChange={(v) => toggleBot(bot, v)}
                         trackColor={{ false: '#22252A', true: 'rgba(0,230,118,0.35)' }}
                         thumbColor={running ? GREEN : '#8A8D93'}
@@ -1385,6 +1421,14 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
     letterSpacing: 0.8,
     marginLeft: 8,
+  },
+  autopilotWidget: {
+    // Establishes the containing block for the absolute-fill paywall curtain
+    // (RN Web does not treat overflow:hidden as an anchor).
+    position: 'relative',
+    gap: 12,
+    borderRadius: colors.radius,
+    overflow: 'hidden',
   },
   summaryCard: {
     backgroundColor: '#16181D',

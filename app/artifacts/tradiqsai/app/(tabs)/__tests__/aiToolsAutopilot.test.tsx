@@ -292,8 +292,10 @@ function press(testID: string) {
 }
 
 beforeEach(() => {
-  subscription.isSubscribed = false;
-  subscription.accessTier = 'starter';
+  // The suite's primary subject is AutoPilot mechanics, which are Pro-gated;
+  // free-tier lock behavior is covered by tests that opt back into starter.
+  subscription.isSubscribed = true;
+  subscription.accessTier = 'pro';
   subscription.isAdmin = false;
   haptics.impactAsync.mockClear();
   haptics.selectionAsync.mockClear();
@@ -344,12 +346,19 @@ describe('AutoPilot summary + master toggle', () => {
     );
   });
 
-  it('opens the existing paywall when free traders use the master toggle', () => {
+  it('forces the master switch off and disabled for free traders', () => {
+    subscription.isSubscribed = false;
+    subscription.accessTier = 'starter';
     renderScreen();
-    toggle('master-toggle');
-    expect(screen.getByText('System Active')).toBeTruthy();
-    expect(screen.getByTestId('paywall-card')).toBeTruthy();
-    expect(haptics.notificationAsync).toHaveBeenCalledWith('error');
+
+    const root = screen.getByTestId('master-toggle');
+    const checkbox = (root.tagName === 'INPUT'
+      ? root
+      : within(root).getByRole('switch')) as HTMLInputElement;
+    expect(checkbox.disabled).toBe(true);
+    expect(screen.getByText('System Paused')).toBeTruthy();
+    // The widget sits under the paywall curtain instead of streaming data.
+    expect(screen.getByTestId('autopilot-paywall-overlay')).toBeTruthy();
   });
 });
 
@@ -451,14 +460,17 @@ describe('Per-bot toggles', () => {
 });
 
 describe('Toggle tier gating and server rejection', () => {
-  it('opens the paywall when a starter user exceeds the free one-bot limit', () => {
-    vi.spyOn(Alert, 'alert').mockImplementation(() => {});
+  it('disables every bot toggle for free traders', () => {
+    subscription.isSubscribed = false;
+    subscription.accessTier = 'starter';
     renderScreen();
-    toggle('bot-toggle-grid-matrix');
 
-    expect(screen.getByText('2 Running')).toBeTruthy();
-    expect(screen.getByTestId('paywall-card')).toBeTruthy();
-    expect(haptics.notificationAsync).toHaveBeenCalledWith('warning');
+    for (const id of ['scalp-oracle', 'breakout-engine', 'grid-matrix']) {
+      const root = screen.getByTestId(`bot-toggle-${id}`);
+      const checkbox = within(root).getByRole('switch') as HTMLInputElement;
+      expect(checkbox.disabled).toBe(true);
+    }
+    expect(screen.getByText('0 Running')).toBeTruthy();
   });
 
   it('rolls back the local switch when the API rejects the update', async () => {
@@ -535,15 +547,16 @@ describe('Toggle tier gating and server rejection', () => {
     );
   });
 
-  it('lets a starter user run one bot once no others are running', () => {
+  it('shows free traders zeroed AutoPilot data under the paywall curtain', () => {
+    subscription.isSubscribed = false;
+    subscription.accessTier = 'starter';
     renderScreen();
 
-    // Stopping is always free; with nothing running, one start is allowed.
-    toggle('bot-toggle-scalp-oracle');
-    toggle('bot-toggle-breakout-engine');
+    expect(screen.getByTestId('autopilot-paywall-overlay')).toBeTruthy();
     expect(screen.getByText('0 Running')).toBeTruthy();
-    toggle('bot-toggle-grid-matrix');
-    expect(screen.getByText('1 Running')).toBeTruthy();
+    expect(screen.getByText('+$0.00')).toBeTruthy();
+    // Live server logs must not render for free users.
+    expect(screen.queryByText(/TradiQs AutoPilot core initialized/)).toBeNull();
   });
 
   it('hydrates persisted switch states from storage on launch', async () => {
@@ -616,6 +629,8 @@ describe('Live log console', () => {
 
 describe('PRO-locked bot', () => {
   it('hides metrics and controls for non-subscribers', () => {
+    subscription.isSubscribed = false;
+    subscription.accessTier = 'starter';
     renderScreen();
     // Metrics redacted.
     expect(screen.queryByText('88.7%')).toBeNull();
@@ -629,6 +644,8 @@ describe('PRO-locked bot', () => {
   });
 
   it('opens the paywall from the unlock button and closes it again', () => {
+    subscription.isSubscribed = false;
+    subscription.accessTier = 'starter';
     renderScreen();
     press('unlock-quantum-inst');
     expect(routerPush).toHaveBeenCalledWith({
