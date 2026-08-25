@@ -14,6 +14,7 @@ import blogRouter from "./blog";
 import autopilotRouter from "./autopilot";
 import revenueCatRouter from "./revenuecat";
 import adminRouter from "./admin";
+import supportRouter from "./support";
 
 const router: IRouter = Router();
 
@@ -32,5 +33,6 @@ router.use(blogRouter);
 router.use(autopilotRouter);
 router.use(revenueCatRouter);
 router.use(adminRouter);
+router.use(supportRouter);
 
 export default router;
