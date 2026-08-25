@@ -17,4 +17,4 @@
 - [AutoPilot free-tier policy](autopilot-free-tier-policy.md) — client fully Pro-locks AutoPilot + Oracle (2026-08-25), stricter than the server's 1-free-bot slot; server limits must be claimed atomically in Postgres (advisory lock).
 - [Private channel entitlement gating](private-channel-entitlement-gating.md) — Telegram access must use a current, unexpired entitlement; cached state must never authorize external private links.
 - [Twelve Data credit limits](twelve-data-credit-limits.md) — the configured free plan allows fewer quote credits per minute than the full marquee symbol batch consumes.
-- [Signals backend invariants](signals-backend-invariants.md) — publisher lease window < tick < absolute cycle deadline + jsonb-envelope CAS; unlock is consume-first (mark-first leaks premium data).
+- [Signals backend invariants](signals-backend-invariants.md) — publisher deadline < lease window < tick + jsonb-envelope CAS; unlock is consume-first (mark-first leaks premium data).
