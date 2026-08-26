@@ -18,6 +18,7 @@ import * as Font from 'expo-font';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import { Stack, useRouter } from 'expo-router';
+import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import { usePendingRouteRedirect } from '@/lib/usePendingRouteRedirect';
 import * as SplashScreen from 'expo-splash-screen';
 import {
@@ -35,6 +36,14 @@ import { BiometricLock } from '@/components/BiometricLock';
 import { MfaGate } from '@/components/MfaGate';
 import { DegradedSecurityNoticeProvider } from '@/components/DegradedSecurityNoticeProvider';
 import { AnimatedBootScreen } from '@/components/AnimatedBootScreen';
+
+// Navigation must paint the same dark canvas as the app shell. The default
+// (light) React Navigation theme is what flashes white when the (auth) group
+// swaps to (tabs); override background/card to the app's terminal black.
+const AppDarkTheme = {
+  ...DarkTheme,
+  colors: { ...DarkTheme.colors, background: '#0A0B0E', card: '#0A0B0E' },
+};
 
 // Expo web is served by Metro and native has no browser origin; neither is
 // the Express API service. Always use the explicit API origin when supplied.
@@ -185,6 +194,8 @@ function RootLayoutNav() {
   if (loading) return null;
 
   return (
+    <View style={{ flex: 1, backgroundColor: '#0A0B0E' }}>
+      <ThemeProvider value={AppDarkTheme}>
     <Stack initialRouteName="index" screenOptions={{ headerBackTitle: 'Back' }}>
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="(auth)/login" options={{ headerShown: false }} />
@@ -206,6 +217,8 @@ function RootLayoutNav() {
       <Stack.Screen name="refer-and-earn" options={{ headerShown: false }} />
       <Stack.Screen name="session-details" options={{ headerShown: false }} />
     </Stack>
+      </ThemeProvider>
+    </View>
   );
 }
 

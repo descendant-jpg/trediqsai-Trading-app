@@ -13,6 +13,25 @@ vi.mock('expo-router', () => ({
   }),
 }));
 
+// The real package's ESM chain imports the Flow-typed react-native source,
+// which Node cannot parse when Vitest externalizes it. Stack is mocked above,
+// so the layout only needs a passthrough theme provider in tests.
+vi.mock('@react-navigation/native', () => ({
+  DarkTheme: {
+    dark: true,
+    colors: {
+      primary: '#0A84FF',
+      background: '#0A0B0E',
+      card: '#0A0B0E',
+      text: '#FFFFFF',
+      border: '#262626',
+      notification: '#FF453A',
+    },
+    fonts: {},
+  },
+  ThemeProvider: ({ children }: { children?: unknown }) => children,
+}));
+
 vi.mock('expo-image-picker', () => ({
   launchImageLibraryAsync: vi.fn(),
   requestMediaLibraryPermissionsAsync: vi.fn(async () => ({ granted: false })),
