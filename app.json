@@ -1,6 +1,31 @@
 {
   "expo": {
+    "name": "TradiQs AI",
+    "slug": "tradiqsai",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./app/artifacts/tradiqsai/assets/images/icon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0A0B0E",
     "scheme": "tradiqsai",
+    "splash": {
+      "image": "./app/artifacts/tradiqsai/assets/images/splash-logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0A0B0E"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.tradiqsai.app",
+      "buildNumber": "1"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./app/artifacts/tradiqsai/assets/images/icon.png",
+        "backgroundColor": "#0A0B0E"
+      },
+      "package": "com.tradiqsai.app",
+      "versionCode": 1
+    },
     "extra": {
       "eas": {
         "projectId": "602d4abf-022b-4fd4-a732-09ccd78f323b"
